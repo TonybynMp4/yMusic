@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VideoId } from "@ytbm/core";
+import { TrackId } from "@ytbm/core";
 import type { PlaybackEngine, PlaybackEvent, StreamLease } from "@ytbm/core";
 import { invokeVoid, isTauri } from "./tauri.ts";
 
@@ -99,9 +99,9 @@ export class MpvPlaybackEngine implements PlaybackEngine {
 }
 
 /** Rust echoes the track id back as a plain string; re-brand it on the way in. */
-function toVideoId(value: string | null): VideoId | null {
+function toTrackId(value: string | null): TrackId | null {
   if (value === null) return null;
-  const parsed = VideoId.safeParse(value);
+  const parsed = TrackId.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
 
@@ -112,8 +112,8 @@ function toCoreEvent(event: RustPlaybackEvent): PlaybackEvent {
     case "position":
       return { type: "position", positionMs: event.positionMs, durationMs: event.durationMs };
     case "ended":
-      return { type: "ended", trackId: toVideoId(event.trackId)! };
+      return { type: "ended", trackId: toTrackId(event.trackId)! };
     case "error":
-      return { type: "error", trackId: toVideoId(event.trackId), message: event.message };
+      return { type: "error", trackId: toTrackId(event.trackId), message: event.message };
   }
 }

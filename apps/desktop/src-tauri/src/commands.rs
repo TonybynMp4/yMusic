@@ -66,3 +66,54 @@ pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), S
 pub fn player_stop(player: State<'_, Player>) -> Result<(), String> {
     player.stop()
 }
+
+// -- Local library -----------------------------------------------------------
+
+use crate::library::{Library, LocalLease, LocalTrack, ScanReport};
+
+#[tauri::command]
+pub fn library_folders(library: State<'_, Library>) -> Result<Vec<String>, String> {
+    library.folders().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_add_folder(
+    library: State<'_, Library>,
+    path: String,
+) -> Result<ScanReport, String> {
+    let path = std::path::PathBuf::from(path);
+    library.add_folder(&path).map_err(|e| e.to_string())?;
+    // Scanning here rather than making the caller do it keeps "add a folder"
+    // a single user-visible action that either works or reports why not.
+    library.scan_folder(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_remove_folder(library: State<'_, Library>, path: String) -> Result<(), String> {
+    library.remove_folder(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_scan(library: State<'_, Library>) -> Result<ScanReport, String> {
+    library.scan_all().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_tracks(library: State<'_, Library>) -> Result<Vec<LocalTrack>, String> {
+    library.tracks().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_search(
+    library: State<'_, Library>,
+    query: String,
+) -> Result<Vec<LocalTrack>, String> {
+    library.search(&query).map_err(|e| e.to_string())
+}
+
+/// The local half of stream resolution. Returns the same shape the YouTube
+/// resolver will, so the frontend can treat the two interchangeably.
+#[tauri::command]
+pub fn library_resolve(library: State<'_, Library>, id: String) -> Result<LocalLease, String> {
+    library.resolve(&id).map_err(|e| e.to_string())
+}

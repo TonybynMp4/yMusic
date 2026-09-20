@@ -175,9 +175,15 @@ impl Player {
         self.command("seek", &[&seconds.to_string(), "absolute"])
     }
 
-    /// Volume as 0.0..=1.0, scaled to mpv's 0..100.
-    pub fn set_volume(&self, volume: f64) -> Result<(), String> {
-        self.set_property("volume", (volume.clamp(0.0, 1.0) * 100.0).round())
+    /// Volume as a slider *position* in 0.0..=1.0, not an amplitude.
+    ///
+    /// mpv's `volume` property applies a cubic taper, so passing the position
+    /// through unchanged is what makes the slider perceptually even: half way
+    /// up is 0.125 amplitude, roughly half as loud. `tests/volume.rs` measures
+    /// mpv's rendered output and fails if that curve ever changes, because the
+    /// alternative is the app quietly getting a linear slider back.
+    pub fn set_volume(&self, position: f64) -> Result<(), String> {
+        self.set_property("volume", (position.clamp(0.0, 1.0) * 100.0).round())
     }
 
     pub fn stop(&self) -> Result<(), String> {

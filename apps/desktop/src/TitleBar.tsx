@@ -1,4 +1,4 @@
-import { windowAction } from "./tauri.ts";
+import { isTauri } from "@ytbm/ipc";
 
 /**
  * Custom titlebar. `data-tauri-drag-region` makes the bar draggable, and on
@@ -40,6 +40,12 @@ export function TitleBar() {
       </div>
     </header>
   );
+}
+
+async function windowAction(action: "minimize" | "toggleMaximize" | "close"): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow()[action]();
 }
 
 function TitleBarButton({

@@ -19,7 +19,8 @@
     "@ytbm/core": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^4.1.5"
+    "zod": "^4.1.5",
+    "@ytbm/ipc": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",

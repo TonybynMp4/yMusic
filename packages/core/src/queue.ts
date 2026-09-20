@@ -1,4 +1,4 @@
-import type { Track, VideoId } from "./domain.ts";
+import type { Track, TrackId } from "./domain.ts";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -27,12 +27,12 @@ export const emptyQueue: QueueState = {
 
 export type QueueAction =
   | { type: "setQueue"; tracks: readonly Track[]; startIndex?: number }
-  | { type: "jumpTo"; trackId: VideoId }
+  | { type: "jumpTo"; trackId: TrackId }
   | { type: "next"; reason: "user" | "trackEnded" }
   | { type: "previous" }
   | { type: "enqueueNext"; tracks: readonly Track[] }
   | { type: "enqueueLast"; tracks: readonly Track[] }
-  | { type: "remove"; trackId: VideoId }
+  | { type: "remove"; trackId: TrackId }
   | { type: "clear" }
   | { type: "setRepeat"; repeat: RepeatMode }
   | { type: "setShuffle"; shuffle: boolean; rng?: () => number };

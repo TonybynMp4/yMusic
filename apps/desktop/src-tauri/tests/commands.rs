@@ -16,6 +16,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use ytbm_lib::{
+    library::Library,
     playback::{EventSink, PlaybackEvent, Player},
     ytbm_commands,
 };
@@ -57,6 +58,9 @@ fn every_command_is_reachable_over_ipc() {
     let loaded = LoadedFlag::default();
     player.subscribe(loaded.clone());
     app.manage(player);
+
+    let art_dir = std::env::temp_dir().join(format!("ytbm-ipc-art-{}", std::process::id()));
+    app.manage(Library::open_in_memory(art_dir).expect("in-memory library"));
 
     let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
@@ -107,4 +111,93 @@ fn every_command_is_reachable_over_ipc() {
         get_ipc_response(&webview, request(command, body))
             .unwrap_or_else(|error| panic!("`{command}` failed over IPC: {error}"));
     }
+}
+
+/// The library half of the surface, driven the same way. Kept separate from the
+/// player test because it needs no audio device and no waiting.
+#[test]
+fn library_commands_round_trip_over_ipc() {
+    let app = mock_builder()
+        .invoke_handler(ytbm_commands!())
+        .build(tauri::generate_context!())
+        .expect("mock app");
+
+    let home = std::env::temp_dir().join(format!("ytbm-ipc-library-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).expect("temp home");
+    app.manage(Library::open_in_memory(home.join("art")).expect("in-memory library"));
+
+    let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("mock webview");
+
+    let fixtures = format!("{}/tests/fixtures/library", env!("CARGO_MANIFEST_DIR"));
+
+    let report = get_ipc_response(
+        &webview,
+        request("library_add_folder", serde_json::json!({ "path": fixtures })),
+    )
+    .expect("library_add_folder should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("report json");
+    assert_eq!(report["added"], 3, "adding a folder also scans it: {report}");
+
+    let tracks = get_ipc_response(&webview, request("library_tracks", serde_json::json!({})))
+        .expect("library_tracks should succeed")
+        .deserialize::<serde_json::Value>()
+        .expect("tracks json");
+    let tracks = tracks.as_array().expect("an array of tracks");
+    assert_eq!(tracks.len(), 3);
+    // Pins the casing the zod schema in `packages/ipc` parses.
+    for field in ["id", "path", "title", "artist", "album", "albumArtist", "trackNumber",
+                  "discNumber", "year", "durationMs", "codec", "bitrate", "coverArt"] {
+        assert!(tracks[0].get(field).is_some(), "missing `{field}` in {}", tracks[0]);
+    }
+
+    let found = get_ipc_response(
+        &webview,
+        request("library_search", serde_json::json!({ "query": "nebula" })),
+    )
+    .expect("library_search should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("search json");
+    assert_eq!(found.as_array().expect("array").len(), 2);
+
+    let id = tracks[0]["id"].as_str().expect("a track id");
+    let lease = get_ipc_response(
+        &webview,
+        request("library_resolve", serde_json::json!({ "id": id })),
+    )
+    .expect("library_resolve should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("lease json");
+    // The lease must satisfy the same schema a YouTube lease will.
+    for field in ["trackId", "url", "itag", "codec", "bitrate", "isPremiumFormat", "headers",
+                  "expiresAt"] {
+        assert!(lease.get(field).is_some(), "missing `{field}` in {lease}");
+    }
+    assert!(lease["expiresAt"].is_null(), "a local file never expires");
+
+    let folders = get_ipc_response(&webview, request("library_folders", serde_json::json!({})))
+        .expect("library_folders should succeed")
+        .deserialize::<Vec<String>>()
+        .expect("folders json");
+    assert_eq!(folders.len(), 1);
+
+    get_ipc_response(
+        &webview,
+        request("library_remove_folder", serde_json::json!({ "path": folders[0] })),
+    )
+    .expect("library_remove_folder should succeed");
+
+    let after = get_ipc_response(&webview, request("library_tracks", serde_json::json!({})))
+        .expect("library_tracks should succeed")
+        .deserialize::<Vec<serde_json::Value>>()
+        .expect("tracks json");
+    assert!(after.is_empty(), "removing the folder removes its tracks");
+
+    get_ipc_response(&webview, request("library_scan", serde_json::json!({})))
+        .expect("library_scan should succeed with no folders");
+
+    let _ = std::fs::remove_dir_all(&home);
 }

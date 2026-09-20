@@ -1,0 +1,5 @@
+# The dev watcher rebuilds and restarts the app on any change under src-tauri.
+# Tests and their fixtures are not part of the running binary, so editing them
+# while the app is open should not tear it down.
+tests/
+target/

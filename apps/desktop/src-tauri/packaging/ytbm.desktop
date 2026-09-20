@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=YTBM
+GenericName=Music Player
+Comment=A native YouTube Music player
+Exec={{exec}} %U
+Icon={{icon}}
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;youtube;player;audio;
+StartupNotify=true
+StartupWMClass=YTBM
+MimeType=x-scheme-handler/ytbm;

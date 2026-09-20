@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  /* Segoe UI Variable on Windows, whatever the desktop theme uses on Linux. */
+  --font-sans:
+    "Segoe UI Variable Display", "Segoe UI", system-ui, "Cantarell", "Noto Sans",
+    sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Set from the OS accent color at startup; this is the fallback. */
+    --accent: oklch(0.72 0.19 20);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    /* App chrome, not a web page: no rubber-band scroll, no caret, no
+       drag-select of labels. Text inputs opt back in below. */
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+    background: transparent;
+    font-family: var(--font-sans);
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+  }
+}

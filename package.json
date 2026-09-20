@@ -1,0 +1,23 @@
+{
+  "name": "ytbm",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "tauri": "pnpm --filter @ytbm/desktop tauri",
+    "app": "pnpm --filter @ytbm/desktop tauri dev"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "latest",
+    "turbo": "^2.5.5",
+    "typescript": "^5.9.2"
+  }
+}

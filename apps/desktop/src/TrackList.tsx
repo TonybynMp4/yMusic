@@ -1,11 +1,11 @@
 import { IconPlaylistAdd } from "@tabler/icons-react";
 import type { Track, TrackId } from "@ytbm/core";
-import type { LocalTrack } from "@ytbm/ipc";
 
 import { formatDuration } from "./format.ts";
 
 interface Props {
-  tracks: LocalTrack[];
+  /** Any source: a local file and a YouTube result render identically. */
+  tracks: readonly Track[];
   currentId: TrackId | null;
   onPlay: (id: TrackId) => void;
   onEnqueue: (track: Track) => void;

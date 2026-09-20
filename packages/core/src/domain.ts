@@ -81,10 +81,10 @@ export type AudioCodec = z.infer<typeof AudioCodec>;
 /**
  * A resolved, playable stream.
  *
- * Remote leases are session-bound and time-limited: googlevideo ties the URL to
- * the headers that resolved it, so `headers` must be replayed by whatever
- * performs the actual playback, and `expiresAt` must be checked before handing
- * it to the player. A local file is the degenerate case of the same shape --
+ * Remote leases are time-limited, so `expiresAt` must be checked before handing
+ * one to the player. `headers` exists for sources that bind a URL to the
+ * request that fetched it; YouTube's measurably does not, so its leases carry
+ * none. A local file is the degenerate case of the same shape --
  * a `file://` URL, no headers, and an `expiresAt` of null -- which is why
  * playback never needs to know which source it is playing.
  */

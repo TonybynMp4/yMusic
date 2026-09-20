@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { VideoId } from "@ytbm/core";
 
-import { createYouTube } from "./client.ts";
+import { createPlayer, createYouTube } from "./client.ts";
 import { searchSongs } from "./search.ts";
+import { NotPlayableError, resolveStream } from "./stream.ts";
 
 /**
  * The half the offline tests cannot cover: that InnerTube still answers, and
@@ -66,4 +68,56 @@ live("search against the real InnerTube", () => {
     // concept, and a plain video search would never populate it.
     expect(tracks.filter((t) => t.album !== null).length).toBeGreaterThan(0);
   }, 30_000);
+});
+
+live("stream resolution against the real player endpoint", () => {
+  // Boards of Canada — Roygbiv. A fixed id rather than a search result, so a
+  // failure here means resolution broke and not that search returned something
+  // different today.
+  const VIDEO_ID = "SM4tQcUt_mQ" as VideoId;
+
+  it("resolves a video id to a lease that names real audio", async () => {
+    const youtube = await createPlayer({ fetch: globalThis.fetch });
+    const lease = await resolveStream(youtube, VIDEO_ID);
+
+    expect(lease.trackId).toBe(`yt:${VIDEO_ID}`);
+    expect(lease.url).toMatch(/^https:\/\/[^/]*googlevideo\.com\//);
+    expect(lease.codec).not.toBe("unknown");
+    expect(lease.bitrate).toBeGreaterThan(0);
+    // Six hours when measured. Asserting only that it is in the future keeps
+    // the test about the lease being usable rather than about YouTube's TTL.
+    expect(lease.expiresAt).toBeGreaterThan(Date.now());
+  }, 60_000);
+
+  /**
+   * The check the offline tests structurally cannot make, and the one that
+   * actually decides whether a track plays.
+   *
+   * mpv opens a stream with an open-ended range and re-asks the same way on
+   * every seek. Most InnerTube clients hand back URLs that answer those with
+   * 403 while still serving a bounded range perfectly — so a lease can look
+   * completely correct, pass every test above, and produce a player that sits
+   * at zero seconds with no error. This asserts the two requests mpv really
+   * makes, against the URL we really hand it.
+   */
+  it("hands back a URL that answers the requests mpv makes", async () => {
+    const youtube = await createPlayer({ fetch: globalThis.fetch });
+    const lease = await resolveStream(youtube, VIDEO_ID);
+
+    const opening = await globalThis.fetch(lease.url, { headers: { Range: "bytes=0-" } });
+    opening.body?.cancel();
+    expect(opening.status).toBe(206);
+
+    const seek = await globalThis.fetch(lease.url, { headers: { Range: "bytes=500000-" } });
+    seek.body?.cancel();
+    expect(seek.status).toBe(206);
+  }, 60_000);
+
+  it("reports why a track cannot be played instead of failing obscurely", async () => {
+    const youtube = await createPlayer({ fetch: globalThis.fetch });
+
+    await expect(resolveStream(youtube, "aaaaaaaaaaa" as VideoId)).rejects.toThrow(
+      NotPlayableError,
+    );
+  }, 60_000);
 });

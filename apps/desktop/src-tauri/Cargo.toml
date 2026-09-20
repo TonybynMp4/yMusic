@@ -16,7 +16,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
-tauri-plugin-http = "2"
+# `unsafe-headers`: without it the plugin strips Origin and Referer from every
+# request and stamps on its own `Origin: http://tauri.localhost`, which YouTube
+# answers with 403. See `packages/ipc/src/http.ts`.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

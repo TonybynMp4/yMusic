@@ -10,16 +10,11 @@ import {
   type Track,
   type TrackId,
 } from "@ytbm/core";
-import { libraryResolve } from "@ytbm/ipc";
-
+import { resolveTrack } from "./resolve.ts";
 import { usePlayback } from "./usePlayback.ts";
 
-/**
- * A resolve or transport failure should not become an unhandled rejection.
- * The user-visible error already comes through the playback event stream, so
- * this only has to keep the console honest.
- */
-function reportPlaybackFailure(error: unknown): void {
+/** A transport failure that has no user-visible consequence beyond not happening. */
+function logPlaybackFailure(error: unknown): void {
   console.error("playback command failed", error);
 }
 
@@ -34,7 +29,7 @@ function reportPlaybackFailure(error: unknown): void {
  */
 export function usePlayer() {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
-  const { state, engine, load } = usePlayback();
+  const { state, engine, load, reportError } = usePlayback();
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -52,7 +47,7 @@ export function usePlayer() {
       // is both pointless and, outside the Tauri webview, an error.
       if (loadedId.current !== null) {
         loadedId.current = null;
-        void engine.stop().catch(reportPlaybackFailure);
+        void engine.stop().catch(logPlaybackFailure);
       }
       return;
     }
@@ -63,19 +58,24 @@ export function usePlayer() {
     void (async () => {
       const cached = leases.current.get(trackId);
       const lease =
-        cached && isLeaseUsable(cached, Date.now()) ? cached : await libraryResolve(trackId);
+        cached && isLeaseUsable(cached, Date.now()) ? cached : await resolveTrack(trackId);
       // The user can skip while a lease is in flight; dropping the result is
       // correct, because a newer effect is already resolving the new track.
       if (cancelled) return;
       leases.current.set(trackId, lease);
       await load(lease);
       await engine.play();
-    })().catch(reportPlaybackFailure);
+    })().catch((error: unknown) => {
+      logPlaybackFailure(error);
+      // Resolution happens before mpv is involved, so its failures have no
+      // event stream to arrive on. Put them where the player's errors go.
+      if (!cancelled) reportError(error instanceof Error ? error.message : String(error));
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [trackId, engine, load]);
+  }, [trackId, engine, load, reportError]);
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
   // only here, which is the distinction the reducer encodes.

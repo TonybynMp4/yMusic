@@ -199,12 +199,18 @@ importers:
       '@ytbm/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc
+      '@ytbm/youtube':
+        specifier: workspace:*
+        version: link:../../packages/youtube
       react:
         specifier: ^19.2.0
         version: 19.3.0
       react-dom:
         specifier: ^19.2.0
         version: 19.3.0(react@19.3.0)
+      youtubei.js:
+        specifier: ^18.0.0
+        version: 18.0.0
       zod:
         specifier: ^4.1.5
         version: 4.6.5
@@ -252,9 +258,28 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.7.3
         version: 2.7.3
+      '@tauri-apps/plugin-http':
+        specifier: ^2.5.2
+        version: 2.6.1
       '@ytbm/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: ^4.1.5
+        version: 4.6.5
+    devDependencies:
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.6.2)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/youtube:
+    dependencies:
+      '@ytbm/core':
+        specifier: workspace:*
+        version: link:../core
+      youtubei.js:
+        specifier: ^18.0.0
+        version: 18.0.0
       zod:
         specifier: ^4.1.5
         version: 4.6.5
@@ -347,6 +372,9 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@bufbuild/protobuf@2.15.0':
+    resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1089,6 +1117,9 @@ packages:
       picomatch:
         optional: true
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1203,6 +1234,10 @@ packages:
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+
+  meriyah@7.3.3:
+    resolution: {integrity: sha512-uE5cnoNj+UYhoMdZDuymCzr5TzEuE3ZF2C4kn6Z76rLhkwnvZ/+6dUZnM41T3fifyuhW0+n8vK7eq6DKJxUfPA==}
+    engines: {node: '>=20.0.0'}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -1403,6 +1438,9 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  youtubei.js@18.0.0:
+    resolution: {integrity: sha512-7Tztl5QzNL4nIhiAxa4P/0C8cDDsUe0j4iaUeNiaA+ZfSe/l+HkHxXyoWlQXNW7IPi2n6AW23ysVMJLDh+AwWQ==}
+
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
@@ -1519,6 +1557,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@bufbuild/protobuf@2.15.0': {}
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -2066,6 +2106,8 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
+  fflate@0.8.3: {}
+
   fsevents@2.3.3:
     optional: true
 
@@ -2141,6 +2183,8 @@ snapshots:
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  meriyah@7.3.3: {}
 
   ms@2.1.3: {}
 
@@ -2339,5 +2383,11 @@ snapshots:
       stackback: 0.0.2
 
   yallist@3.1.1: {}
+
+  youtubei.js@18.0.0:
+    dependencies:
+      '@bufbuild/protobuf': 2.15.0
+      fflate: 0.8.3
+      meriyah: 7.3.3
 
   zod@4.6.5: {}

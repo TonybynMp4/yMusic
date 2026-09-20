@@ -10,6 +10,16 @@ interface SearchResponse {
   contents?: readonly { type?: unknown; contents?: readonly unknown[] }[] | null;
 }
 
+/**
+ * Songs matching a query, from YouTube **Music**.
+ *
+ * `youtube.music.search` rather than `youtube.search`: the two post to the
+ * same `/youtubei/v1/search` endpoint and differ only by the client context in
+ * the body (`WEB_REMIX` against `WEB`). Plain search returns videos, with no
+ * album and no artist channel — so the wrong one here is not a build error or
+ * even an obviously wrong result, just a quietly worse music app. `live.test.ts`
+ * asserts the client that actually goes on the wire.
+ */
 export async function searchSongs(youtube: Innertube, query: string): Promise<Track[]> {
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];

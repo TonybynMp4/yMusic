@@ -38,4 +38,32 @@ live("search against the real InnerTube", () => {
     const youtube = await createYouTube({ fetch: globalThis.fetch });
     expect(await searchSongs(youtube, "   ")).toEqual([]);
   });
+
+  it("searches YouTube Music, not YouTube", async () => {
+    // YouTube Music and plain YouTube share the `/youtubei/v1/search`
+    // endpoint and differ only by the client context in the request body, so
+    // the two are indistinguishable from the outside. Without this, swapping
+    // `music.search` for `search` would still compile and still return
+    // plausible-looking rows — just video results instead of songs.
+    const clients: string[] = [];
+    const watching: typeof fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
+      if (url.includes("/youtubei/v1/search")) {
+        const body = init?.body ?? (input instanceof Request ? await input.clone().text() : null);
+        const text = typeof body === "string" ? body : await new Response(body).text();
+        clients.push(JSON.parse(text).context?.client?.clientName);
+      }
+      return globalThis.fetch(input as RequestInfo, init);
+    };
+
+    const youtube = await createYouTube({ fetch: watching });
+    const tracks = await searchSongs(youtube, "boards of canada roygbiv");
+
+    expect(clients).toContain("WEB_REMIX");
+    expect(clients).not.toContain("WEB");
+
+    // The behavioural half of the same check: album is a YouTube Music
+    // concept, and a plain video search would never populate it.
+    expect(tracks.filter((t) => t.album !== null).length).toBeGreaterThan(0);
+  }, 30_000);
 });

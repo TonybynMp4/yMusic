@@ -1,87 +1,172 @@
-import { IconPlaylistAdd, IconVolume } from "@tabler/icons-react";
+import {
+  IconDots,
+  IconPlayerPauseFilled,
+  IconPlayerPlayFilled,
+  IconPlaylistAdd,
+} from "@tabler/icons-react";
 import type { Track, TrackId } from "@ytbm/core";
 import { Fragment, type ReactNode } from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { Art } from "@/components/Art";
+import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format.ts";
+import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
 
 interface Props {
   /** Any source: a local file and a YouTube result render identically. */
   tracks: readonly Track[];
   currentId: TrackId | null;
+  /** Whether the current track is playing rather than paused. */
+  playing: boolean;
   onPlay: (id: TrackId) => void;
+  /** Pauses or resumes the current track, from its row. */
+  onToggle: () => void;
   onEnqueue: (track: Track) => void;
   /** Opens an artist or album page. Without it, bylines are plain text. */
-  onOpen?: (route: Route) => void;
+  onOpen?: ((route: Route) => void) | undefined;
   /** Leave the album out of the byline, as on the album's own page. */
   hideAlbum?: boolean;
 }
 
-export function TrackList({ tracks, currentId, onPlay, onEnqueue, onOpen, hideAlbum }: Props) {
+/** Every row is this tall, which is what lets long lists skip rendering most of them. */
+const ROW_HEIGHT = 48;
+/** Below this, rendering every row is cheaper than keeping track of which to render. */
+const VIRTUAL_FROM = 60;
+
+export function TrackList(props: Props) {
+  const scroller = useScrollParent();
+  const { tracks } = props;
   if (tracks.length === 0) return null;
 
+  if (scroller && tracks.length >= VIRTUAL_FROM) {
+    return (
+      <VirtualList
+        count={tracks.length}
+        scroller={scroller}
+        rowHeight={ROW_HEIGHT}
+        // By position too: a playlist can hold the same track twice.
+        getKey={(index) => `${index}:${tracks[index]!.id}`}
+        renderRow={(index) => <Row {...props} track={tracks[index]!} />}
+      />
+    );
+  }
   return (
     <ul>
-      {tracks.map((track) => {
-        const isCurrent = track.id === currentId;
-        return (
-          <li key={track.id}>
-            {/* The whole row plays on click, for the mouse; the title is the
-                real button, for the keyboard. Byline links sit inside the
-                row but not inside that button, which cannot nest them. */}
-            <div
-              onClick={() => onPlay(track.id)}
-              className={cn(
-                "group flex cursor-default items-center gap-3 rounded-lg px-3 py-1.5 transition-colors",
-                isCurrent ? "bg-accent" : "hover:bg-accent/60",
-              )}
-            >
-              <Artwork track={track} />
-              <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {/* YouTube Music marks the playing row with a small red
-                      speaker rather than by recolouring the title. */}
-                  {isCurrent && (
-                    <IconVolume size={14} className="shrink-0 text-brand" aria-hidden />
-                  )}
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onPlay(track.id);
-                    }}
-                    className="truncate text-left text-sm outline-none focus-visible:underline"
-                  >
-                    {track.title}
-                  </button>
-                </span>
-                <Byline track={track} onOpen={onOpen} hideAlbum={hideAlbum} />
-              </span>
-              <IconButton
-                label="Add to queue"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onEnqueue(track);
-                }}
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <IconPlaylistAdd size={17} stroke={1.75} />
-              </IconButton>
-              <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                {formatDuration(track.durationMs)}
-              </span>
-            </div>
-          </li>
-        );
-      })}
+      {tracks.map((track, index) => (
+        <li key={`${index}:${track.id}`}>
+          <Row {...props} track={track} />
+        </li>
+      ))}
     </ul>
   );
 }
 
-/** "Artist, Artist — Album", each part a link when it has a page to open. */
+function Row({
+  track,
+  currentId,
+  playing,
+  onPlay,
+  onToggle,
+  onEnqueue,
+  onOpen,
+  hideAlbum,
+}: Props & { track: Track }) {
+  const isCurrent = track.id === currentId;
+  const play = () => (isCurrent ? onToggle() : onPlay(track.id));
+  return (
+    // The whole row plays on click, for the mouse; the title is the real
+    // button, for the keyboard. Byline links sit inside the row but not
+    // inside that button, which cannot nest them.
+    <div
+      onClick={() => onPlay(track.id)}
+      style={{ height: ROW_HEIGHT }}
+      className={cn(
+        "group flex cursor-default items-center gap-3 rounded-lg px-3 transition-colors",
+        isCurrent ? "bg-accent" : "hover:bg-accent/60",
+      )}
+    >
+      <RowArt track={track} isCurrent={isCurrent} playing={playing} onClick={play} />
+      <span className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onPlay(track.id);
+          }}
+          className="block max-w-full truncate text-left text-sm outline-none focus-visible:underline"
+        >
+          {track.title}
+        </button>
+        <Byline track={track} onOpen={onOpen} hideAlbum={hideAlbum} />
+      </span>
+      <IconButton
+        label="Add to queue"
+        onClick={(event) => {
+          event.stopPropagation();
+          onEnqueue(track);
+        }}
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        <IconPlaylistAdd size={17} stroke={1.75} />
+      </IconButton>
+      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        {formatDuration(track.durationMs)}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The cover, and over it what YouTube Music shows there: bars moving while
+ * the row plays, dots while it is paused, and a play (or pause) button on hover.
+ */
+function RowArt(props: {
+  track: Track;
+  isCurrent: boolean;
+  playing: boolean;
+  onClick: () => void;
+}) {
+  const { isCurrent, playing } = props;
+  const pauses = isCurrent && playing;
+  return (
+    <span className="relative shrink-0">
+      <Artwork track={props.track} size={36} />
+      {isCurrent && (
+        <span className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-white group-hover:opacity-0">
+          {playing ? <Equalizer /> : <IconDots size={18} stroke={2} />}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={pauses ? "Pause" : "Play"}
+        tabIndex={-1}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onClick();
+        }}
+        className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-white opacity-0 outline-none group-hover:opacity-100"
+      >
+        {pauses ? <IconPlayerPauseFilled size={16} /> : <IconPlayerPlayFilled size={16} />}
+      </button>
+    </span>
+  );
+}
+
+/** Three bars rising and falling out of step. The animation lives in `styles.css`. */
+function Equalizer() {
+  return (
+    <span className="flex h-3.5 items-end gap-0.5" aria-hidden>
+      {[0, 1, 2].map((bar) => (
+        <span key={bar} className="equalizer-bar h-full w-[3px] rounded-[1px] bg-current" />
+      ))}
+    </span>
+  );
+}
+
+/** "Artist, Artist • Album", each part a link when it has a page to open. */
 function Byline({
   track,
   onOpen,

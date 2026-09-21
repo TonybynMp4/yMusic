@@ -38,6 +38,8 @@ export function LocalView(props: {
         <TrackList
           tracks={tracks}
           currentId={actions.currentId}
+          playing={actions.playing}
+          onToggle={actions.onToggle}
           onPlay={(id) => actions.onPlay(tracks, id)}
           onEnqueue={actions.onEnqueue}
           onOpen={actions.onOpen}

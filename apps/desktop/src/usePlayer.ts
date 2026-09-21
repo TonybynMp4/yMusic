@@ -30,7 +30,7 @@ function logPlaybackFailure(error: unknown): void {
  */
 export function usePlayer() {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
-  const { state, engine, load, reportError } = usePlayback();
+  const { state, position, engine, load, reportError } = usePlayback();
   /**
    * The slider position in 0..1. Held here rather than in the player bar
    * because the OS can set it too, from the MPRIS volume control.
@@ -150,12 +150,12 @@ export function usePlayer() {
    * is usually meant to do.
    */
   const previous = useCallback(() => {
-    if (state.positionMs > 3000) {
+    if (position.get() > 3000) {
       void engine.seek(0);
       return;
     }
     dispatch({ type: "previous" });
-  }, [engine, state.positionMs]);
+  }, [engine, position]);
 
   const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
   const setVolume = useCallback(
@@ -177,6 +177,7 @@ export function usePlayer() {
     dispatch: dispatch as React.Dispatch<QueueAction>,
     track,
     playback: state,
+    position,
     volume,
     playTrack,
     play,

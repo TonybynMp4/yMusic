@@ -8,7 +8,7 @@ import {
   createYouTube,
   type FetchLike,
 } from "./client.ts";
-import { getAlbum, getArtist, getLibraryPlaylists, getPlaylist } from "./browse.ts";
+import { getAlbum, getArtist, getLibraryPlaylists, openPlaylist, type PlaylistMore } from "./browse.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -18,6 +18,9 @@ import { NotPlayableError, resolveStream } from "./stream.ts";
  * and the integrity token behind it lasts twelve hours; half that leaves room.
  */
 const FALLBACK_SESSION_MS = 6 * 60 * 60 * 1000;
+
+/** Playlists that can be left half loaded and still resumed. */
+const MAX_CONTINUATIONS = 16;
 
 export interface ResolveOptions {
   /**
@@ -50,6 +53,8 @@ export class YouTubeEngine {
   #player: Promise<Innertube> | null = null;
   readonly #minter: PoTokenMinter | null;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
+  readonly #continuations = new Map<string, PlaylistMore>();
+  #handles = 0;
 
   /** Without `botguard` there is no fallback, and resolving uses `VISIONOS` only. */
   constructor(fetch: FetchLike, botguard?: BotGuardVm) {
@@ -97,9 +102,37 @@ export class YouTubeEngine {
     return getArtist(await this.#browseClient(), id);
   }
 
-  /** `id` with or without the `VL` browse prefix. */
-  async playlist(id: string): Promise<PlaylistPage> {
-    return getPlaylist(await this.#browseClient(), id);
+  /**
+   * `id` with or without the `VL` browse prefix. Returns the first page of
+   * rows; `more`, when set, is a handle for `playlistMore` to fetch the next.
+   */
+  async playlist(id: string): Promise<{ page: PlaylistPage; more: string | null }> {
+    const { page, more } = await openPlaylist(await this.#browseClient(), id);
+    return { page, more: this.#hold(more) };
+  }
+
+  async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
+    const next = this.#continuations.get(handle);
+    if (!next) throw new Error("this playlist page has expired; reopen the playlist");
+    this.#continuations.delete(handle);
+    const { tracks, more } = await next();
+    return { tracks, more: this.#hold(more) };
+  }
+
+  /**
+   * A continuation is a youtubei.js closure and cannot cross the worker
+   * boundary, so it stays here under a handle. Only the newest few are kept:
+   * one abandoned per playlist left half loaded is not worth holding forever.
+   */
+  #hold(more: PlaylistMore | null): string | null {
+    if (more === null) return null;
+    const handle = String(++this.#handles);
+    this.#continuations.set(handle, more);
+    for (const old of this.#continuations.keys()) {
+      if (this.#continuations.size <= MAX_CONTINUATIONS) break;
+      this.#continuations.delete(old);
+    }
+    return handle;
   }
 
   /** The signed-in account's playlists, Liked Music first. Empty when signed out. */

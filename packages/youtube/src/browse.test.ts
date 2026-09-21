@@ -101,6 +101,18 @@ describe("artistFrom", () => {
     expect(artist.shelves.map((s) => s.title)).toEqual(["Albums", "Featured on"]);
     expect(artist.shelves[1]!.cards[0]!.id).toBe("RDCLAK5uy_x");
   });
+
+  it("crops a square avatar out of the banner", () => {
+    const banner = "https://yt3.googleusercontent.com/abc=w1440-h600-p-l90-rj";
+    const artist = artistFrom(BOC, {
+      header: { title: text("Thornhill"), thumbnail: { contents: [{ url: banner, width: 1440, height: 600 }] } },
+    });
+    expect(artist.avatar[0]).toEqual({
+      url: "https://yt3.googleusercontent.com/abc=w544-h544-p-l90-rj",
+      width: 544,
+      height: 544,
+    });
+  });
 });
 
 describe("toCard", () => {

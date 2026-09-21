@@ -34,6 +34,7 @@ tauri-plugin-dialog = "2.7.3"
 souvlaki = { version = "0.8.3", default-features = false, features = ["use_zbus"] }
 keyring = "4"
 chacha20poly1305 = "0.10"
+tokio = { version = "1", features = ["fs", "time"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test", "protocol-asset"] }

@@ -1,10 +1,19 @@
 import {
   IconArrowsShuffle,
   IconDisc,
+  IconLoader2,
   IconPlayerPlayFilled,
   IconUser,
 } from "@tabler/icons-react";
-import type { AlbumPage, ArtistPage, BrowseCard, PlaylistPage, Thumbnail, Track, TrackId } from "@ytbm/core";
+import type {
+  AlbumPage,
+  ArtistPage,
+  BrowseCard,
+  PlaylistPage,
+  Thumbnail,
+  Track,
+  TrackId,
+} from "@ytbm/core";
 
 import { useState, type CSSProperties } from "react";
 
@@ -18,6 +27,9 @@ import { useBrowse, type Route } from "./useBrowse.ts";
 /** What a browse page needs of the player and the navigation stack. */
 export interface BrowseActions {
   currentId: TrackId | null;
+  /** Whether the current track is playing rather than paused. */
+  playing: boolean;
+  onToggle: () => void;
   /** Plays `tracks` from `id`; with no `id`, from a random track, shuffled. */
   onPlay: (tracks: Track[], id: TrackId | null) => void;
   onEnqueue: (track: Track) => void;
@@ -40,7 +52,7 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     case "album":
       return <Album page={page.page} actions={actions} />;
     case "playlist":
-      return <Playlist page={page.page} actions={actions} />;
+      return <Playlist page={page.page} loadingMore={state.loadingMore} actions={actions} />;
     case "artist":
       return <Artist page={page.page} actions={actions} />;
   }
@@ -75,6 +87,8 @@ function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
       <TrackList
         tracks={page.tracks}
         currentId={actions.currentId}
+        playing={actions.playing}
+        onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
         onEnqueue={actions.onEnqueue}
         onOpen={actions.onOpen}
@@ -84,7 +98,15 @@ function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
   );
 }
 
-function Playlist({ page, actions }: { page: PlaylistPage; actions: BrowseActions }) {
+function Playlist({
+  page,
+  loadingMore,
+  actions,
+}: {
+  page: PlaylistPage;
+  loadingMore: boolean;
+  actions: BrowseActions;
+}) {
   return (
     <>
       <Header
@@ -97,10 +119,18 @@ function Playlist({ page, actions }: { page: PlaylistPage; actions: BrowseAction
       <TrackList
         tracks={page.tracks}
         currentId={actions.currentId}
+        playing={actions.playing}
+        onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
         onEnqueue={actions.onEnqueue}
         onOpen={actions.onOpen}
       />
+      {loadingMore && (
+        <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          Loading more songs ({page.tracks.length} so far)
+        </p>
+      )}
     </>
   );
 }
@@ -113,12 +143,15 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
   const playlistId = page.topSongsPlaylistId;
   return (
     <>
-      {/* The banner is a backdrop of fixed height rather than a full-width
+      {/* The banner is a backdrop of capped height rather than a full-width
           image at its own aspect, which on a wide window fills the screen.
-          The head sits in normal flow over its faded lower part, so an
-          expanded description pushes the page down instead of overflowing. */}
-      <div className="relative mb-4" style={{ "--banner": "clamp(220px, 40vh, 380px)" } as CSSProperties}>
-        <div className="absolute inset-x-0 top-0 h-(--banner) overflow-hidden rounded-xl">
+          The block is at least as tall as the banner, so what follows starts
+          below it, and grows past it when the description is expanded. */}
+      <div
+        className="relative isolate mb-4 flex min-h-(--banner) flex-col justify-end"
+        style={{ "--banner": "clamp(240px, 40vh, 380px)" } as CSSProperties}
+      >
+        <div className="absolute inset-x-0 top-0 -z-10 h-(--banner) overflow-hidden rounded-xl">
           <Art
             thumbnails={page.thumbnails}
             width={1200}
@@ -128,10 +161,19 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/0" />
         </div>
-        <div className="relative flex flex-col gap-3 px-4 pt-[calc(var(--banner)_-_10rem)]">
-          <h1 className="text-4xl font-bold tracking-tight">{page.name}</h1>
-          {page.description && <Description text={page.description} />}
-          <PlayButtons tracks={page.topSongs} actions={actions} />
+        <div className="flex items-end gap-6 px-4 pt-24 pb-1">
+          <Art
+            thumbnails={page.avatar}
+            width={144}
+            lazy={false}
+            className="size-36 shrink-0 rounded-full shadow-lg"
+            fallback={<IconUser size={48} stroke={1.25} />}
+          />
+          <div className="flex min-w-0 flex-col gap-3">
+            <h1 className="text-4xl font-bold tracking-tight">{page.name}</h1>
+            {page.description && <Description text={page.description} />}
+            <PlayButtons tracks={page.topSongs} actions={actions} />
+          </div>
         </div>
       </div>
 
@@ -153,6 +195,8 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
           <TrackList
             tracks={page.topSongs}
             currentId={actions.currentId}
+            playing={actions.playing}
+            onToggle={actions.onToggle}
             onPlay={(id) => actions.onPlay(page.topSongs, id)}
             onEnqueue={actions.onEnqueue}
             onOpen={actions.onOpen}

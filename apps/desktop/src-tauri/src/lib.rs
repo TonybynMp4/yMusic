@@ -1,6 +1,7 @@
 pub mod account;
 pub mod botguard;
 pub mod commands;
+pub mod images;
 pub mod platform;
 pub mod library;
 pub mod playback;
@@ -54,12 +55,22 @@ pub fn run() {
                 .level_for("polling", log::LevelFilter::Warn)
                 .level_for("async_io", log::LevelFilter::Warn)
                 .level_for("tracing", log::LevelFilter::Warn)
+                // One line per connection and a "shouldn't retry!" per
+                // request: noise that reads like errors and is not.
+                .level_for("reqwest", log::LevelFilter::Warn)
+                .level_for("hyper_util", log::LevelFilter::Warn)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
+        .register_asynchronous_uri_scheme_protocol(images::SCHEME, |context, request, responder| {
+            let images = context.app_handle().state::<images::Images>().inner().clone();
+            tauri::async_runtime::spawn(async move {
+                responder.respond(images.respond(&request).await);
+            });
+        })
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
@@ -76,6 +87,7 @@ pub fn run() {
             app.manage(player);
             app.manage(media);
 
+            app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
             Ok(())
@@ -89,11 +101,7 @@ pub fn run() {
 /// directory cannot be used. A player that forgets your folders on restart is
 /// a much better outcome than a player that refuses to start.
 fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
-    let art_dir = app
-        .path()
-        .app_cache_dir()
-        .unwrap_or_else(|_| std::env::temp_dir().join("ytbm"))
-        .join("art");
+    let art_dir = cache_dir(app).join("art");
 
     let db_path = app.path().app_data_dir().map(|dir| dir.join("library.sqlite3"));
 
@@ -106,6 +114,10 @@ fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
     }
 
     Library::open_in_memory(art_dir).expect("an in-memory library cannot fail to open")
+}
+
+fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf {
+    app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ytbm"))
 }
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {

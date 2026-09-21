@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
 import type { Track, TrackId } from "@ytbm/core";
 
@@ -11,6 +11,7 @@ import { BrowseView, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { LocalView } from "./Local.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
+import { ScrollParent } from "./scroll.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
@@ -23,15 +24,22 @@ import { usePlayer } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
 const SIDEBAR_KEY = "ytbm.sidebar-collapsed";
+/** How far back Back can go. */
+const HISTORY_LIMIT = 50;
 /** Local matches shown above YouTube's before "Show all". */
 const LOCAL_PREVIEW = 5;
 
 export function App() {
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
-  // Pages opened, newest last. Empty means search is showing.
-  const [stack, setStack] = useState<View[]>([]);
-  const view = stack.at(-1) ?? null;
+  // Where you have been, newest last; `null` is search. Every move pushes,
+  // sidebar ones included, so Back always returns to the previous screen.
+  const [history, setHistory] = useState<(View | null)[]>([null]);
+  const view = history.at(-1) ?? null;
+  const depth = history.length - 1;
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+  /** Scroll offsets by history depth, so Back lands where you left. */
+  const scrolls = useRef<number[]>([]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
   const searchInput = useRef<HTMLInputElement>(null);
 
@@ -47,23 +55,49 @@ export function App() {
       localStorage.setItem(SIDEBAR_KEY, c ? "0" : "1");
       return !c;
     });
-  /** From the sidebar: a fresh place, not a step deeper. */
-  const navigate = (next: View) => {
-    setStack([next]);
+  const go = (next: View | null) => {
     setExpanded(false);
+    setHistory((entries) => {
+      const current = entries.at(-1) ?? null;
+      const same = current === next || (current && next && viewKey(current) === viewKey(next));
+      if (same) return entries;
+      scrolls.current.length = entries.length;
+      return [...entries, next].slice(-HISTORY_LIMIT);
+    });
   };
-  /** From a link on a page: one step deeper, so Back returns. */
-  const open = (next: Route) => {
-    setStack((views) => [...views, next]);
+  const back = useCallback(() => {
     setExpanded(false);
-  };
+    setHistory((entries) => (entries.length > 1 ? entries.slice(0, -1) : entries));
+  }, []);
   const showSearch = () => {
-    setStack([]);
-    setExpanded(false);
+    go(null);
     searchInput.current?.focus();
   };
+
+  // Restores the offset saved for this depth, or the top for a new page.
+  useLayoutEffect(() => {
+    if (viewport) viewport.scrollTop = scrolls.current[depth] ?? 0;
+  }, [viewport, depth]);
+
+  // The mouse's back button and Alt+Left, as in a browser.
+  useEffect(() => {
+    const onMouse = (event: MouseEvent) => {
+      if (event.button === 3) back();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === "ArrowLeft") back();
+    };
+    window.addEventListener("mouseup", onMouse);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mouseup", onMouse);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [back]);
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,
+    playing: player.playback.status === "playing",
+    onToggle: player.toggle,
     onPlay: (tracks: Track[], id: TrackId | null) => {
       if (tracks.length === 0) return;
       if (id === null) {
@@ -74,7 +108,7 @@ export function App() {
       player.playTrack(tracks, id);
     },
     onEnqueue: (track) => player.dispatch({ type: "enqueueLast", tracks: [track] }),
-    onOpen: open,
+    onOpen: go,
   };
 
   return (
@@ -89,7 +123,7 @@ export function App() {
           onToggleCollapsed={toggleSidebar}
           current={expanded ? "player" : view ? viewKey(view) : null}
           onSearch={showSearch}
-          onNavigate={navigate}
+          onNavigate={go}
           playlists={playlists.playlists}
           folders={library.folders}
           localCount={library.all.length}
@@ -103,8 +137,8 @@ export function App() {
         <div className="relative flex min-w-0 flex-1">
           <main className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-3 px-4 py-3">
-              {view && (
-                <IconButton label="Back" size="icon" onClick={() => setStack((v) => v.slice(0, -1))}>
+              {depth > 0 && (
+                <IconButton label="Back" size="icon" onClick={back}>
                   <IconArrowLeft size={18} stroke={1.75} />
                 </IconButton>
               )}
@@ -120,9 +154,8 @@ export function App() {
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
-                    // Typing is a new search; it replaces whatever page was open.
-                    setStack([]);
-                    setExpanded(false);
+                    // Typing is a new search, so it shows the results.
+                    go(null);
                   }}
                   placeholder="Search YouTube Music and your files"
                   // A pill on a dark field, which is the shape YouTube Music uses.
@@ -132,22 +165,31 @@ export function App() {
               <AccountMenu state={account} />
             </div>
 
-            {/* Keyed by page, so opening one starts it scrolled to the top. */}
-            <ScrollArea key={view ? viewKey(view) : "search"} className="min-h-0 flex-1">
-              <div className="px-2 pb-2">
-                {view?.kind === "local" ? (
-                  <LocalView folder={view.id} all={library.all} actions={browse} />
-                ) : view ? (
-                  <BrowseView route={view} actions={browse} />
-                ) : (
-                  <SearchResults
-                    query={query}
-                    local={library.matches}
-                    youtube={youtube}
-                    actions={browse}
-                  />
-                )}
-              </div>
+            {/* Keyed by position in history, so each screen mounts fresh. */}
+            <ScrollArea
+              key={`${depth}:${view ? viewKey(view) : "search"}`}
+              viewportRef={setViewport}
+              onScrollCapture={(event) => {
+                if (event.target === viewport) scrolls.current[depth] = viewport.scrollTop;
+              }}
+              className="min-h-0 flex-1"
+            >
+              <ScrollParent value={viewport}>
+                <div className="px-2 pb-2">
+                  {view?.kind === "local" ? (
+                    <LocalView folder={view.id} all={library.all} actions={browse} />
+                  ) : view ? (
+                    <BrowseView route={view} actions={browse} />
+                  ) : (
+                    <SearchResults
+                      query={query}
+                      local={library.matches}
+                      youtube={youtube}
+                      actions={browse}
+                    />
+                  )}
+                </div>
+              </ScrollParent>
             </ScrollArea>
           </main>
 
@@ -167,6 +209,7 @@ export function App() {
       <NowPlaying
         track={player.track}
         playback={player.playback}
+        position={player.position}
         repeat={player.queue.repeat}
         shuffle={player.queue.shuffle}
         onToggle={player.toggle}
@@ -216,6 +259,8 @@ function SearchResults(props: {
           <TrackList
             tracks={shown}
             currentId={actions.currentId}
+            playing={actions.playing}
+            onToggle={actions.onToggle}
             onPlay={(id) => actions.onPlay([...local], id)}
             onEnqueue={actions.onEnqueue}
           />
@@ -232,6 +277,8 @@ function SearchResults(props: {
             <TrackList
               tracks={youtube.tracks}
               currentId={actions.currentId}
+              playing={actions.playing}
+              onToggle={actions.onToggle}
               onPlay={(id) => actions.onPlay(youtube.tracks, id)}
               onEnqueue={actions.onEnqueue}
               onOpen={actions.onOpen}

@@ -138,4 +138,4 @@ jobs:
           node scripts/release-notes.mjs "v$VERSION" > notes.md
           prerelease=$([[ "$VERSION" == *-* ]] && echo --prerelease || true)
           gh release create "v$VERSION" dist/*.deb \
-            --title "yMusic v$VERSION" --notes-file notes.md $prerelease
+            --title "v$VERSION" --notes-file notes.md $prerelease

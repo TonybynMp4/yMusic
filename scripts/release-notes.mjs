@@ -2,7 +2,7 @@
 // Prints a release's notes: `node scripts/release-notes.mjs v0.2.0`.
 //
 // Every commit since the previous tag, grouped by its Conventional Commits
-// type, as "**title** by @author in #pull" (or the short hash when the commit
+// type, as "**subject** by @author in #pull" (or the short hash when the commit
 // has no pull request). Authors and pull requests come from GitHub's API when
 // GITHUB_TOKEN and GITHUB_REPOSITORY are set; otherwise the git author name.
 
@@ -44,10 +44,9 @@ const commits = git("log", "--no-merges", "--reverse", "--format=%H%x1f%s%x1f%an
   .filter(Boolean)
   .map((line) => {
     const [sha, subject, name] = line.split("\x1f");
-    const match = subject.match(/^(\w+)(\(([^)]+)\))?(!)?: (.+)$/);
+    const match = subject.match(/^(\w+)(\([^)]+\))?!?: /);
     const type = match && SECTIONS.some(([t]) => t === match[1]) ? match[1] : "other";
-    const title = match && type !== "other" ? (match[3] ? `${match[3]}: ${match[5]}` : match[5]) : subject;
-    return { sha, title, breaking: Boolean(match?.[4]), type, authors: [name], pull: null };
+    return { sha, title: subject, type, authors: [name], pull: null };
   });
 
 // One GraphQL request per 50 commits: every author (co-authors included) and
@@ -99,7 +98,7 @@ for (const [type, heading] of SECTIONS) {
   if (!group.length) continue;
   lines.push("", `### ${heading}`, "");
   for (const c of group) {
-    lines.push(`- ${c.breaking ? "**BREAKING** " : ""}**${c.title}** by ${people(c.authors)} in ${link(c)}`);
+    lines.push(`- **${c.title}** by ${people(c.authors)} in ${link(c)}`);
   }
 }
 if (previous && repository) {

@@ -7,6 +7,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./worker": {
+      "types": "./src/worker.ts",
+      "default": "./src/worker.ts"
+    },
+    "./host": {
+      "types": "./src/host.ts",
+      "default": "./src/host.ts"
     }
   },
   "scripts": {
@@ -15,6 +23,7 @@
   },
   "dependencies": {
     "@ytbm/core": "workspace:*",
+    "comlink": "^4.4.2",
     "youtubei.js": "^18.0.0",
     "zod": "^4.1.5"
   },

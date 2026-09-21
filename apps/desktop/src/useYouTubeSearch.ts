@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Track } from "@ytbm/core";
-import { appFetch } from "@ytbm/ipc";
-import { createYouTube, searchSongs } from "@ytbm/youtube";
-import type { Innertube } from "youtubei.js";
+
+import { engine } from "./engine.ts";
 
 export interface YouTubeSearchState {
   tracks: Track[];
@@ -11,11 +10,9 @@ export interface YouTubeSearchState {
 }
 
 /**
- * Debounced song search against YouTube Music.
- *
- * The client is created once and reused: `Innertube.create` performs a network
- * round trip for its session context, so making one per keystroke would be
- * slower than the search itself.
+ * Debounced song search against YouTube Music, run in the engine worker. The
+ * worker keeps one InnerTube session for every search, and drops it after a
+ * failure so the next search starts clean.
  */
 export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearchState {
   const [state, setState] = useState<YouTubeSearchState>({
@@ -23,8 +20,6 @@ export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearch
     loading: false,
     error: null,
   });
-  const client = useRef<Promise<Innertube> | null>(null);
-
   useEffect(() => {
     if (!enabled) return;
     const trimmed = query.trim();
@@ -40,13 +35,9 @@ export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearch
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          client.current ??= createYouTube({ fetch: appFetch });
-          const tracks = await searchSongs(await client.current, trimmed);
+          const tracks = await engine.search(trimmed);
           if (!cancelled) setState({ tracks, loading: false, error: null });
         } catch (error) {
-          // A failed create must not be cached, or every later search reuses
-          // the same rejected promise and the tab never recovers.
-          client.current = null;
           if (!cancelled) {
             setState({ tracks: [], loading: false, error: describe(error) });
           }

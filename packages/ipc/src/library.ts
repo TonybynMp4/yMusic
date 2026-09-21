@@ -96,6 +96,7 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
     title: row.title,
     artists: [{ name: row.artist, channelId: null }],
     album: row.album,
+    albumId: null,
     durationMs: row.durationMs,
     thumbnails,
     isExplicit: false,

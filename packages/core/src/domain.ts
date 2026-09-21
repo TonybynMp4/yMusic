@@ -59,12 +59,58 @@ export const Track = z.object({
   title: z.string(),
   artists: z.array(Artist),
   album: z.string().nullable(),
+  /** YouTube Music's browse id for the album page. Null for local files. */
+  albumId: z.string().nullable().default(null),
   /** Missing for live content, which we do not queue. */
   durationMs: z.number().int().nonnegative().nullable(),
   thumbnails: z.array(Thumbnail),
   isExplicit: z.boolean().default(false),
 });
 export type Track = z.infer<typeof Track>;
+
+/** Something a browse page links to, drawn as a card: YouTube Music's two-row item. */
+export const BrowseCard = z.object({
+  kind: z.enum(["album", "playlist", "artist"]),
+  /** The browse id to open it with. */
+  id: z.string().min(1),
+  title: z.string(),
+  /** "Album • 1998", "812K monthly audience" — YouTube's own summary line. */
+  subtitle: z.string().nullable(),
+  thumbnails: z.array(Thumbnail),
+});
+export type BrowseCard = z.infer<typeof BrowseCard>;
+
+export const AlbumPage = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  artists: z.array(Artist),
+  thumbnails: z.array(Thumbnail),
+  tracks: z.array(Track),
+});
+export type AlbumPage = z.infer<typeof AlbumPage>;
+
+export const PlaylistPage = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  thumbnails: z.array(Thumbnail),
+  tracks: z.array(Track),
+});
+export type PlaylistPage = z.infer<typeof PlaylistPage>;
+
+export const ArtistPage = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  description: z.string().nullable(),
+  thumbnails: z.array(Thumbnail),
+  topSongs: z.array(Track),
+  /** The playlist behind "Top songs", when YouTube offers the full list. */
+  topSongsPlaylistId: z.string().nullable(),
+  /** Albums, singles, "fans might also like" — in YouTube's order. */
+  shelves: z.array(z.object({ title: z.string(), cards: z.array(BrowseCard) })),
+});
+export type ArtistPage = z.infer<typeof ArtistPage>;
 
 export const AudioCodec = z.enum([
   "opus",

@@ -103,7 +103,7 @@ In build order:
 
 ## Roadmap after MVP
 
-- Library and playlists via `youtubei.js`.
+- Library and playlists via `youtubei.js`. *Browsing is done:* album, artist and playlist pages, with artist and album links on every track row. What remains is the signed-in library — your own playlists, liked songs, saved albums — via `yt.music.getLibrary`.
 - Downloads to local files — the premium stream saved to disk, written in Rust with resumable range requests. This is the real "offline." Respect XDG base directories on Linux and the known-folder paths on Windows.
 - Local music library. Index on-disk files in Rust, play through the same mpv layer behind `PlaybackEngine`.
 - Flatpak, after the `.deb` is solid — it needs portal-based file access and a bundled libmpv, and it brings its own update mechanism, which is why it comes second rather than instead. An apt repo is worth revisiting only if other people start installing this; for one user, a release asset is the whole story.

@@ -10,7 +10,7 @@ export const PlatformSummary = z.object({
   appVersion: z.string(),
   installFlavor: InstallFlavor,
   /**
-   * False when the build cannot install an update itself — a hand-run binary,
+   * False when the build cannot install an update itself: a hand-run binary,
    * or a `.deb` on a desktop with no polkit. The UI links to a download
    * instead of offering a button that cannot work.
    */

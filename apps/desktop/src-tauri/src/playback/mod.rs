@@ -36,7 +36,7 @@ impl EventSink for tauri::ipc::Channel<PlaybackEvent> {
 }
 
 /// The frontend's sink, which `subscribe` replaces, plus observers that live
-/// for the whole run — the OS media session is one. Kept apart so a webview
+/// for the whole run, such as the OS media session. Kept apart so a webview
 /// reload re-subscribing cannot knock the media session off the event stream.
 #[derive(Clone, Default)]
 struct Sink {
@@ -76,7 +76,7 @@ pub struct Player {
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
 /// because its option parser would then read "0,5" for a decimal. GTK sets the
 /// locale from the environment during Tauri's startup, so this has to run
-/// before the first `mpv_create` — not once at program start, which is too
+/// before the first `mpv_create`, not once at program start, which is too
 /// early to survive it.
 #[cfg(unix)]
 fn force_c_numeric_locale() {
@@ -264,7 +264,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                                 &sink,
                                 PlaybackEvent::Error {
                                     track_id: track(),
-                                    message: "playback failed — the stream may have expired or \
+                                    message: "playback failed: the stream may have expired or \
                                               been rejected"
                                         .into(),
                                 },

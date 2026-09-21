@@ -47,7 +47,7 @@ live("search against the real InnerTube", () => {
     // endpoint and differ only by the client context in the request body, so
     // the two are indistinguishable from the outside. Without this, swapping
     // `music.search` for `search` would still compile and still return
-    // plausible-looking rows — just video results instead of songs.
+    // plausible-looking rows, just video results instead of songs.
     const clients: string[] = [];
     const watching: typeof fetch = async (input, init) => {
       const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
@@ -72,7 +72,7 @@ live("search against the real InnerTube", () => {
 });
 
 live("stream resolution against the real player endpoint", () => {
-  // Boards of Canada — Roygbiv. A fixed id rather than a search result, so a
+  // Boards of Canada, "Roygbiv". A fixed id rather than a search result, so a
   // failure here means resolution broke and not that search returned something
   // different today.
   const VIDEO_ID = "SM4tQcUt_mQ" as VideoId;
@@ -96,7 +96,7 @@ live("stream resolution against the real player endpoint", () => {
    *
    * mpv opens a stream with an open-ended range and re-asks the same way on
    * every seek. Most InnerTube clients hand back URLs that answer those with
-   * 403 while still serving a bounded range perfectly — so a lease can look
+   * 403 while still serving a bounded range perfectly, so a lease can look
    * completely correct, pass every test above, and produce a player that sits
    * at zero seconds with no error. This asserts the two requests mpv really
    * makes, against the URL we really hand it.

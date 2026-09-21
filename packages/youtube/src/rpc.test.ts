@@ -5,8 +5,8 @@ import { connectEngine } from "./host.ts";
 import { exposeEngine } from "./worker.ts";
 
 /**
- * The engine exactly as the app runs it — Comlink on one side, the fetch bridge
- * on the other — but over a `MessageChannel` in one process instead of a Worker.
+ * The engine exactly as the app runs it (Comlink on one side, the fetch bridge
+ * on the other), but over a `MessageChannel` in one process instead of a Worker.
  * Every request crosses the port twice, so a body that fails to transfer or a
  * header that gets dropped breaks this the same way it would break the app.
  *

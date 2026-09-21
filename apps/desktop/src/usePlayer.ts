@@ -87,7 +87,7 @@ export function usePlayer() {
   }, [trackId, engine, load, reportError]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
-  // it — a 403 surfaces only here. Retry such a track once on the PO-token
+  // it, and a 403 surfaces only here. Retry such a track once on the PO-token
   // client before letting the error stand.
   useEffect(
     () =>

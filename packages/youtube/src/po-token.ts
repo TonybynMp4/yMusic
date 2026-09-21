@@ -9,14 +9,14 @@ import type { FetchLike } from "./client.ts";
  * token and 206 with (measured, `tv_simply`). Minting is four steps, and only
  * the middle two need BotGuard's VM, which needs a real DOM:
  *
- * 1. fetch a challenge — the VM's interpreter and a program for it (here);
+ * 1. fetch a challenge: the VM's interpreter and a program for it (here);
  * 2. run it, getting an attestation (the VM);
  * 3. trade the attestation for an integrity token (here) and hand that to the
  *    VM, which returns a minter;
  * 4. mint a token per content binding (the VM).
  *
- * The VM lives behind `BotGuardVm` — an isolated frame in the app, jsdom in
- * tests — and everything that touches the network stays in the worker.
+ * The VM lives behind `BotGuardVm` (an isolated frame in the app, jsdom in
+ * tests), and everything that touches the network stays in the worker.
  */
 
 /** YouTube's BotGuard request key, as the web player sends it. */

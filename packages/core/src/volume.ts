@@ -2,7 +2,7 @@
  * Loudness is perceived roughly logarithmically, so a slider that maps linearly
  * to amplitude wastes most of its travel: the top half all sounds much the same
  * and everything interesting is crushed into the last few pixels. Cubing the
- * position is the usual audio taper — the handle then moves in steps that sound
+ * position is the usual audio taper: the handle then moves in steps that sound
  * evenly spaced, and amplitude follows the curve the ear expects.
  *
  * This is also exactly the curve mpv applies to its own `volume` property, so

@@ -25,7 +25,7 @@ const MAX_CONTINUATIONS = 16;
 export interface ResolveOptions {
   /**
    * Skip straight to the PO-token client. For when a lease the usual client
-   * issued resolved fine but then failed to play — a 403 on the stream shows
+   * issued resolved fine but then failed to play: a 403 on the stream shows
    * up only in mpv, never here.
    */
   fallback?: boolean;
@@ -42,7 +42,7 @@ export interface AccountSummary {
  * Everything the app asks of YouTube, behind one object.
  *
  * It is the unit that runs in the worker, so its methods take and return only
- * structured-cloneable values — ids, strings, `Track`s, leases — never a
+ * structured-cloneable values (ids, strings, `Track`s, leases), never a
  * youtubei.js object. That rule is what keeps the worker boundary a detail:
  * the same class runs on the main thread in tests with nothing changed.
  */
@@ -65,7 +65,7 @@ export class YouTubeEngine {
   /**
    * Signs the browsing client in or out. Only that client: the player client
    * impersonates VISIONOS, and a web session's cookie on a non-web client is
-   * exactly the mismatch YouTube flags, so playback stays anonymous — it
+   * exactly the mismatch YouTube flags, so playback stays anonymous. It
    * needs no account for anything the app plays today.
    */
   setCookie(cookie: string | null): void {
@@ -143,8 +143,8 @@ export class YouTubeEngine {
 
   /**
    * `VISIONOS` first: it needs no token and no evaluator, so it is fast and has
-   * the fewest moving parts. Anything that goes wrong there — short of YouTube
-   * saying the video is gone — is retried on the PO-token client.
+   * the fewest moving parts. Anything that goes wrong there, short of YouTube
+   * saying the video is gone, is retried on the PO-token client.
    */
   async resolve(videoId: VideoId, options: ResolveOptions = {}): Promise<StreamLease> {
     if (options.fallback) return this.#resolveWithToken(videoId);
@@ -214,7 +214,7 @@ export class YouTubeEngine {
   }
 }
 
-/** YouTube's "this video does not exist" — no client will do better. */
+/** YouTube's "this video does not exist": no client will do better. */
 function isGone(error: unknown): boolean {
   return error instanceof NotPlayableError && error.status === "ERROR";
 }
@@ -225,7 +225,7 @@ function describe(error: unknown): string {
 
 /**
  * A rejected creation left cached would be reused forever, so one failed
- * startup — offline for a moment, say — would break the engine for the rest of
+ * startup (offline for a moment, say) would break the engine for the rest of
  * the run. Forget it on failure and let the next call try again.
  */
 function retryable<T>(promise: Promise<T>, forget: () => void): Promise<T> {

@@ -42,7 +42,7 @@ export async function createYouTube(options: YouTubeOptions): Promise<Innertube>
  * The client type is the entire trick, and it was measured rather than chosen.
  * YouTube has moved the default web player onto SABR: `WEB` still returns
  * twenty-two formats for a track, but every one of them arrives with no `url`
- * and no `signatureCipher`, only a `serverAbrStreamingUrl` — there is nothing
+ * and no `signatureCipher`, only a `serverAbrStreamingUrl`, so there is nothing
  * to hand mpv. Of the fifteen client types, these are the ones that still
  * return direct URLs and need neither a PO token nor a JavaScript evaluator
  * for the signature:
@@ -53,7 +53,7 @@ export async function createYouTube(options: YouTubeOptions): Promise<Innertube>
  * | `ANDROID_VR` | 403       | 403               | 206                    |
  * | `VISIONOS`   | 200       | 206               | 206                    |
  *
- * mpv asks for `Range: bytes=0-` — open-ended — and re-asks the same way when
+ * mpv asks for `Range: bytes=0-`, open-ended, and re-asks the same way when
  * it seeks, so the first two columns are the ones that decide this. Under
  * `IOS` or `ANDROID_VR` mpv reports itself as playing and then sits at zero
  * forever, with no error to show the user, because the 403 never becomes a
@@ -76,7 +76,7 @@ export async function createPlayer(options: YouTubeOptions): Promise<Innertube> 
  * The client for when `VISIONOS` stops working, which is a question of when.
  *
  * `TV_SIMPLY` was the one other client whose URLs answer mpv's open-ended
- * range request — but only with a PO token bound to the session's visitor id:
+ * range request, but only with a PO token bound to the session's visitor id:
  * 403 without, 206 with. Its formats are also signature-ciphered, which
  * `VISIONOS`'s are not, so this is the path that needs both BotGuard and a
  * JavaScript evaluator. `sessionToken` must have been minted for

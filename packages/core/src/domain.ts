@@ -74,7 +74,7 @@ export const BrowseCard = z.object({
   /** The browse id to open it with. */
   id: z.string().min(1),
   title: z.string(),
-  /** "Album • 1998", "812K monthly audience" — YouTube's own summary line. */
+  /** "Album • 1998", "812K monthly audience": YouTube's own summary line. */
   subtitle: z.string().nullable(),
   thumbnails: z.array(Thumbnail),
 });
@@ -110,7 +110,7 @@ export const ArtistPage = z.object({
   topSongs: z.array(Track),
   /** The playlist behind "Top songs", when YouTube offers the full list. */
   topSongsPlaylistId: z.string().nullable(),
-  /** Albums, singles, "fans might also like" — in YouTube's order. */
+  /** Albums, singles, "fans might also like", in YouTube's order. */
   shelves: z.array(z.object({ title: z.string(), cards: z.array(BrowseCard) })),
 });
 export type ArtistPage = z.infer<typeof ArtistPage>;

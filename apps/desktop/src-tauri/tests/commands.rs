@@ -1,5 +1,5 @@
-//! Drives the commands the way the frontend does — through Tauri's IPC layer on
-//! a mock runtime — so an argument name or payload shape that only the webview
+//! Drives the commands the way the frontend does, through Tauri's IPC layer on
+//! a mock runtime, so an argument name or payload shape that only the webview
 //! would exercise cannot drift unnoticed.
 
 use tauri::{

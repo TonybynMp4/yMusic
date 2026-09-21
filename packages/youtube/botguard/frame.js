@@ -2,11 +2,11 @@
  * The BotGuard side of PO-token minting, run inside an isolated frame.
  *
  * BotGuard is Google's obfuscated VM. Minting a PO token means running it, and
- * it will not run without a real DOM — so not in the engine worker — while
+ * it will not run without a real DOM (so not in the engine worker), while
  * running it in the app's own document would mean `unsafe-eval` and
  * Google-served code next to Tauri IPC. It runs here instead: a frame on its
  * own custom-scheme origin, served by Rust with a CSP that allows eval and
- * nothing else — no network, no IPC, no reach into the parent but a
+ * nothing else: no network, no IPC, no reach into the parent but a
  * MessagePort. The worker does all networking; this file only touches the VM.
  *
  * Deliberately hand-written, dependency-free, and small enough to audit. It

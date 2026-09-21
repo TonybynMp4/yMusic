@@ -94,7 +94,7 @@ export function usePlayback() {
   );
 
   /**
-   * Reports a failure that never reached mpv — a lease that could not be
+   * Reports a failure that never reached mpv, such as a lease that could not be
    * resolved, say. Without this those failures are only a console line, and
    * the UI just sits there having silently not played anything.
    */

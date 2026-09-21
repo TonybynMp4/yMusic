@@ -3,7 +3,7 @@ import { isTauri } from "@ytbm/ipc";
 /**
  * Custom titlebar. `data-tauri-drag-region` makes the bar draggable, and on
  * Windows the maximize button carries `data-snap-hover` so the Rust side can
- * expose snap layouts for it — the hit-testing half lives in the app's
+ * expose snap layouts for it. The hit-testing half lives in the app's
  * platform module.
  */
 export function TitleBar() {

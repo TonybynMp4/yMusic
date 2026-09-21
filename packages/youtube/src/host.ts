@@ -1,7 +1,7 @@
 /**
  * The main thread's half of the engine.
  *
- * Kept free of youtubei.js on purpose — only type imports reach across — so
+ * Kept free of youtubei.js on purpose (only type imports reach across), so
  * importing it does not pull the InnerTube client and its parsers into the
  * main bundle, which is the whole point of having a worker.
  */

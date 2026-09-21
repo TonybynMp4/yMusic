@@ -5,8 +5,8 @@ import type { BotGuardVm } from "@ytbm/youtube/host";
  * BotGuard for the engine worker, run in a hidden frame.
  *
  * The frame is `packages/youtube/botguard/`, served by Rust on its own
- * `botguard:` origin with a CSP that allows eval and nothing else — see
- * `src-tauri/src/botguard.rs`. This page's CSP stays as strict as it was; all
+ * `botguard:` origin with a CSP that allows eval and nothing else (see
+ * `src-tauri/src/botguard.rs`). This page's CSP stays as strict as it was; all
  * that crosses between the two is a MessagePort carrying the challenge in and
  * tokens out. Created on first use: most sessions never need a PO token.
  */

@@ -6,7 +6,7 @@ import { isTauri } from "./tauri.ts";
  * `www.youtube.com` and not `music.youtube.com`, even though this app is a
  * music client: YouTube Music search posts to `www.youtube.com` and differs
  * only by the client context in the body, and `/youtubei/v1/config` answers
- * 400 when the origin disagrees with the host it was sent to. Measured — of
+ * 400 when the origin disagrees with the host it was sent to. Measured: of
  * `tauri.localhost`, `music.youtube.com` and this, only this is 200 on both
  * `/config` and `/search`.
  */
@@ -16,7 +16,7 @@ const YOUTUBE_ORIGIN = "https://www.youtube.com";
  * The headers to send instead of the ones the webview would attach.
  *
  * A request from the app's page is cross-origin to YouTube, so the plugin
- * labels it `Origin: http://tauri.localhost` — an origin YouTube does not
+ * labels it `Origin: http://tauri.localhost`, an origin YouTube does not
  * know, and answers with 403. Overriding both headers makes the request look
  * like what it is in every way that matters to the server.
  *
@@ -52,7 +52,7 @@ export function youtubeHeaders(input: RequestInfo | URL, init?: RequestInit): He
  * The fetch that reaches YouTube.
  *
  * InnerTube sends no CORS headers, so the webview's own `fetch` never gets the
- * response — the request is blocked as a cross-origin read before anything
+ * response: the request is blocked as a cross-origin read before anything
  * comes back. Tauri's HTTP plugin performs the request in Rust instead, where
  * the same-origin policy does not apply, and it is scoped to the YouTube hosts
  * in `capabilities/default.json` so this is not a general-purpose hole.

@@ -12,7 +12,7 @@ function logMediaFailure(error: unknown): void {
 /**
  * Connects the player to the OS media session: media keys and headset buttons
  * in, track details and volume out. Play state and position are not sent from
- * here — Rust reports those straight from mpv, which sees every seek.
+ * here: Rust reports those straight from mpv, which sees every seek.
  */
 export function useMediaSession(player: Player) {
   // The subscription is made once, so it reads the player through a ref: the

@@ -16,7 +16,7 @@ interface SearchResponse {
  * `youtube.music.search` rather than `youtube.search`: the two post to the
  * same `/youtubei/v1/search` endpoint and differ only by the client context in
  * the body (`WEB_REMIX` against `WEB`). Plain search returns videos, with no
- * album and no artist channel — so the wrong one here is not a build error or
+ * album and no artist channel, so the wrong one here is not a build error or
  * even an obviously wrong result, just a quietly worse music app. `live.test.ts`
  * asserts the client that actually goes on the wire.
  */
@@ -34,8 +34,8 @@ export async function searchSongs(youtube: Innertube, query: string): Promise<Tr
  *
  * Exported for tests, and split from the request so the shelf-picking rule can
  * be exercised without the network. That rule is the fragile part: a search
- * response leads with an `ItemSection` holding a `Message` — a "did you mean"
- * notice — so taking the first shelf that has contents returns notices instead
+ * response leads with an `ItemSection` holding a `Message` (a "did you mean"
+ * notice), so taking the first shelf that has contents returns notices instead
  * of songs. The shelf has to be selected by type.
  */
 export function songsFrom(response: SearchResponse): Track[] {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   IconArrowsShuffle,
+  IconChevronUp,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconPlayerSkipBackFilled,
@@ -14,6 +15,7 @@ import {
 import { decibelsForVolume, type RepeatMode, type Track } from "@ytbm/core";
 
 import { IconButton } from "@/components/IconButton";
+import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Artwork } from "./TrackList.tsx";
@@ -33,6 +35,8 @@ interface Props {
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
   onShuffle: (shuffle: boolean) => void;
+  expanded: boolean;
+  onToggleExpanded: () => void;
 }
 
 const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
@@ -70,6 +74,17 @@ export function NowPlaying(props: Props) {
       )}
       <div className="flex items-center gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
+          <IconButton
+            label={props.expanded ? "Collapse player" : "Expand player"}
+            onClick={props.onToggleExpanded}
+            disabled={!track}
+          >
+            <IconChevronUp
+              size={18}
+              stroke={1.75}
+              className={cn("transition-transform", props.expanded && "rotate-180")}
+            />
+          </IconButton>
           {track ? (
             <>
               <Artwork track={track} size="size-12" />

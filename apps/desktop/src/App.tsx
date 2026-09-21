@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { FullPlayer } from "./FullPlayer.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
-import { Queue } from "./Queue.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
@@ -20,6 +20,7 @@ type Source = "library" | "youtube";
 
 export function App() {
   const [source, setSource] = useState<Source>("library");
+  const [expanded, setExpanded] = useState(false);
   // One query per source. Sharing it would mean switching tabs fires a search
   // for a string typed for somewhere else, which is rarely what was meant.
   const [queries, setQueries] = useState<Record<Source, string>>({ library: "", youtube: "" });
@@ -37,7 +38,9 @@ export function App() {
     <div className="flex h-full flex-col bg-background text-foreground">
       <TitleBar />
 
-      <div className="flex min-h-0 flex-1">
+      {/* `relative` so the expanded player can cover the browsing area while
+          leaving the title bar and the player bar reachable. */}
+      <div className="relative flex min-h-0 flex-1">
         <Sidebar
           folders={library.folders}
           report={library.report}
@@ -88,12 +91,16 @@ export function App() {
           </ScrollArea>
         </main>
 
-        <Queue
-          queue={player.queue}
-          onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
-          onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
-          onClear={() => player.dispatch({ type: "clear" })}
-        />
+        {expanded && (
+          <FullPlayer
+            track={player.track}
+            queue={player.queue}
+            onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
+            onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
+            onClear={() => player.dispatch({ type: "clear" })}
+            onCollapse={() => setExpanded(false)}
+          />
+        )}
       </div>
 
       <NowPlaying
@@ -108,6 +115,8 @@ export function App() {
         onVolume={player.setVolume}
         onRepeat={player.setRepeat}
         onShuffle={player.setShuffle}
+        expanded={expanded}
+        onToggleExpanded={() => setExpanded((open) => !open)}
       />
     </div>
   );

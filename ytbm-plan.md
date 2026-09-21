@@ -9,7 +9,7 @@ Constraints the user set:
 - React and TypeScript. No Electron, no Flutter, no being stuck in C#.
 - Windows and Linux are both first-class targets, shipped together. Mobile later.
 - Playback should use libmpv.
-- Preferred libs: Tauri, tRPC, shadcn/ui, better-auth, zod.
+- Preferred libs: Tauri, tRPC, shadcn/ui, better-auth, zod. (tRPC was evaluated and dropped — see below. The rest all earn their place.)
 
 Two facts from research shape the design:
 
@@ -44,11 +44,16 @@ Two mpv details that will otherwise cost a day each: googlevideo binds the strea
 
 ### Where each requested library earns its place
 
-**zod** — the spine. InnerTube responses are undocumented and change without notice, so every response is parsed at the engine boundary into a domain model; a schema failure becomes a legible error instead of a downstream `undefined`. Also used for tRPC procedure inputs, the settings file, and every payload crossing the Rust↔TS boundary. Derive TypeScript types from the schemas, never the other way around.
+**zod** — the spine. InnerTube responses are undocumented and change without notice, so every response is parsed at the engine boundary into a domain model; a schema failure becomes a legible error instead of a downstream `undefined`. Also used for worker call inputs, the settings file, and every payload crossing the Rust↔TS boundary. Derive TypeScript types from the schemas, never the other way around.
 
-**tRPC** — needs a real boundary to be worth anything, and in a desktop app there is only one natural candidate: the data engine runs in a **Web Worker**, not on the UI thread. That keeps `youtubei.js` parsing and BotGuard attestation (which is genuinely slow and bursty) off the render thread, and it gives tRPC a client/server split to type. A ~40-line custom tRPC link over `MessageChannel` carries the calls; `@trpc/tanstack-react-query` handles caching, deduping, and infinite scroll for search and browse results, which is most of the reason to bother.
+**tRPC — dropped.** It was in the original preferred-libs list, and the case for it was the one real boundary in the app: the data engine runs in a **Web Worker**, not on the UI thread, so that `youtubei.js` parsing and BotGuard attestation (genuinely slow and bursty) stay off the render thread. That boundary is real and still stands. tRPC is simply the wrong tool for it.
 
-  Rust commands are *not* wrapped in tRPC — an `invoke` with a zod-parsed result is already typed and adding a router on top buys nothing. `packages/ipc` holds those thin typed wrappers instead. If a sync service appears later (below), its router reuses the same pattern and the frontend calls both through one client style.
+  tRPC exists to recover types that were lost crossing a *network*, where the two sides are separately compiled and the wire is untyped JSON. Our two sides are in one repo, compiled together by one `tsgo` invocation — the types were never lost, so there is nothing to recover. What remains is a router, a procedure builder, a hand-written `MessageChannel` link, and a codec, all to arrive back at the type the worker already exported. Two things do the job with no ceremony:
+
+  - **Comlink** for the worker. It proxies the exported object across `MessageChannel` and keeps its type, so a worker method is called like a method and is typed like one. It is also the same primitive the plugin sandbox needs, so the app grows one worker-RPC mechanism rather than two.
+  - **tauri-specta** for Rust. It generates TypeScript bindings from the command signatures, which beats both tRPC and a hand-written wrapper: those describe what we *believe* Rust returns, whereas generated bindings cannot drift from what it actually returns. `packages/ipc` keeps the zod parsing for InnerTube-shaped payloads, where the schema is a guess about someone else's API and validation earns its keep.
+
+  **TanStack Query stays**, used directly. Caching, deduping, and infinite scroll for search and browse were most of the reason to want tRPC, and none of them needed tRPC to work.
 
 **shadcn/ui** — the UI layer, with Tailwind v4. Owned source rather than a dependency, which matters because a music player needs heavily customized sliders, context menus, and virtualized lists. Theme tokens are driven from the Windows accent color and light/dark setting read via Tauri.
 
@@ -61,7 +66,7 @@ Two mpv details that will otherwise cost a day each: googlevideo binds the strea
 pnpm workspaces plus Turborepo. `tsgo` (TypeScript 7 native compiler) for workspace type-checking; Vite for the app bundle.
 
 - `packages/core` — pure TypeScript, no Tauri and no DOM. Domain models and zod schemas, the playback queue and transport state machine, the `PlaybackEngine` interface, and the auth token-store interface. Framework-agnostic so mobile can reuse it verbatim.
-- `packages/data-engine` — runs in the Web Worker. The `youtubei.js` wrapper (search, browse, library, playlists, `getStreamingData`), the `bgutils-js` PO-token provider, and the tRPC router. No React, no direct Tauri window APIs.
+- `packages/data-engine` — runs in the Web Worker. The `youtubei.js` wrapper (search, browse, library, playlists, `getStreamingData`), the `bgutils-js` PO-token provider, and the Comlink-exposed engine API. No React, no direct Tauri window APIs.
 - `packages/ipc` — typed, zod-validated wrappers over Tauri commands and event channels. The only file in the repo that calls `invoke`.
 - `packages/ui` — shadcn components, theme tokens, and the player-specific primitives (seek bar, volume, queue row, marquee title).
 - `apps/desktop` — the Tauri app. `src/` is the React frontend; `src-tauri/` is the Rust core: mpv playback, keyring, deep-link OAuth callback, downloads, local-library indexing, media controls (`souvlaki`), single-instance, tray, and updater. Platform differences live in a `platform/` module with one trait per concern, not in `#[cfg]`s scattered through feature code.
@@ -75,7 +80,7 @@ In build order:
 
 1. Scaffold the pnpm/Turborepo workspace and the Tauri 2 app with React, Vite, Tailwind v4, and shadcn/ui. Empty window building and running on both targets, custom titlebar in place, Mica on Windows and the themed fallback on Linux.
 2. libmpv in Rust. Commands for load, play, pause, seek, and volume; a `Channel` emitting position and state. Prove it against a plain HTTPS audio URL before any YouTube code exists, on both platforms — this is where the bundled-versus-system linking split gets settled.
-3. The data-engine worker. `youtubei.js` over `tauri-plugin-http` fetch, the tRPC router and `MessageChannel` link, zod schemas for the response shapes, and `search` plus `getStreamingData` working end to end.
+3. The data-engine worker. `youtubei.js` over `tauri-plugin-http` fetch, the engine API exposed over Comlink, zod schemas for the response shapes, and `search` plus `getStreamingData` working end to end.
 4. OAuth through the system browser with the `ytbm://` deep-link callback — installer-registered on Windows, `.desktop` handler on Linux — and the refresh token in the platform secret store.
 5. The PO-token provider (`bgutils-js`) in the worker, with JS-less client impersonation as the first-choice path and minting as the fallback.
 6. UI: search screen, now-playing bar, queue view. Wire `packages/core`'s queue and transport to the mpv commands. `souvlaki` for SMTC and MPRIS so media keys work on both.
@@ -109,6 +114,23 @@ In build order:
   The bulk identification pass is a separate pass from the filesystem scan: that one is local and fast, this one is network-bound and rate-limited, so it runs in the background, resumably, and a library with no links is fully functional without it.
 - Mobile via Tauri 2's iOS/Android targets, reusing `packages/core` and `packages/data-engine`. libmpv is heavy on iOS, so expect a platform player behind the `PlaybackEngine` interface — which is why that interface exists.
 
+## Plugins
+
+Pear Desktop is the reference, and the lesson from its source is what *not* to copy: its plugins are compiled into the app at build time (`virtual:plugins`) and run with full Electron access, so there is no sandbox and no permission model — a plugin is trusted because it shipped in the binary. YTBM plugins are loaded at runtime, so they need both.
+
+- **Written in TypeScript, never Rust.** `@ytbm/plugin-sdk` is the whole authoring surface. Each plugin runs in its own Web Worker and talks to the app over Comlink — the same mechanism as the data engine, so there is one worker-RPC path in the app, not two.
+- **Capabilities are declared, not discovered.** The plugin definition carries a `capabilities` array (`network:<host>`, `library:read`, `playback:control`, `fs:write:<dir>` …), shown to the user on install and enforced at the worker boundary: an undeclared call does not exist on the proxy the plugin receives. The worker is what makes the enforcement real rather than advisory.
+- **Contributions go into typed slots.** `player.panel` (a tab in the expanded player, beside Up next — already built as `PlayerPanelTab`), `artist.section` (a block on the artist page), `home.shelf` (a row on the home page). One plugin can fill several: trivia and tour dates belong both beside the current song and on the artist page.
+- **Some plugins transform rather than render.** A `tracks.transform` hook receives a list — search results, radio, recommendations — and returns it reordered or filtered. No UI slot involved.
+
+Ideas so far:
+
+- **Lyrics** — synced where the provider has timings, plain otherwise. `player.panel`.
+- **Trivia** — facts about the current song and artist. `player.panel`, `artist.section`.
+- **Tour dates (Bandsintown)** — upcoming shows for the artist. `player.panel`, `artist.section`, `home.shelf` for artists you listen to.
+- **Downloader** — saves the stream to disk and writes the video ID into the file's tags, so the local↔YouTube link above is exact from the start.
+- **Duplicate collapsing** — bands release a song as a single and again on the album, and YouTube Music treats them as two tracks, so both get suggested. This plugin keeps one per song via `tracks.transform`, preferring the album version. The hard part is not merging what should stay apart: live, acoustic, remix and remaster are genuinely different recordings, and they usually differ in a title suffix or in duration by more than a second or two — the same signals, and the same matcher, as linking local files to YouTube, so it gets written once and shared. A strong example of a minimal grant, too: it needs the list it is handed and nothing else — no network, no library access.
+
 ## Risks
 
 - **PO-token and BotGuard fragility.** Breaks whenever Google changes BotGuard. Isolated in the data engine so fixes stay in one place; client impersonation reduces how often we depend on it at all.
@@ -116,7 +138,7 @@ In build order:
 - **WebView2 is not WinUI.** Accepted deliberately, mitigated by the platform integration listed above. If native controls later prove essential, `packages/core` and `packages/data-engine` port to a `react-native-windows` shell without rewriting the engine.
 - **WebKitGTK is the weaker of the two webviews**, and it is the one carrying BotGuard. It lags Chromium on JS features and performance, needs `WEBKIT_DISABLE_DMABUF_RENDERER=1` on several driver and compositor combinations to avoid a blank window, and is fingerprinted differently by Google. Expect the PO-token path to degrade on Linux before it degrades on Windows — another argument for treating JS-less client impersonation as the default path rather than an optimization.
 - **Linux distribution fragmentation.** libmpv version skew, a missing Secret Service, and WebKitGTK 4.0 versus 4.1 are the three that will actually bite. Pin the floor versions, detect at startup, and fail with a message that names the missing piece.
-- **tRPC is load-bearing only for the worker boundary.** If the worker ever collapses back onto the main thread, tRPC should be dropped rather than kept as ceremony.
+- **The worker boundary is load-bearing; the RPC library is not.** If the data engine ever collapses back onto the main thread, Comlink goes with it and the engine is called directly. Nothing above it should be able to tell the difference, which is the property worth protecting.
 - **Terms of service.** Personal and educational build. Downloading commercial music can violate YouTube's terms; the user owns that call.
 
 ## Reference projects

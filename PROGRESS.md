@@ -52,7 +52,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] A search result starts that song's radio
 - [x] Autoplay: YouTube Music's suggestions after the queue, with a switch
 - [ ] Reorder the queue by dragging
-- [ ] "Play next" from a track's menu (the reducer has `enqueueNext`; only "add to queue" is in the UI)
+- [x] "Play next" and "Add to queue" in a track's menu
 
 ### Local library
 

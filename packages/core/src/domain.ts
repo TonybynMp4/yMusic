@@ -103,7 +103,10 @@ export const ArtistPage = z.object({
   id: z.string().min(1),
   name: z.string(),
   description: z.string().nullable(),
+  /** The wide banner. */
   thumbnails: z.array(Thumbnail),
+  /** A square picture of the artist, for a round avatar. */
+  avatar: z.array(Thumbnail),
   topSongs: z.array(Track),
   /** The playlist behind "Top songs", when YouTube offers the full list. */
   topSongsPlaylistId: z.string().nullable(),

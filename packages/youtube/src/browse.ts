@@ -10,7 +10,7 @@ import {
 import { YTNodes, type Innertube } from "youtubei.js";
 
 import { toArtists, toTrack, type RawSong } from "./parse.ts";
-import { toThumbnails, type RawThumbnail } from "./thumbnails.ts";
+import { squareCrop, toThumbnails, type RawThumbnail } from "./thumbnails.ts";
 
 /**
  * Album, artist and playlist pages from YouTube Music.
@@ -38,6 +38,8 @@ interface RawHeader {
   description?: RawText | null;
   thumbnail?: { contents?: readonly RawThumbnail[] | null } | null;
   thumbnails?: readonly RawThumbnail[] | null;
+  /** The round picture on a `MusicVisualHeader`, when YouTube sends one. */
+  foreground_thumbnail?: { contents?: readonly RawThumbnail[] | null } | null;
 }
 
 interface RawCard {
@@ -106,44 +108,78 @@ export function albumFrom(
   });
 }
 
-export async function getPlaylist(youtube: Innertube, id: string): Promise<PlaylistPage> {
+/** The rest of a long playlist, a page of rows at a time. */
+export type PlaylistMore = () => Promise<{ tracks: Track[]; more: PlaylistMore | null }>;
+
+/**
+ * The header and the first page of rows, with a way to fetch the rest.
+ *
+ * Long playlists (a liked-songs list, say) arrive a hundred rows at a time,
+ * and each page is a round trip, so fetching them all before showing anything
+ * leaves a large library blank for half a minute.
+ */
+export async function openPlaylist(
+  youtube: Innertube,
+  id: string,
+): Promise<{ page: PlaylistPage; more: PlaylistMore | null }> {
   const playlistId = playlistIdFromBrowseId(id);
-  type RawPlaylist = {
-    header?: RawHeader | null;
-    items?: readonly unknown[] | null;
-    has_continuation?: boolean;
-    getContinuation(): Promise<RawPlaylist>;
+  const first = (await youtube.music.getPlaylist(playlistId)) as unknown as RawPlaylist;
+  return {
+    page: playlistFrom(playlistId, first.header ?? {}, first.items ?? []),
+    more: continuing(first, 1),
   };
-  let page = (await youtube.music.getPlaylist(playlistId)) as unknown as RawPlaylist;
-  const header = page.header ?? {};
-  const rows = [...(page.items ?? [])];
-  // Long playlists — a liked-songs list, say — arrive a hundred rows at a
-  // time. Bounded, so a runaway continuation cannot hold the page forever.
-  for (let pages = 1; page.has_continuation && pages < MAX_PLAYLIST_PAGES; pages++) {
-    page = await page.getContinuation();
-    rows.push(...(page.items ?? []));
-  }
-  return playlistFrom(playlistId, header, rows);
 }
 
-const MAX_PLAYLIST_PAGES = 20;
+type RawPlaylist = {
+  header?: RawHeader | null;
+  items?: readonly unknown[] | null;
+  has_continuation?: boolean;
+  getContinuation(): Promise<RawPlaylist>;
+};
+
+/** Bounded, so a runaway continuation cannot keep fetching forever. */
+function continuing(page: RawPlaylist, pages: number): PlaylistMore | null {
+  if (!page.has_continuation || pages >= MAX_PLAYLIST_PAGES) return null;
+  return async () => {
+    const next = await page.getContinuation();
+    return { tracks: tracksFrom(next.items ?? []), more: continuing(next, pages + 1) };
+  };
+}
+
+/** The whole playlist in one go, for callers that need every row. */
+export async function getPlaylist(youtube: Innertube, id: string): Promise<PlaylistPage> {
+  const { page, more } = await openPlaylist(youtube, id);
+  const tracks = [...page.tracks];
+  for (let next = more; next; ) {
+    const chunk = await next();
+    tracks.push(...chunk.tracks);
+    next = chunk.more;
+  }
+  return { ...page, tracks };
+}
+
+const MAX_PLAYLIST_PAGES = 100;
+
+function tracksFrom(rows: readonly unknown[]): Track[] {
+  const tracks: Track[] = [];
+  for (const row of rows) {
+    const track = toTrack(row as RawSong);
+    if (track !== null) tracks.push(track);
+  }
+  return tracks;
+}
 
 export function playlistFrom(
   id: string,
   header: RawHeader,
   rows: readonly unknown[],
 ): PlaylistPage {
-  const tracks: Track[] = [];
-  for (const row of rows) {
-    const track = toTrack(row as RawSong);
-    if (track !== null) tracks.push(track);
-  }
   return PlaylistPage.parse({
     id,
     title: text(header.title) ?? "",
     subtitle: joinSubtitles(header),
     thumbnails: headerThumbnails(header),
-    tracks,
+    tracks: tracksFrom(rows),
   });
 }
 
@@ -182,11 +218,14 @@ export function artistFrom(
     if (cards.length > 0) shelves.push({ title, cards });
   }
 
+  const thumbnails = headerThumbnails(header);
+  const foreground = toThumbnails(header.foreground_thumbnail?.contents ?? undefined);
   return ArtistPage.parse({
     id,
     name: text(header.title) ?? "",
     description: text(header.description),
-    thumbnails: headerThumbnails(header),
+    thumbnails,
+    avatar: foreground.length > 0 ? foreground : squareCrop(thumbnails),
     topSongs,
     topSongsPlaylistId,
     shelves,

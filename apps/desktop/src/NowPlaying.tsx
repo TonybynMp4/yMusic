@@ -20,11 +20,12 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Artwork } from "./TrackList.tsx";
 import { formatDuration } from "./format.ts";
-import type { PlaybackState } from "./usePlayback.ts";
+import { usePosition, type PlaybackState, type PositionStore } from "./usePlayback.ts";
 
 interface Props {
   track: Track | null;
   playback: PlaybackState;
+  position: PositionStore;
   repeat: RepeatMode;
   shuffle: boolean;
   onToggle: () => void;
@@ -62,7 +63,8 @@ export function NowPlaying(props: Props) {
   const [scrubbing, setScrubbing] = useState<number | null>(null);
 
   const duration = playback.durationMs ?? track?.durationMs ?? null;
-  const position = scrubbing ?? playback.positionMs;
+  const playing = usePosition(props.position);
+  const position = scrubbing ?? playing;
   const isPlaying = playback.status === "playing";
   const decibels = decibelsForVolume(volume / 100);
 
@@ -119,7 +121,7 @@ export function NowPlaying(props: Props) {
               disabled={!track}
               size="icon-lg"
               // The one filled control in the bar, as on YouTube Music.
-              className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+              variant="default"
             >
               {isPlaying ? (
                 <IconPlayerPauseFilled size={18} />

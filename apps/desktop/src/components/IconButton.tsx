@@ -13,6 +13,8 @@ interface Props {
   /** Renders pressed-on, the way YouTube Music marks shuffle and repeat. */
   active?: boolean;
   size?: "icon-xs" | "icon-sm" | "icon" | "icon-lg";
+  /** `default` is filled, for the one primary control in a group. */
+  variant?: "ghost" | "default";
   className?: string;
 }
 
@@ -23,18 +25,27 @@ interface Props {
  * tooltip and no `aria-label` is unusable twice over. Making that the single
  * component means there is no version of the control that can omit it.
  */
-export function IconButton({ label, active, size = "icon-sm", className, ...props }: Props) {
+export function IconButton({
+  label,
+  active,
+  size = "icon-sm",
+  variant = "ghost",
+  className,
+  ...props
+}: Props) {
+  const filled = variant === "default";
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
-            variant="ghost"
+            variant={variant}
             size={size}
             aria-label={label}
             aria-pressed={active}
             className={cn(
-              "rounded-full text-muted-foreground hover:text-foreground",
+              "rounded-full",
+              !filled && "text-muted-foreground hover:text-foreground",
               active && "text-foreground",
               className,
             )}

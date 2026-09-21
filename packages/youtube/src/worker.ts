@@ -44,6 +44,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     album: (id) => engine.album(id),
     artist: (id) => engine.artist(id),
     playlist: (id) => engine.playlist(id),
+    playlistMore: (handle) => engine.playlistMore(handle),
     libraryPlaylists: () => engine.libraryPlaylists(),
     resolve: (videoId, options) => engine.resolve(videoId, options),
   };

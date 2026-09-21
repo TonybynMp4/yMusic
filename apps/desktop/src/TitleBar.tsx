@@ -13,7 +13,7 @@ export function TitleBar() {
       className="flex h-8 shrink-0 items-center justify-between pl-3 select-none"
     >
       <span data-tauri-drag-region className="text-xs font-medium text-muted-foreground">
-        YTBM
+        yMusic
       </span>
       <div className="flex h-full">
         <TitleBarButton label="Minimize" onClick={() => void windowAction("minimize")}>

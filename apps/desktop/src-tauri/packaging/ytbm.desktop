@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=YTBM
+Name=yMusic
 GenericName=Music Player
 Comment=A native YouTube Music player
 Exec={{exec}} %U
@@ -9,5 +9,5 @@ Terminal=false
 Categories=AudioVideo;Audio;Player;
 Keywords=music;youtube;player;audio;
 StartupNotify=true
-StartupWMClass=YTBM
+StartupWMClass=yMusic
 MimeType=x-scheme-handler/ytbm;

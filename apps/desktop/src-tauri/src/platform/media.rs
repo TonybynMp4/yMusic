@@ -244,7 +244,7 @@ fn create_controls<R: Runtime>(
     };
 
     let config = PlatformConfig {
-        display_name: "YTBM",
+        display_name: "yMusic",
         // Becomes `org.mpris.MediaPlayer2.ytbm` on the session bus.
         dbus_name: "ytbm",
         hwnd,

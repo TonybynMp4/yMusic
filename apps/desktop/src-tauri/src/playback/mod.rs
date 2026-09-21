@@ -114,7 +114,7 @@ impl Player {
             init.set_property("gapless-audio", "yes")?;
             init.set_property("prefetch-playlist", "yes")?;
             init.set_property("cache", "yes")?;
-            init.set_property("audio-client-name", "YTBM")?;
+            init.set_property("audio-client-name", "yMusic")?;
             // Tests and headless machines have no audio device; `ao=null`
             // decodes everything and discards the samples, which still
             // exercises the whole path up to the sound card.

@@ -12,7 +12,7 @@ export function TitleBar() {
       data-tauri-drag-region
       className="flex h-8 shrink-0 items-center justify-between pl-3 select-none"
     >
-      <span data-tauri-drag-region className="text-xs font-medium text-white/60">
+      <span data-tauri-drag-region className="text-xs font-medium text-muted-foreground">
         YTBM
       </span>
       <div className="flex h-full">
@@ -66,8 +66,8 @@ function TitleBarButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`grid h-full w-12 place-items-center text-white/70 transition-colors ${
-        danger ? "hover:bg-red-600 hover:text-white" : "hover:bg-white/10"
+      className={`grid h-full w-12 place-items-center text-muted-foreground transition-colors ${
+        danger ? "hover:bg-brand hover:text-white" : "hover:bg-accent hover:text-foreground"
       }`}
       {...rest}
     >

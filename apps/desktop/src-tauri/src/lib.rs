@@ -1,9 +1,10 @@
 pub mod commands;
-mod platform;
+pub mod platform;
 pub mod library;
 pub mod playback;
 
 use library::Library;
+use platform::media::MediaSession;
 use playback::Player;
 use tauri::Manager;
 
@@ -22,6 +23,9 @@ macro_rules! ytbm_commands {
             $crate::commands::player_seek,
             $crate::commands::player_set_volume,
             $crate::commands::player_stop,
+            $crate::commands::media_subscribe,
+            $crate::commands::media_set_track,
+            $crate::commands::media_set_volume,
             $crate::commands::library_folders,
             $crate::commands::library_add_folder,
             $crate::commands::library_remove_folder,
@@ -36,7 +40,16 @@ macro_rules! ytbm_commands {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                // The MPRIS backend's async runtime traces every poll, which
+                // buries everything else in the log within seconds.
+                .level_for("zbus", log::LevelFilter::Warn)
+                .level_for("polling", log::LevelFilter::Warn)
+                .level_for("async_io", log::LevelFilter::Warn)
+                .level_for("tracing", log::LevelFilter::Warn)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
@@ -49,7 +62,12 @@ pub fn run() {
             // A missing or too-old libmpv is the one startup failure worth
             // naming precisely: the app is a music player without it.
             let player = Player::new()?;
+            // Media keys are a nicety; `attach` logs and carries on without
+            // them rather than failing startup.
+            let media = MediaSession::attach(&window);
+            player.observe(media.clone());
             app.manage(player);
+            app.manage(media);
 
             app.manage(open_library(app.handle()));
             Ok(())

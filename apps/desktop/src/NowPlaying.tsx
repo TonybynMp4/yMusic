@@ -31,7 +31,8 @@ interface Props {
   onNext: () => void;
   onPrevious: () => void;
   onSeek: (positionMs: number) => void;
-  /** Takes a slider position in 0..1, not an amplitude. See `@ytbm/core`. */
+  /** A slider position in 0..1, not an amplitude. See `@ytbm/core`. */
+  volume: number;
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
   onShuffle: (shuffle: boolean) => void;
@@ -51,8 +52,8 @@ const BRAND_SLIDER = "[&_[data-slot=slider-range]]:bg-brand";
 
 export function NowPlaying(props: Props) {
   const { track, playback, repeat, shuffle } = props;
-  /** The slider's own position, 0..100. The curve lives in `@ytbm/core`. */
-  const [volume, setVolume] = useState(100);
+  /** The slider works in whole percent; the curve lives in `@ytbm/core`. */
+  const volume = Math.round(props.volume * 100);
   /**
    * While dragging, the scrubber shows the dragged value rather than the
    * position events still arriving from mpv, which would otherwise yank the
@@ -181,10 +182,7 @@ export function NowPlaying(props: Props) {
                   value={volume}
                   // The position is sent as a fraction; the perceptual curve is
                   // applied downstream, by mpv, and pinned by tests on both sides.
-                  onValueChange={(value) => {
-                    setVolume(value as number);
-                    props.onVolume((value as number) / 100);
-                  }}
+                  onValueChange={(value) => props.onVolume((value as number) / 100)}
                   className="w-24"
                 />
               }

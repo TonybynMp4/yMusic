@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   currentTrack,
   emptyQueue,
@@ -30,6 +30,11 @@ function logPlaybackFailure(error: unknown): void {
 export function usePlayer() {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, engine, load, reportError } = usePlayback();
+  /**
+   * The slider position in 0..1. Held here rather than in the player bar
+   * because the OS can set it too, from the MPRIS volume control.
+   */
+  const [volume, setVolumeState] = useState(1);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -98,6 +103,9 @@ export function usePlayer() {
     });
   }, []);
 
+  const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
+  const pause = useCallback(() => void engine.pause().catch(logPlaybackFailure), [engine]);
+
   const toggle = useCallback(() => {
     void (state.status === "playing" ? engine.pause() : engine.play());
   }, [engine, state.status]);
@@ -118,7 +126,14 @@ export function usePlayer() {
   }, [engine, state.positionMs]);
 
   const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
-  const setVolume = useCallback((volume: number) => void engine.setVolume(volume), [engine]);
+  const setVolume = useCallback(
+    (position: number) => {
+      const clamped = Math.min(1, Math.max(0, position));
+      setVolumeState(clamped);
+      void engine.setVolume(clamped).catch(logPlaybackFailure);
+    },
+    [engine],
+  );
   const setRepeat = useCallback((repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }), []);
   const setShuffle = useCallback(
     (shuffle: boolean) => dispatch({ type: "setShuffle", shuffle }),
@@ -130,7 +145,10 @@ export function usePlayer() {
     dispatch: dispatch as React.Dispatch<QueueAction>,
     track,
     playback: state,
+    volume,
     playTrack,
+    play,
+    pause,
     toggle,
     next,
     previous,

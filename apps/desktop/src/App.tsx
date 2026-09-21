@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { IconBrandYoutube, IconMusic } from "@tabler/icons-react";
+import { IconBrandYoutube, IconMusic, IconSearch } from "@tabler/icons-react";
 import type { Track } from "@ytbm/core";
 import { isTauri } from "@ytbm/ipc";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { Queue } from "./Queue.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -30,7 +34,7 @@ export function App() {
   const error = source === "library" ? library.error : youtube.error;
 
   return (
-    <div className="flex h-full flex-col bg-neutral-950/80 text-neutral-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       <TitleBar />
 
       <div className="flex min-h-0 flex-1">
@@ -46,34 +50,42 @@ export function App() {
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-3 px-4 py-3">
             <SourceTabs source={source} onChange={setSource} />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQueries((q) => ({ ...q, [source]: e.target.value }))}
-              placeholder={
-                source === "library" ? "Search your library" : "Search YouTube Music"
-              }
-              className="min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm placeholder:text-neutral-600 focus:border-emerald-500/50 focus:outline-none"
-            />
+            <div className="relative min-w-0 flex-1">
+              <IconSearch
+                size={15}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQueries((q) => ({ ...q, [source]: e.target.value }))}
+                placeholder={source === "library" ? "Search your library" : "Search YouTube Music"}
+                // A pill on a dark field, which is the shape YouTube Music uses.
+                className="h-9 rounded-full bg-secondary pl-9"
+              />
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {error ? (
-              <Empty
-                title={source === "library" ? "Library unavailable" : "Search unavailable"}
-                detail={error}
-              />
-            ) : results.length === 0 && !loading ? (
-              <Empty {...emptyCopy(source, query)} />
-            ) : (
-              <TrackList
-                tracks={results}
-                currentId={player.track?.id ?? null}
-                onPlay={(id) => player.playTrack([...results], id)}
-                onEnqueue={(track) => player.dispatch({ type: "enqueueLast", tracks: [track] })}
-              />
-            )}
-          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="px-2 pb-2">
+              {error ? (
+                <Empty
+                  title={source === "library" ? "Library unavailable" : "Search unavailable"}
+                  detail={error}
+                />
+              ) : results.length === 0 && !loading ? (
+                <Empty {...emptyCopy(source, query)} />
+              ) : (
+                <TrackList
+                  tracks={results}
+                  currentId={player.track?.id ?? null}
+                  onPlay={(id) => player.playTrack([...results], id)}
+                  onEnqueue={(track) => player.dispatch({ type: "enqueueLast", tracks: [track] })}
+                />
+              )}
+            </div>
+          </ScrollArea>
         </main>
 
         <Queue
@@ -101,25 +113,21 @@ export function App() {
   );
 }
 
-function SourceTabs({
-  source,
-  onChange,
-}: {
-  source: Source;
-  onChange: (source: Source) => void;
-}) {
+function SourceTabs({ source, onChange }: { source: Source; onChange: (source: Source) => void }) {
   return (
-    <div className="flex shrink-0 gap-1 rounded-md bg-white/5 p-1">
+    <div className="flex shrink-0 gap-1">
       <Tab active={source === "library"} onClick={() => onChange("library")} label="Library">
         <IconMusic size={15} stroke={1.75} />
       </Tab>
-      <Tab active={source === "youtube"} onClick={() => onChange("youtube")} label="YouTube">
+      <Tab active={source === "youtube"} onClick={() => onChange("youtube")} label="YouTube Music">
         <IconBrandYoutube size={15} stroke={1.75} />
       </Tab>
     </div>
   );
 }
 
+/** A filled pill for the active tab, transparent for the rest — YouTube
+ *  Music's chip row, rather than a segmented control in a tinted well. */
 function Tab(props: {
   active: boolean;
   onClick: () => void;
@@ -127,19 +135,21 @@ function Tab(props: {
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={props.onClick}
       aria-pressed={props.active}
-      className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition ${
+      className={cn(
+        "rounded-full",
         props.active
-          ? "bg-white/10 text-neutral-100"
-          : "text-neutral-500 hover:text-neutral-300"
-      }`}
+          ? "bg-foreground text-background hover:bg-foreground hover:text-background"
+          : "bg-secondary text-muted-foreground",
+      )}
     >
       {props.children}
       {props.label}
-    </button>
+    </Button>
   );
 }
 
@@ -158,9 +168,9 @@ function emptyCopy(source: Source, query: string): { title: string; detail: stri
 
 function Empty({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-1 px-8 text-center">
-      <p className="text-sm text-neutral-300">{title}</p>
-      <p className="text-xs text-neutral-500">{detail}</p>
+    <div className="flex h-full flex-col items-center justify-center gap-1 px-8 py-24 text-center">
+      <p className="text-sm">{title}</p>
+      <p className="text-xs text-muted-foreground">{detail}</p>
     </div>
   );
 }

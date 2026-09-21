@@ -1,11 +1,17 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 const host = process.env["TAURI_DEV_HOST"];
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // `@/` is what shadcn components import each other by; without it every
+  // added component needs hand-editing before it resolves.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   // Tauri owns the console; Vite's own error overlay is the useful signal.
   clearScreen: false,
   server: {

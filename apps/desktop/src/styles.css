@@ -1,17 +1,98 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  /* Segoe UI Variable on Windows, whatever the desktop theme uses on Linux. */
+@custom-variant dark (&:is(.dark *));
+
+/**
+ * The palette is YouTube Music's, sampled from it rather than invented, so the
+ * app reads as a companion to the service instead of a generic dark theme.
+ *
+ * The distinction worth keeping: Spotify is #121212 with a green accent and
+ * large rounded cards; YouTube Music is nearly black (#030303) with grey
+ * surfaces that step up in lightness, red used sparingly for progress and the
+ * playing indicator, and much tighter corner radii. Drifting toward green,
+ * lighter greys, or pill-shaped everything is drifting toward the wrong app.
+ */
+:root {
+  --radius: 0.5rem;
+
+  /* #030303 — the page itself. */
+  --background: oklch(0.0969 0 0);
+  --foreground: oklch(1 0 0);
+
+  /* #212121 — anything that sits above the page: player bar, menus, dialogs. */
+  --card: oklch(0.2478 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.2478 0 0);
+  --popover-foreground: oklch(1 0 0);
+
+  /* White, as YouTube Music's primary buttons are. Not the red: red is for
+     progress and state, and a red button would read as destructive. */
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0.0969 0 0);
+
+  /* #0f0f0f — the quieter surface, for rows and inputs. */
+  --secondary: oklch(0.1684 0 0);
+  --secondary-foreground: oklch(1 0 0);
+
+  --muted: oklch(0.1684 0 0);
+  /* #aaa — YouTube Music's secondary text everywhere. */
+  --muted-foreground: oklch(0.738 0 0);
+
+  /* #2a2a2a — hover and pressed states. */
+  --accent: oklch(0.285 0 0);
+  --accent-foreground: oklch(1 0 0);
+
+  /* #ff0000. Progress fill and the playing indicator; nothing else. */
+  --brand: oklch(0.628 0.2577 29.23);
+  --destructive: oklch(0.628 0.2577 29.23);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.738 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Roboto is YouTube's own face; the rest is what each desktop actually has. */
   --font-sans:
-    "Segoe UI Variable Display", "Segoe UI", system-ui, "Cantarell", "Noto Sans",
-    sans-serif;
+    Roboto, "Segoe UI Variable Display", "Segoe UI", system-ui, "Cantarell",
+    "Noto Sans", sans-serif;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
-    /* Set from the OS accent color at startup; this is the fallback. */
-    --accent: oklch(0.72 0.19 20);
+  }
+
+  * {
+    border-color: var(--border);
   }
 
   html,
@@ -30,6 +111,7 @@
     -webkit-user-select: none;
     cursor: default;
     background: transparent;
+    color: var(--foreground);
     font-family: var(--font-sans);
   }
 

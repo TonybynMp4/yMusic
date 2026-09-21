@@ -55,6 +55,8 @@ Two mpv details that will otherwise cost a day each: googlevideo binds the strea
 
   **TanStack Query stays**, used directly. Caching, deduping, and infinite scroll for search and browse were most of the reason to want tRPC, and none of them needed tRPC to work.
 
+  tRPC does come back for **plugin backends** (see Plugins), where there is a real process boundary between two separately running sides. It stays out of the core.
+
 **shadcn/ui** — the UI layer, with Tailwind v4. Owned source rather than a dependency, which matters because a music player needs heavily customized sliders, context menus, and virtualized lists. Theme tokens are driven from the Windows accent color and light/dark setting read via Tauri.
 
 **better-auth** — worth being precise about, because it does not fit the YouTube login. Signing into YouTube Music means Google OAuth with YouTube scopes, consumed by `youtubei.js`'s own OAuth flow; we run it through the system browser with a `ytbm://` deep-link callback (`tauri-plugin-deep-link`) and store the refresh token in the Windows credential store via `keyring-rs`. No embedded login page, and no auth framework in that path.
@@ -121,6 +123,9 @@ Pear Desktop is the reference, and the lesson from its source is what *not* to c
 - **Written in TypeScript, never Rust.** `@ytbm/plugin-sdk` is the whole authoring surface. Each plugin runs in its own Web Worker and talks to the app over Comlink — the same mechanism as the data engine, so there is one worker-RPC path in the app, not two.
 - **Capabilities are declared, not discovered.** The plugin definition carries a `capabilities` array (`network:<host>`, `library:read`, `playback:control`, `fs:write:<dir>` …), shown to the user on install and enforced at the worker boundary: an undeclared call does not exist on the proxy the plugin receives. The worker is what makes the enforcement real rather than advisory.
 - **Contributions go into typed slots.** `player.panel` (a tab in the expanded player, beside Up next — already built as `PlayerPanelTab`), `artist.section` (a block on the artist page), `home.shelf` (a row on the home page). One plugin can fill several: trivia and tour dates belong both beside the current song and on the artist page.
+- **Some plugins need a backend process.** A worker can't spawn `yt-dlp`, hold a socket open after the window closes, or serve a "now playing" endpoint to OBS or a stream overlay (Pear ships exactly that as its API-server plugin). Those plugins get a sidecar, and the plugin's UI half talks to its backend half over **tRPC** — a real process boundary, two runtimes, input that has to be validated on arrival, and subscriptions for progress and events. The SDK makes it the blessed pattern: the backend exports a router, the UI half gets a client typed from it.
+
+  The sidecar runs on **Deno**, because a Node or Bun process would escape the capability model entirely: it has the whole filesystem and network. Deno's permission flags map almost one-to-one onto the declared capabilities — `network:<host>` becomes `--allow-net=<host>`, `fs:write:<dir>` becomes `--allow-write=<dir>`, and running `yt-dlp` becomes `--allow-run=yt-dlp` — so enforcement is the runtime's job, not ours. The cost is binary size, so the runtime is downloaded the first time a backend plugin is installed rather than shipped with the app. Transport is stdio by default; a plugin that exists to serve other programs, like the API server, declares `server:listen:<port>` and binds to `127.0.0.1` with a per-session token.
 - **Some plugins transform rather than render.** A `tracks.transform` hook receives a list — search results, radio, recommendations — and returns it reordered or filtered. No UI slot involved.
 
 Ideas so far:
@@ -128,7 +133,7 @@ Ideas so far:
 - **Lyrics** — synced where the provider has timings, plain otherwise. `player.panel`.
 - **Trivia** — facts about the current song and artist. `player.panel`, `artist.section`.
 - **Tour dates (Bandsintown)** — upcoming shows for the artist. `player.panel`, `artist.section`, `home.shelf` for artists you listen to.
-- **Downloader** — saves the stream to disk and writes the video ID into the file's tags, so the local↔YouTube link above is exact from the start.
+- **Downloader** — a backend plugin. Saves the stream to disk and writes the video ID into the file's tags, so the local↔YouTube link above is exact from the start.
 - **Duplicate collapsing** — bands release a song as a single and again on the album, and YouTube Music treats them as two tracks, so both get suggested. This plugin keeps one per song via `tracks.transform`, preferring the album version. The hard part is not merging what should stay apart: live, acoustic, remix and remaster are genuinely different recordings, and they usually differ in a title suffix or in duration by more than a second or two — the same signals, and the same matcher, as linking local files to YouTube, so it gets written once and shared. A strong example of a minimal grant, too: it needs the list it is handed and nothing else — no network, no library access.
 
 ## Risks

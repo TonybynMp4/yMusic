@@ -28,6 +28,7 @@ interface Props {
   onAutoplay: (on: boolean) => void;
   onJump: (id: TrackId) => void;
   onRemove: (id: TrackId) => void;
+  onMove: (from: number, to: number) => void;
   onClear: () => void;
   onCollapse: () => void;
   /** Contributed tabs. Empty until plugins exist; the strip is built for them. */

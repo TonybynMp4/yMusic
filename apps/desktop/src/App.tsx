@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { AccountMenu } from "./AccountMenu.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
+import { useAccount } from "./useAccount.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { usePlayer } from "./usePlayer.ts";
@@ -30,6 +32,7 @@ export function App() {
   const library = useLibrary(queries.library);
   const youtube = useYouTubeSearch(queries.youtube, source === "youtube");
   const player = usePlayer();
+  const account = useAccount();
   useMediaSession(player);
 
   const results: readonly Track[] = source === "library" ? library.tracks : youtube.tracks;
@@ -70,6 +73,7 @@ export function App() {
                 className="h-9 rounded-full bg-secondary pl-9"
               />
             </div>
+            <AccountMenu state={account} />
           </div>
 
           <ScrollArea className="min-h-0 flex-1">

@@ -1,8 +1,10 @@
+pub mod account;
 pub mod commands;
 pub mod platform;
 pub mod library;
 pub mod playback;
 
+use account::{Account, OsKeyring};
 use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
@@ -32,7 +34,10 @@ macro_rules! ytbm_commands {
             $crate::commands::library_scan,
             $crate::commands::library_tracks,
             $crate::commands::library_search,
-            $crate::commands::library_resolve
+            $crate::commands::library_resolve,
+            $crate::commands::account_cookie,
+            $crate::commands::account_sign_in,
+            $crate::commands::account_sign_out
         ]
     };
 }
@@ -70,6 +75,7 @@ pub fn run() {
             app.manage(media);
 
             app.manage(open_library(app.handle()));
+            app.manage(open_account(app.handle()));
             Ok(())
         })
         .invoke_handler(ytbm_commands!())
@@ -98,4 +104,12 @@ fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
     }
 
     Library::open_in_memory(art_dir).expect("an in-memory library cannot fail to open")
+}
+
+fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {
+    let dir = app.path().app_data_dir().unwrap_or_else(|err| {
+        log::error!("no app data directory, the session will not persist: {err}");
+        std::env::temp_dir().join("ytbm")
+    });
+    Account::open(dir.join("account.bin"), OsKeyring)
 }

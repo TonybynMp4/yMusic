@@ -16,6 +16,8 @@ export interface EngineWorkerApi {
   /** Must be the first call; every other one fetches through the host. */
   /** Comlink unwraps a `proxy()`-marked argument into this remote on arrival. */
   connect(host: Remote<EngineHost & ProxyMarked>): void;
+  setCookie: YouTubeEngine["setCookie"];
+  account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];
   resolve: YouTubeEngine["resolve"];
 }

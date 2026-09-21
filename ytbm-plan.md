@@ -31,7 +31,7 @@ The honest tradeoff versus the earlier `react-native-windows` idea: Tauri does *
 | Secrets | Windows Credential Manager | Secret Service (gnome-keyring / KWallet) |
 | Deep link | `ytbm://` registered by the installer | `ytbm://` via a `.desktop` file with `MimeType=x-scheme-handler/ytbm` |
 
-`souvlaki` covers SMTC and MPRIS behind one API, and `keyring-rs` covers Credential Manager and Secret Service behind another, so both rows are one code path with two backends rather than two implementations. The place to plan for divergence is Linux machines with no running Secret Service — detect that at startup and fall back to an encrypted token file with a clear warning, rather than failing sign-in.
+`souvlaki` covers SMTC and MPRIS behind one API, and `keyring-rs` covers Credential Manager and Secret Service behind another, so both rows are one code path with two backends rather than two implementations. The keyring holds only a random key; the session itself is sealed with it (ChaCha20-Poly1305) in the app data directory, because Credential Manager caps a secret at 2560 bytes and a Google cookie header runs close to that. On a Linux machine with no running Secret Service, sign-in still succeeds for the session and the failure to persist is logged.
 
 Tauri also removes the hidden-webview contortion from the previous plan. The frontend *is* a Chromium DOM, so `youtubei.js` and BotGuard both run in-process. Two details make it work:
 
@@ -59,7 +59,7 @@ Two mpv details that will otherwise cost a day each: googlevideo binds the strea
 
 **shadcn/ui** — the UI layer, with Tailwind v4. Owned source rather than a dependency, which matters because a music player needs heavily customized sliders, context menus, and virtualized lists. Theme tokens are driven from the Windows accent color and light/dark setting read via Tauri.
 
-**better-auth** — worth being precise about, because it does not fit the YouTube login. Signing into YouTube Music means Google OAuth with YouTube scopes, consumed by `youtubei.js`'s own OAuth flow; we run it through the system browser with a `ytbm://` deep-link callback (`tauri-plugin-deep-link`) and store the refresh token in the Windows credential store via `keyring-rs`. No embedded login page, and no auth framework in that path.
+**better-auth** — worth being precise about, because it does not fit the YouTube login. OAuth is not available either: InnerTube only takes OAuth tokens from YouTube's own TV client, whose flow is a device code with no redirect to catch, and whose tokens YouTube began refusing in late 2024 (yt-dlp dropped it for that reason). So sign-in is a cookie session, like every working third-party client: Google's own sign-in page opens in an incognito app window with no IPC capability, and once it lands on `music.youtube.com` the window's cookies are read back, sealed, and handed to the engine worker. youtubei.js derives the `SAPISIDHASH` authorization from them. Only the browsing client is signed in; the VISIONOS player client stays anonymous, since a web cookie on a non-web client is the mismatch YouTube flags. No auth framework in that path.
 
   better-auth belongs to the **optional sync service** (`services/sync`): a small Hono server that owns YTBM accounts so settings, local-library metadata, download state, and play history can follow the user to a second desktop or to mobile. That is a post-MVP phase, and the desktop app works fully without it. Building it there rather than bolting sessions onto the local app is the difference between using better-auth and misusing it.
 
@@ -71,7 +71,7 @@ pnpm workspaces plus Turborepo. `tsgo` (TypeScript 7 native compiler) for worksp
 - `packages/youtube` — the data engine, run in a Web Worker. The `youtubei.js` wrapper (search, browse, library, playlists, `getStreamingData`), the `bgutils-js` PO-token provider, and the Comlink-exposed engine API, split into `worker` and `host` entry points so the main bundle never imports youtubei.js. Workers have no Tauri IPC, so the worker's `fetch` is serialised back to the host and sent through `tauri-plugin-http` there. No React, no direct Tauri window APIs.
 - `packages/ipc` — typed, zod-validated wrappers over Tauri commands and event channels. The only file in the repo that calls `invoke`.
 - `packages/ui` — shadcn components, theme tokens, and the player-specific primitives (seek bar, volume, queue row, marquee title).
-- `apps/desktop` — the Tauri app. `src/` is the React frontend; `src-tauri/` is the Rust core: mpv playback, keyring, deep-link OAuth callback, downloads, local-library indexing, media controls (`souvlaki`), single-instance, tray, and updater. Platform differences live in a `platform/` module with one trait per concern, not in `#[cfg]`s scattered through feature code.
+- `apps/desktop` — the Tauri app. `src/` is the React frontend; `src-tauri/` is the Rust core: mpv playback, the sealed account session and its sign-in window, downloads, local-library indexing, media controls (`souvlaki`), single-instance, tray, and updater. Platform differences live in a `platform/` module with one trait per concern, not in `#[cfg]`s scattered through feature code.
 - `services/sync` — post-MVP. Hono plus better-auth plus Drizzle/SQLite.
 
 ## MVP (Windows and Linux)
@@ -83,7 +83,7 @@ In build order:
 1. Scaffold the pnpm/Turborepo workspace and the Tauri 2 app with React, Vite, Tailwind v4, and shadcn/ui. Empty window building and running on both targets, custom titlebar in place, Mica on Windows and the themed fallback on Linux.
 2. libmpv in Rust. Commands for load, play, pause, seek, and volume; a `Channel` emitting position and state. Prove it against a plain HTTPS audio URL before any YouTube code exists, on both platforms — this is where the bundled-versus-system linking split gets settled.
 3. The data-engine worker. `youtubei.js` over `tauri-plugin-http` fetch (proxied through the main thread), the engine API exposed over Comlink, zod schemas for the response shapes, and `search` plus `getStreamingData` working end to end.
-4. OAuth through the system browser with the `ytbm://` deep-link callback — installer-registered on Windows, `.desktop` handler on Linux — and the refresh token in the platform secret store.
+4. Sign-in: Google's page in an incognito app window, the resulting cookie session sealed with a keyring-held key, and the account shown in the corner. (Originally OAuth with a `ytbm://` deep link; see the better-auth note for why that cannot work.)
 5. The PO-token provider (`bgutils-js`) in the worker, with JS-less client impersonation as the first-choice path and minting as the fallback.
 6. UI: search screen, now-playing bar, queue view. Wire `packages/core`'s queue and transport to the mpv commands. `souvlaki` for SMTC and MPRIS so media keys work on both.
 7. Packaging and updates. Windows: MSI/NSIS with the WebView2 bootstrapper, updated by `tauri-plugin-updater` directly. Linux: a `.deb` attached to a GitHub release — no AppImage, no hosted apt repo.
@@ -99,7 +99,7 @@ In build order:
 
     Sign the release assets with the updater's minisign key so the download is verified before it is handed to dpkg.
 
-    One thing gets *easier* than the mirror's experience: its `.desktop` deep-link handling is convoluted because an AppImage's `process.execPath` points into a transient `/tmp/.mount_*` directory. A `.deb` installs a stable exec path and its own `.desktop` file, so the `ytbm://` handler in step 4 is straightforward by comparison.
+    One thing gets *easier* than the mirror's experience: its `.desktop` deep-link handling is convoluted because an AppImage's `process.execPath` points into a transient `/tmp/.mount_*` directory. A `.deb` installs a stable exec path and its own `.desktop` file, so a `ytbm://` handler, if one is ever needed, is straightforward by comparison.
 
 ## Roadmap after MVP
 

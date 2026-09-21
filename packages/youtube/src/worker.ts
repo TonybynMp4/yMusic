@@ -26,6 +26,8 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     connect(remote) {
       host = remote;
     },
+    setCookie: (cookie) => engine.setCookie(cookie),
+    account: () => engine.account(),
     search: (query) => engine.search(query),
     resolve: (videoId) => engine.resolve(videoId),
   };

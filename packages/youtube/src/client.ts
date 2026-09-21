@@ -13,6 +13,11 @@ export interface YouTubeOptions {
    * global one.
    */
   fetch: FetchLike;
+  /**
+   * A signed-in browser session's `Cookie` header. youtubei.js derives the
+   * `Authorization: SAPISIDHASH` header from it, so this alone signs requests in.
+   */
+  cookie?: string | undefined;
 }
 
 /**
@@ -27,6 +32,7 @@ export async function createYouTube(options: YouTubeOptions): Promise<Innertube>
   return Innertube.create({
     retrieve_player: false,
     fetch: options.fetch,
+    ...(options.cookie ? { cookie: options.cookie } : {}),
   });
 }
 

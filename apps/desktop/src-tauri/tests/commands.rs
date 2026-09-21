@@ -16,6 +16,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use ytbm_lib::{
+    account::{Account, MemoryKeys},
     library::Library,
     platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
@@ -66,6 +67,10 @@ fn every_command_is_reachable_over_ipc() {
 
     let art_dir = std::env::temp_dir().join(format!("ytbm-ipc-art-{}", std::process::id()));
     app.manage(Library::open_in_memory(art_dir).expect("in-memory library"));
+    let account_path = std::env::temp_dir()
+        .join(format!("ytbm-ipc-account-{}", std::process::id()))
+        .join("account.bin");
+    app.manage(Account::open(account_path, MemoryKeys::default()));
 
     let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
@@ -124,7 +129,15 @@ fn every_command_is_reachable_over_ipc() {
         ),
         ("media_set_track", serde_json::json!({ "track": null })),
         ("media_set_volume", serde_json::json!({ "volume": 0.5 })),
+        // `account_sign_in` opens a real Google page, so it stays out of here.
+        ("account_sign_out", serde_json::json!({})),
     ];
+    let cookie = get_ipc_response(&webview, request("account_cookie", serde_json::json!({})))
+        .expect("account_cookie should succeed")
+        .deserialize::<Option<String>>()
+        .expect("cookie json");
+    assert_eq!(cookie, None, "a fresh account is signed out");
+
     for (command, body) in calls {
         get_ipc_response(&webview, request(command, body))
             .unwrap_or_else(|error| panic!("`{command}` failed over IPC: {error}"));

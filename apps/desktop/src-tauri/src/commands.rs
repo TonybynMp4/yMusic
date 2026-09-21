@@ -4,6 +4,7 @@
 //! macros beside each function, and those collide with the crate root once the
 //! functions are public enough for `ytbm_commands!` to name them.
 
+use crate::account::{sign_in, Account};
 use crate::platform::InstallFlavor;
 use crate::playback::{LoadRequest, PlaybackEvent, Player};
 use tauri::{ipc::Channel, Runtime, State};
@@ -135,4 +136,30 @@ pub fn library_search(
 #[tauri::command]
 pub fn library_resolve(library: State<'_, Library>, id: String) -> Result<LocalLease, String> {
     library.resolve(&id).map_err(|e| e.to_string())
+}
+
+/// The saved session's cookie header, for the engine worker to send. None when
+/// signed out.
+#[tauri::command]
+pub fn account_cookie(account: State<'_, Account>) -> Option<String> {
+    account.cookie()
+}
+
+/// Opens Google's sign-in and resolves once it completes. `None` means the user
+/// closed the window, which is a cancel rather than an error.
+#[tauri::command]
+pub async fn account_sign_in<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    account: State<'_, Account>,
+) -> Result<Option<String>, String> {
+    let cookie = sign_in::sign_in(&app).await?;
+    if let Some(cookie) = &cookie {
+        account.save(cookie.clone());
+    }
+    Ok(cookie)
+}
+
+#[tauri::command]
+pub fn account_sign_out(account: State<'_, Account>) -> Result<(), String> {
+    account.clear()
 }

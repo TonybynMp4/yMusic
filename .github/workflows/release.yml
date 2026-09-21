@@ -1,7 +1,7 @@
 name: Release
 
 # Runs on the tag `pnpm release` pushes. Builds the Linux .deb and publishes a
-# GitHub release whose notes are the version's CHANGELOG.md section. Windows
+# GitHub release whose notes list the commits since the previous tag. Windows
 # joins once the build bundles libmpv-2.dll.
 
 on:
@@ -28,6 +28,9 @@ jobs:
             libssl-dev librsvg2-dev
 
       - uses: actions/checkout@v5
+        with:
+          # The whole history and tags, for the release notes.
+          fetch-depth: 0
 
       - name: Check the tag matches the version
         shell: bash
@@ -57,13 +60,18 @@ jobs:
       - name: Write the release notes
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v heading="## $version " '
-            index($0, heading) == 1 { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > notes.md
-          test -s notes.md
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          range="${previous:+$previous..}$GITHUB_REF_NAME"
+          {
+            echo "## Changes"
+            echo
+            git log --no-merges --reverse --format='- %s' "$range" | grep -v '^- Release v'
+            if [ -n "$previous" ]; then
+              echo
+              echo "Full diff: https://github.com/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_REF_NAME"
+            fi
+          } > notes.md
 
       - uses: softprops/action-gh-release@v2
         with:

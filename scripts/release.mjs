@@ -2,9 +2,9 @@
 // Cuts a release: `pnpm release 0.2.0`.
 //
 // The version lives in apps/desktop/package.json, which tauri.conf.json reads.
-// Cargo keeps its own copy, so this writes both, turns the changelog's
-// Unreleased section into the version's section, commits and tags. Pushing
-// the tag (`git push --follow-tags`) runs .github/workflows/release.yml.
+// Cargo keeps its own copy, so this writes both, commits and tags. Pushing the
+// tag (`git push --follow-tags`) runs .github/workflows/release.yml, which
+// writes the release notes from the commits since the previous tag.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -12,7 +12,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 const PACKAGE = "apps/desktop/package.json";
 const CARGO = "apps/desktop/src-tauri/Cargo.toml";
 const LOCK = "apps/desktop/src-tauri/Cargo.lock";
-const CHANGELOG = "CHANGELOG.md";
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const fail = (message) => {
@@ -30,16 +29,6 @@ if (git("status", "--porcelain")) fail("The working tree has changes. Commit or 
 if (git("branch", "--show-current") !== "main") fail("Releases are cut from main.");
 if (git("tag", "--list", tag)) fail(`${tag} already exists.`);
 
-const changelog = readFileSync(CHANGELOG, "utf8");
-const unreleased = changelog.match(/^## Unreleased\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
-if (!unreleased) fail(`${CHANGELOG} has no "## Unreleased" section.`);
-if (!unreleased[1].trim()) fail(`${CHANGELOG} has nothing under Unreleased.`);
-const date = new Date().toISOString().slice(0, 10);
-writeFileSync(
-  CHANGELOG,
-  changelog.replace("## Unreleased\n", `## Unreleased\n\n## ${version} (${date})\n`),
-);
-
 const pkg = JSON.parse(readFileSync(PACKAGE, "utf8"));
 pkg.version = version;
 writeFileSync(PACKAGE, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -51,7 +40,8 @@ writeFileSync(
   readFileSync(LOCK, "utf8").replace(/(name = "ymusic"\nversion = )".*"/, `$1"${version}"`),
 );
 
-git("add", PACKAGE, CARGO, LOCK, CHANGELOG);
-git("commit", "--quiet", "-m", `Release ${tag}`);
+git("add", PACKAGE, CARGO, LOCK);
+// Nothing to commit when the version is already this one, as for the first release.
+if (git("diff", "--cached", "--name-only")) git("commit", "--quiet", "-m", `Release ${tag}`);
 git("tag", "--annotate", tag, "-m", `yMusic ${tag}`);
 console.log(`Tagged ${tag}. Push it with: git push --follow-tags`);

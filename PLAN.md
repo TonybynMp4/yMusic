@@ -85,7 +85,7 @@ pnpm workspaces and Turborepo. `tsgo` (the TypeScript 7 native compiler) type-ch
 
 Semantic versions, one source: `apps/desktop/package.json`. `tauri.conf.json` points at it, and Cargo keeps a copy that `pnpm release` writes. Before 1.0, a minor bump means new features and a patch means fixes.
 
-`CHANGELOG.md` is the release history. A commit that changes something a user would notice adds a line under Unreleased. `pnpm release 0.2.0` checks for a clean `main`, turns Unreleased into `## 0.2.0 (date)`, bumps both versions, commits `Release v0.2.0` and tags `v0.2.0`. Pushing the tag runs `.github/workflows/release.yml`, which builds the `.deb` in `debian:13` (the oldest target, so the glibc floor is right) and publishes a GitHub release with that changelog section as its notes. A version with a suffix (`0.2.0-beta.1`) becomes a prerelease.
+`pnpm release 0.2.0` checks for a clean `main`, bumps both versions, commits `Release v0.2.0` and tags `v0.2.0`. Pushing the tag runs `.github/workflows/release.yml`, which builds the `.deb` in `debian:13` (the oldest target, so the glibc floor is right) and publishes a GitHub release. The release notes are the commit subjects since the previous tag, which is why commits are one focused line each; edit the release on GitHub to add anything more. A version with a suffix (`0.2.0-beta.1`) becomes a prerelease.
 
 ## Packaging and updates
 

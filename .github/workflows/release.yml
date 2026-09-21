@@ -114,6 +114,9 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           fetch-depth: 0
+          # main's ruleset wants signed pull requests. Deploy keys bypass it,
+          # and GITHUB_TOKEN cannot, so the bump is pushed over SSH.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       # Fails if main moved during the build; run the workflow again.
       - name: Commit the bump and tag it
@@ -126,7 +129,8 @@ jobs:
             git commit -am "chore: release v$VERSION"
           fi
           git tag -a "v$VERSION" -m "yMusic v$VERSION"
-          git push origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
+          # Atomic, so the tag never lands without the bump.
+          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
 
       - uses: actions/download-artifact@v8
         with:

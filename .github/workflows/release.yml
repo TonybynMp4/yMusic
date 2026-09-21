@@ -1,7 +1,8 @@
 name: Release
 
 # Runs on the tag `pnpm release` pushes. Builds the Linux .deb and publishes a
-# GitHub release whose notes list the commits since the previous tag. Windows
+# GitHub release whose notes group the commits since the previous tag by
+# Conventional Commits type (scripts/release-notes.mjs). Windows
 # joins once the build bundles libmpv-2.dll.
 
 on:
@@ -59,19 +60,11 @@ jobs:
 
       - name: Write the release notes
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
-          range="${previous:+$previous..}$GITHUB_REF_NAME"
-          {
-            echo "## Changes"
-            echo
-            git log --no-merges --reverse --format='- %s' "$range" | grep -v '^- Release v'
-            if [ -n "$previous" ]; then
-              echo
-              echo "Full diff: https://github.com/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_REF_NAME"
-            fi
-          } > notes.md
+          node scripts/release-notes.mjs "$GITHUB_REF_NAME" > notes.md
 
       - uses: softprops/action-gh-release@v2
         with:

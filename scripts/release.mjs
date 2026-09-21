@@ -4,7 +4,7 @@
 // The version lives in apps/desktop/package.json, which tauri.conf.json reads.
 // Cargo keeps its own copy, so this writes both, commits and tags. Pushing the
 // tag (`git push --follow-tags`) runs .github/workflows/release.yml, which
-// writes the release notes from the commits since the previous tag.
+// writes the notes with scripts/release-notes.mjs.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -42,6 +42,6 @@ writeFileSync(
 
 git("add", PACKAGE, CARGO, LOCK);
 // Nothing to commit when the version is already this one, as for the first release.
-if (git("diff", "--cached", "--name-only")) git("commit", "--quiet", "-m", `Release ${tag}`);
+if (git("diff", "--cached", "--name-only")) git("commit", "--quiet", "-m", `chore: release ${tag}`);
 git("tag", "--annotate", tag, "-m", `yMusic ${tag}`);
 console.log(`Tagged ${tag}. Push it with: git push --follow-tags`);

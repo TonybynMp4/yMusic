@@ -36,7 +36,7 @@ export interface BrowseActions {
    * `from` lets the queue keep growing, with the rest of a playlist or a radio.
    */
   onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => void;
-  onEnqueue: (track: Track) => void;
+  onEnqueue: (track: Track, at: "next" | "last") => void;
   onOpen: (route: Route) => void;
 }
 

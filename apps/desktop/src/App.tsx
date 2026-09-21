@@ -107,7 +107,8 @@ export function App() {
       }
       player.playTrack(tracks, id, from);
     },
-    onEnqueue: (track) => player.dispatch({ type: "enqueueLast", tracks: [track] }),
+    onEnqueue: (track, at) =>
+      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks: [track] }),
     onOpen: go,
   };
 

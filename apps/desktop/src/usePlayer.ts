@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   currentTrack,
   emptyQueue,
+  sourceOf,
   isLeaseUsable,
   type QueueAction,
   queueReducer,
@@ -45,6 +46,8 @@ export function usePlayer() {
    */
   const loadedId = useRef<TrackId | null>(null);
   const leases = useRef(new Map<TrackId, StreamLease>());
+  /** The track already given its fallback retry, so a second failure sticks. */
+  const retried = useRef<TrackId | null>(null);
 
   useEffect(() => {
     if (trackId === null) {
@@ -58,6 +61,7 @@ export function usePlayer() {
     }
     if (loadedId.current === trackId) return;
     loadedId.current = trackId;
+    retried.current = null;
 
     let cancelled = false;
     void (async () => {
@@ -81,6 +85,34 @@ export function usePlayer() {
       cancelled = true;
     };
   }, [trackId, engine, load, reportError]);
+
+  // A YouTube stream can resolve fine and still be refused once mpv asks for
+  // it — a 403 surfaces only here. Retry such a track once on the PO-token
+  // client before letting the error stand.
+  useEffect(
+    () =>
+      engine.subscribe((event) => {
+        if (event.type !== "error") return;
+        const failed = event.trackId;
+        if (failed === null || failed !== loadedId.current) return;
+        if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
+        retried.current = failed;
+        leases.current.delete(failed);
+        void (async () => {
+          const lease = await resolveTrack(failed, { fallback: true });
+          if (loadedId.current !== failed) return;
+          leases.current.set(failed, lease);
+          await load(lease);
+          await engine.play();
+        })().catch((error: unknown) => {
+          logPlaybackFailure(error);
+          if (loadedId.current === failed) {
+            reportError(error instanceof Error ? error.message : String(error));
+          }
+        });
+      }),
+    [engine, load, reportError],
+  );
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
   // only here, which is the distinction the reducer encodes.

@@ -1,9 +1,31 @@
 import type { StreamLease, Track, VideoId } from "@ytbm/core";
 import type { Innertube } from "youtubei.js";
 
-import { createPlayer, createYouTube, type FetchLike } from "./client.ts";
+import {
+  createFallbackPlayer,
+  createPlayer,
+  createVisitor,
+  createYouTube,
+  type FetchLike,
+} from "./client.ts";
+import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { searchSongs } from "./search.ts";
-import { resolveStream } from "./stream.ts";
+import { NotPlayableError, resolveStream } from "./stream.ts";
+
+/**
+ * How long one fallback session is reused. Its token is bound to a visitor id,
+ * and the integrity token behind it lasts twelve hours; half that leaves room.
+ */
+const FALLBACK_SESSION_MS = 6 * 60 * 60 * 1000;
+
+export interface ResolveOptions {
+  /**
+   * Skip straight to the PO-token client. For when a lease the usual client
+   * issued resolved fine but then failed to play — a 403 on the stream shows
+   * up only in mpv, never here.
+   */
+  fallback?: boolean;
+}
 
 /** Who is signed in, as far as the UI needs to show it. */
 export interface AccountSummary {
@@ -25,9 +47,13 @@ export class YouTubeEngine {
   #cookie: string | null = null;
   #browse: Promise<Innertube> | null = null;
   #player: Promise<Innertube> | null = null;
+  readonly #minter: PoTokenMinter | null;
+  #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
 
-  constructor(fetch: FetchLike) {
+  /** Without `botguard` there is no fallback, and resolving uses `VISIONOS` only. */
+  constructor(fetch: FetchLike, botguard?: BotGuardVm) {
     this.#fetch = fetch;
+    this.#minter = botguard ? new PoTokenMinter(fetch, botguard) : null;
   }
 
   /**
@@ -60,8 +86,33 @@ export class YouTubeEngine {
     return searchSongs(await this.#browseClient(), query);
   }
 
-  async resolve(videoId: VideoId): Promise<StreamLease> {
-    return resolveStream(await this.#playerClient(), videoId);
+  /**
+   * `VISIONOS` first: it needs no token and no evaluator, so it is fast and has
+   * the fewest moving parts. Anything that goes wrong there — short of YouTube
+   * saying the video is gone — is retried on the PO-token client.
+   */
+  async resolve(videoId: VideoId, options: ResolveOptions = {}): Promise<StreamLease> {
+    if (options.fallback) return this.#resolveWithToken(videoId);
+    try {
+      return await resolveStream(await this.#playerClient(), videoId);
+    } catch (error) {
+      if (this.#minter === null || isGone(error)) throw error;
+      try {
+        return await this.#resolveWithToken(videoId);
+      } catch (fallbackError) {
+        throw new AggregateError(
+          [error, fallbackError],
+          `could not resolve a stream: ${describe(error)}; fallback: ${describe(fallbackError)}`,
+        );
+      }
+    }
+  }
+
+  async #resolveWithToken(videoId: VideoId): Promise<StreamLease> {
+    const minter = this.#minter;
+    if (minter === null) throw new Error("no BotGuard to mint a PO token with");
+    const youtube = await this.#fallbackClient(minter);
+    return resolveStream(youtube, videoId, await minter.mint(videoId));
   }
 
   /**
@@ -86,6 +137,35 @@ export class YouTubeEngine {
     });
     return this.#player;
   }
+
+  #fallbackClient(minter: PoTokenMinter): Promise<Innertube> {
+    if (this.#fallback === null || this.#fallback.expiresAt <= Date.now()) {
+      const youtube = (async () => {
+        const visitorData = await createVisitor({ fetch: this.#fetch });
+        return createFallbackPlayer({
+          fetch: this.#fetch,
+          visitorData,
+          sessionToken: await minter.mint(visitorData),
+        });
+      })();
+      this.#fallback = {
+        youtube: retryable(youtube, () => {
+          this.#fallback = null;
+        }),
+        expiresAt: Date.now() + FALLBACK_SESSION_MS,
+      };
+    }
+    return this.#fallback.youtube;
+  }
+}
+
+/** YouTube's "this video does not exist" — no client will do better. */
+function isGone(error: unknown): boolean {
+  return error instanceof NotPlayableError && error.status === "ERROR";
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**

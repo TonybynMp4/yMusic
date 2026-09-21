@@ -63,9 +63,14 @@ function playabilityOf(error: unknown): { status: string; reason: string | null 
  * want to tell "cannot play this" from "the network broke" should not have to
  * know which of those happened.
  */
-async function basicInfo(youtube: Innertube, videoId: VideoId): Promise<PlayerResponse> {
+async function basicInfo(
+  youtube: Innertube,
+  videoId: VideoId,
+  poToken: string | undefined,
+): Promise<PlayerResponse> {
   try {
-    return (await youtube.getBasicInfo(videoId)) as unknown as PlayerResponse;
+    const options = poToken ? { po_token: poToken } : undefined;
+    return (await youtube.getBasicInfo(videoId, options)) as unknown as PlayerResponse;
   } catch (error) {
     const playability = playabilityOf(error);
     if (playability === null) throw error;
@@ -141,14 +146,17 @@ export function leaseFrom(
 /**
  * A video id to a lease mpv can open.
  *
- * Needs a client built by `createPlayer`, not the search client — see there for
- * why the distinction is load-bearing.
+ * Needs a client built by `createPlayer` or `createFallbackPlayer`, not the
+ * search client — see there for why the distinction is load-bearing.
+ * `poToken` is the content-bound token the fallback client's player request
+ * carries.
  */
 export async function resolveStream(
   youtube: Innertube,
   videoId: VideoId,
+  poToken?: string,
 ): Promise<StreamLease> {
-  const info = await basicInfo(youtube, videoId);
+  const info = await basicInfo(youtube, videoId, poToken);
 
   const status = info.playability_status?.status ?? "UNKNOWN";
   if (status !== "OK") {

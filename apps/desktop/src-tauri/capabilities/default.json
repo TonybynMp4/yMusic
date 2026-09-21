@@ -27,6 +27,12 @@
         },
         {
           "url": "https://*.googlevideo.com/*"
+        },
+        {
+          "url": "https://jnn-pa.googleapis.com/*"
+        },
+        {
+          "url": "https://www.google.com/js/*"
         }
       ],
       "deny": []

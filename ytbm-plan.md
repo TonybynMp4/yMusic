@@ -101,6 +101,12 @@ In build order:
 - Local music library. Index on-disk files in Rust, play through the same mpv layer behind `PlaybackEngine`.
 - Flatpak, after the `.deb` is solid — it needs portal-based file access and a bundled libmpv, and it brings its own update mechanism, which is why it comes second rather than instead. An apt repo is worth revisiting only if other people start installing this; for one user, a release asset is the whole story.
 - Sync service with better-auth, once there is a second device to sync to.
+- **Linking local files to YouTube tracks.** One `links` table mapping a `local:` id to a `yt:` id, so a downloaded track plays from disk while keeping the catalogue APIs — artist pages, radio, plugin panels — pointed at the YouTube side. Identification comes in three grades, and the grade is stored alongside the link rather than being inferred later:
+  - *Exact, from tags.* yt-dlp's `--embed-metadata` writes the source URL into `PURL`, and ripped libraries often carry `MusicBrainzRecordingId`. Both are unambiguous and free; the scanner reads neither today and should.
+  - *Matched.* Title, artist and album normalised, with `duration_ms` as the discriminator — it is the one field that is objective, already indexed, and hard to fake agreement on. Below a confidence floor, leave it unlinked rather than guessing.
+  - *Manual.* The user corrects a match, and the correction outranks any later rescan.
+
+  The bulk identification pass is a separate pass from the filesystem scan: that one is local and fast, this one is network-bound and rate-limited, so it runs in the background, resumably, and a library with no links is fully functional without it.
 - Mobile via Tauri 2's iOS/Android targets, reusing `packages/core` and `packages/data-engine`. libmpv is heavy on iOS, so expect a platform player behind the `PlaybackEngine` interface — which is why that interface exists.
 
 ## Risks

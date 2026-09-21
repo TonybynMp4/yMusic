@@ -60,6 +60,20 @@ jobs:
     container: debian:13
     timeout-minutes: 60
     steps:
+      # Without git in the image yet, checkout downloads the tree instead of
+      # cloning it. Nothing here needs the history.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      # The Debian image deletes downloaded .debs after every install; keep
+      # them so the cache below can skip the downloads next time.
+      - run: rm -f /etc/apt/apt.conf.d/docker-clean
+      - uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: apt-debian13-
       - name: Install build dependencies
         run: |
           apt-get update
@@ -68,19 +82,22 @@ jobs:
             libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
             libssl-dev librsvg2-dev
 
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-
-      - uses: pnpm/action-setup@v4
+      # Node before pnpm: pnpm 12 runs node to install itself, and the
+      # container has none of its own. pnpm then caches its store.
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v4
+        with:
+          cache: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          # Keep the compiled dependencies even when a later step fails, so
+          # the rerun doesn't start cold.
+          cache-on-failure: true
 
       - run: node scripts/bump.mjs "${{ needs.prepare.outputs.version }}"
       - run: pnpm install --frozen-lockfile

@@ -23,7 +23,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Perceptual volume (mpv's cubic taper, applied once)
 - [x] Gapless audio in mpv
 - [x] Stale stream leases re-resolved before playing
-- [ ] Resolve the next YouTube track ahead of time (`peekNext` exists, nothing calls it), so there is no gap while its stream resolves
+- [x] Resolve the next YouTube track while the current one plays, so there is no gap while its stream resolves
 - [x] Media keys and the desktop media widget over MPRIS
 - [ ] SMTC on Windows (shares the `souvlaki` code path, never run)
 

@@ -71,6 +71,7 @@ Only the browsing client is signed in. The `VISIONOS` player client stays anonym
 - **tRPC** is not in the core. It recovers types lost across a network, and the worker and the UI are compiled together, so nothing is lost. It comes back for plugin backends, where there is a real process boundary (see Plugins).
 - **shadcn/ui on Base UI** (not Radix), with Tailwind v4. Owned source, which a music player needs for its sliders, menus and virtualized lists. Icons come from `@tabler/icons-react`.
 - **SQLite** (`rusqlite`) for the local library index.
+- **T3 Env** (`@t3-oss/env-core`), once the app needs an environment value. Nothing does yet, and the repo has no `.env`. The first value brings in one `env.ts` that declares every variable with a zod schema, and code reads them from there, never from `import.meta.env` or `process.env` directly. Client-side values need the `VITE_` prefix, and anything bundled into the frontend is public, so secrets never go there. Build and test tooling (`vite.config.ts`, the `YMUSIC_NETWORK_TESTS` gate, the release scripts) can keep reading `process.env`.
 
 ## Monorepo layout
 

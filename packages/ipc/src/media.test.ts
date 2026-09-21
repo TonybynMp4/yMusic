@@ -13,6 +13,7 @@ const base: Track = {
     { name: "B", channelId: null },
   ],
   album: null,
+  albumId: null,
   durationMs: 200_000,
   thumbnails: [
     { url: "https://i.ytimg.com/small.jpg", width: 60, height: 60 },

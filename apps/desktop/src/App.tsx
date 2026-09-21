@@ -1,19 +1,22 @@
 import { useState } from "react";
-import { IconBrandYoutube, IconMusic, IconSearch } from "@tabler/icons-react";
-import type { Track } from "@ytbm/core";
+import { IconArrowLeft, IconBrandYoutube, IconMusic, IconSearch } from "@tabler/icons-react";
+import type { Track, TrackId } from "@ytbm/core";
 import { isTauri } from "@ytbm/ipc";
 
+import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { AccountMenu } from "./AccountMenu.tsx";
+import { BrowseView, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useAccount } from "./useAccount.ts";
+import type { Route } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { usePlayer } from "./usePlayer.ts";
@@ -28,6 +31,9 @@ export function App() {
   // for a string typed for somewhere else, which is rarely what was meant.
   const [queries, setQueries] = useState<Record<Source, string>>({ library: "", youtube: "" });
   const query = queries[source];
+  // Pages opened from a search, newest last. Empty means the search is showing.
+  const [stack, setStack] = useState<Route[]>([]);
+  const route = stack.at(-1) ?? null;
 
   const library = useLibrary(queries.library);
   const youtube = useYouTubeSearch(queries.youtube, source === "youtube");
@@ -38,6 +44,26 @@ export function App() {
   const results: readonly Track[] = source === "library" ? library.tracks : youtube.tracks;
   const loading = source === "library" ? library.loading : youtube.loading;
   const error = source === "library" ? library.error : youtube.error;
+
+  const open = (next: Route) => {
+    setStack((routes) => [...routes, next]);
+    setSource("youtube");
+    setExpanded(false);
+  };
+  const browse: BrowseActions = {
+    currentId: player.track?.id ?? null,
+    onPlay: (tracks: Track[], id: TrackId | null) => {
+      if (tracks.length === 0) return;
+      if (id === null) {
+        // Shuffle first, so the queue is laid down shuffled from a random start.
+        player.setShuffle(true);
+        id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
+      }
+      player.playTrack(tracks, id);
+    },
+    onEnqueue: (track) => player.dispatch({ type: "enqueueLast", tracks: [track] }),
+    onOpen: open,
+  };
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -57,7 +83,18 @@ export function App() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-3 px-4 py-3">
-            <SourceTabs source={source} onChange={setSource} />
+            {route && (
+              <IconButton label="Back" size="icon" onClick={() => setStack((r) => r.slice(0, -1))}>
+                <IconArrowLeft size={18} stroke={1.75} />
+              </IconButton>
+            )}
+            <SourceTabs
+              source={source}
+              onChange={(next) => {
+                setSource(next);
+                setStack([]);
+              }}
+            />
             <div className="relative min-w-0 flex-1">
               <IconSearch
                 size={15}
@@ -67,7 +104,11 @@ export function App() {
               <Input
                 type="search"
                 value={query}
-                onChange={(e) => setQueries((q) => ({ ...q, [source]: e.target.value }))}
+                onChange={(e) => {
+                  setQueries((q) => ({ ...q, [source]: e.target.value }));
+                  // Typing is a new search; it replaces whatever page was open.
+                  setStack([]);
+                }}
                 placeholder={source === "library" ? "Search your library" : "Search YouTube Music"}
                 // A pill on a dark field, which is the shape YouTube Music uses.
                 className="h-9 rounded-full bg-secondary pl-9"
@@ -76,9 +117,12 @@ export function App() {
             <AccountMenu state={account} />
           </div>
 
-          <ScrollArea className="min-h-0 flex-1">
+          {/* Keyed by page, so opening one starts it scrolled to the top. */}
+          <ScrollArea key={route ? `${route.kind}:${route.id}` : "search"} className="min-h-0 flex-1">
             <div className="px-2 pb-2">
-              {error ? (
+              {route ? (
+                <BrowseView route={route} actions={browse} />
+              ) : error ? (
                 <Empty
                   title={source === "library" ? "Library unavailable" : "Search unavailable"}
                   detail={error}
@@ -90,7 +134,8 @@ export function App() {
                   tracks={results}
                   currentId={player.track?.id ?? null}
                   onPlay={(id) => player.playTrack([...results], id)}
-                  onEnqueue={(track) => player.dispatch({ type: "enqueueLast", tracks: [track] })}
+                  onEnqueue={browse.onEnqueue}
+                  onOpen={open}
                 />
               )}
             </div>

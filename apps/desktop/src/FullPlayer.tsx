@@ -132,7 +132,7 @@ function CoverArt({ track }: { track: Track | null }) {
     <img
       src={art.url}
       alt=""
-      className="aspect-square w-full max-w-md rounded-xl object-cover shadow-2xl"
+      className="aspect-square w-full max-w-md rounded-xl bg-secondary object-cover shadow-2xl"
     />
   );
 }

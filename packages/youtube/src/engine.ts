@@ -1,4 +1,4 @@
-import type { StreamLease, Track, VideoId } from "@ytbm/core";
+import type { AlbumPage, ArtistPage, PlaylistPage, StreamLease, Track, VideoId } from "@ytbm/core";
 import type { Innertube } from "youtubei.js";
 
 import {
@@ -8,6 +8,7 @@ import {
   createYouTube,
   type FetchLike,
 } from "./client.ts";
+import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -84,6 +85,21 @@ export class YouTubeEngine {
 
   async search(query: string): Promise<Track[]> {
     return searchSongs(await this.#browseClient(), query);
+  }
+
+  /** `id` is an album's browse id (`MPREb_…`). */
+  async album(id: string): Promise<AlbumPage> {
+    return getAlbum(await this.#browseClient(), id);
+  }
+
+  /** `id` is the artist's channel id (`UC…`). */
+  async artist(id: string): Promise<ArtistPage> {
+    return getArtist(await this.#browseClient(), id);
+  }
+
+  /** `id` with or without the `VL` browse prefix. */
+  async playlist(id: string): Promise<PlaylistPage> {
+    return getPlaylist(await this.#browseClient(), id);
   }
 
   /**

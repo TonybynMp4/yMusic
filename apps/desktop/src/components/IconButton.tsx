@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 interface Props {
   /** Used for both the tooltip and the accessible name, so they cannot drift. */
   label: string;
-  onClick: () => void;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   children: ReactNode;
   disabled?: boolean;
   /** Renders pressed-on, the way YouTube Music marks shuffle and repeat. */

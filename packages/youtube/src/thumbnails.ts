@@ -27,8 +27,10 @@ export function toThumbnails(raw: readonly RawThumbnail[] | undefined): Thumbnai
   }
   if (parsed.length === 0) return [];
 
-  const largest = parsed.reduce((a, b) => (b.width > a.width ? b : a));
-  const upgraded = upgrade(largest);
+  // Largest first, whatever order YouTube sent them in — album headers come
+  // smallest-first — so `[0]` is always the one to draw.
+  parsed.sort((a, b) => b.width - a.width);
+  const upgraded = upgrade(parsed[0]!);
   return upgraded ? [upgraded, ...parsed] : parsed;
 }
 

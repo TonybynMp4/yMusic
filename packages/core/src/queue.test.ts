@@ -14,6 +14,7 @@ const track = (id: string): Track => ({
   title: id.toUpperCase(),
   artists: [{ name: "Test", channelId: null }],
   album: null,
+  albumId: null,
   durationMs: 180_000,
   thumbnails: [],
   isExplicit: false,

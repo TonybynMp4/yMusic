@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VideoId } from "@ytbm/core";
 
+import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -120,4 +121,43 @@ live("stream resolution against the real player endpoint", () => {
       NotPlayableError,
     );
   }, 60_000);
+});
+
+live("browse pages against the real InnerTube", () => {
+  // Boards of Canada, and "Music Has The Right To Children": long-lived ids.
+  const artistId = "UCidyEq0ZC6rcqZmwKt_g_2g";
+
+  it("opens an artist, one of its albums, and its top-songs playlist", { timeout: 60_000 }, async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+
+    const artist = await getArtist(youtube, artistId);
+    expect(artist.name).toBe("Boards of Canada");
+    expect(artist.thumbnails.length).toBeGreaterThan(0);
+    expect(artist.topSongs.length).toBeGreaterThan(0);
+    const albums = artist.shelves.flatMap((shelf) => shelf.cards).filter((c) => c.kind === "album");
+    expect(albums.length).toBeGreaterThan(0);
+    expect(albums[0]!.id).toMatch(/^MPREb_/);
+
+    const album = await getAlbum(youtube, albums[0]!.id);
+    expect(album.title.length).toBeGreaterThan(0);
+    expect(album.artists.map((a) => a.channelId)).toContain(artistId);
+    expect(album.tracks.length).toBeGreaterThan(0);
+    for (const track of album.tracks) {
+      // Filled in from the header, which is the whole point of `albumFrom`.
+      expect(track.thumbnails.length).toBeGreaterThan(0);
+      expect(track.artists.length).toBeGreaterThan(0);
+      expect(track.albumId).toBe(album.id);
+    }
+
+    expect(artist.topSongsPlaylistId).not.toBeNull();
+    const playlist = await getPlaylist(youtube, artist.topSongsPlaylistId!);
+    expect(playlist.title.length).toBeGreaterThan(0);
+    expect(playlist.tracks.length).toBeGreaterThan(artist.topSongs.length);
+  });
+
+  it("links search results to their album", { timeout: 30_000 }, async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const tracks = await searchSongs(youtube, "boards of canada roygbiv");
+    expect(tracks.filter((t) => t.albumId?.startsWith("MPREb_")).length).toBeGreaterThan(0);
+  });
 });

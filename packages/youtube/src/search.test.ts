@@ -48,6 +48,7 @@ describe("toTrack", () => {
       title: "Untitled",
       artists: [],
       album: null,
+      albumId: null,
       durationMs: null,
       thumbnails: [],
       isExplicit: false,

@@ -23,6 +23,9 @@ export interface PlayerPanelTab {
 interface Props {
   track: Track | null;
   queue: QueueState;
+  filling: boolean;
+  autoplay: boolean;
+  onAutoplay: (on: boolean) => void;
   onJump: (id: TrackId) => void;
   onRemove: (id: TrackId) => void;
   onClear: () => void;

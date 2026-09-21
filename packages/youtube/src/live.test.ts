@@ -3,6 +3,7 @@ import type { VideoId } from "@ytbm/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
+import { getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -50,7 +51,7 @@ live("search against the real InnerTube", () => {
     // plausible-looking rows, just video results instead of songs.
     const clients: string[] = [];
     const watching: typeof fetch = async (input, init) => {
-      const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
+      const url = typeof input === "string" ? input : ((input as Request).url ?? String(input));
       if (url.includes("/youtubei/v1/search")) {
         const body = init?.body ?? (input instanceof Request ? await input.clone().text() : null);
         const text = typeof body === "string" ? body : await new Response(body).text();
@@ -68,6 +69,17 @@ live("search against the real InnerTube", () => {
     // The behavioural half of the same check: album is a YouTube Music
     // concept, and a plain video search would never populate it.
     expect(tracks.filter((t) => t.album !== null).length).toBeGreaterThan(0);
+  }, 30_000);
+});
+
+live("song radio against the real InnerTube", () => {
+  it("suggests songs to follow a seed, without the seed", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const tracks = await getRadio(youtube, "SM4tQcUt_mQ" as VideoId);
+
+    expect(tracks.length).toBeGreaterThan(10);
+    expect(tracks.some((t) => t.id === "yt:SM4tQcUt_mQ")).toBe(false);
+    expect(tracks.filter((t) => t.artists.length > 0).length).toBeGreaterThan(0);
   }, 30_000);
 });
 
@@ -127,33 +139,39 @@ live("browse pages against the real InnerTube", () => {
   // Boards of Canada, and "Music Has The Right To Children": long-lived ids.
   const artistId = "UCidyEq0ZC6rcqZmwKt_g_2g";
 
-  it("opens an artist, one of its albums, and its top-songs playlist", { timeout: 60_000 }, async () => {
-    const youtube = await createYouTube({ fetch: globalThis.fetch });
+  it(
+    "opens an artist, one of its albums, and its top-songs playlist",
+    { timeout: 60_000 },
+    async () => {
+      const youtube = await createYouTube({ fetch: globalThis.fetch });
 
-    const artist = await getArtist(youtube, artistId);
-    expect(artist.name).toBe("Boards of Canada");
-    expect(artist.thumbnails.length).toBeGreaterThan(0);
-    expect(artist.topSongs.length).toBeGreaterThan(0);
-    const albums = artist.shelves.flatMap((shelf) => shelf.cards).filter((c) => c.kind === "album");
-    expect(albums.length).toBeGreaterThan(0);
-    expect(albums[0]!.id).toMatch(/^MPREb_/);
+      const artist = await getArtist(youtube, artistId);
+      expect(artist.name).toBe("Boards of Canada");
+      expect(artist.thumbnails.length).toBeGreaterThan(0);
+      expect(artist.topSongs.length).toBeGreaterThan(0);
+      const albums = artist.shelves
+        .flatMap((shelf) => shelf.cards)
+        .filter((c) => c.kind === "album");
+      expect(albums.length).toBeGreaterThan(0);
+      expect(albums[0]!.id).toMatch(/^MPREb_/);
 
-    const album = await getAlbum(youtube, albums[0]!.id);
-    expect(album.title.length).toBeGreaterThan(0);
-    expect(album.artists.map((a) => a.channelId)).toContain(artistId);
-    expect(album.tracks.length).toBeGreaterThan(0);
-    for (const track of album.tracks) {
-      // Filled in from the header, which is the whole point of `albumFrom`.
-      expect(track.thumbnails.length).toBeGreaterThan(0);
-      expect(track.artists.length).toBeGreaterThan(0);
-      expect(track.albumId).toBe(album.id);
-    }
+      const album = await getAlbum(youtube, albums[0]!.id);
+      expect(album.title.length).toBeGreaterThan(0);
+      expect(album.artists.map((a) => a.channelId)).toContain(artistId);
+      expect(album.tracks.length).toBeGreaterThan(0);
+      for (const track of album.tracks) {
+        // Filled in from the header, which is the whole point of `albumFrom`.
+        expect(track.thumbnails.length).toBeGreaterThan(0);
+        expect(track.artists.length).toBeGreaterThan(0);
+        expect(track.albumId).toBe(album.id);
+      }
 
-    expect(artist.topSongsPlaylistId).not.toBeNull();
-    const playlist = await getPlaylist(youtube, artist.topSongsPlaylistId!);
-    expect(playlist.title.length).toBeGreaterThan(0);
-    expect(playlist.tracks.length).toBeGreaterThan(artist.topSongs.length);
-  });
+      expect(artist.topSongsPlaylistId).not.toBeNull();
+      const playlist = await getPlaylist(youtube, artist.topSongsPlaylistId!);
+      expect(playlist.title.length).toBeGreaterThan(0);
+      expect(playlist.tracks.length).toBeGreaterThan(artist.topSongs.length);
+    },
+  );
 
   it("links search results to their album", { timeout: 30_000 }, async () => {
     const youtube = await createYouTube({ fetch: globalThis.fetch });

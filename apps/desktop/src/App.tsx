@@ -20,7 +20,7 @@ import { viewKey, type Route, type View } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
-import { usePlayer } from "./usePlayer.ts";
+import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
 const SIDEBAR_KEY = "ytbm.sidebar-collapsed";
@@ -98,14 +98,14 @@ export function App() {
     currentId: player.track?.id ?? null,
     playing: player.playback.status === "playing",
     onToggle: player.toggle,
-    onPlay: (tracks: Track[], id: TrackId | null) => {
+    onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
       if (tracks.length === 0) return;
       if (id === null) {
         // Shuffle first, so the queue is laid down shuffled from a random start.
         player.setShuffle(true);
         id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
       }
-      player.playTrack(tracks, id);
+      player.playTrack(tracks, id, from);
     },
     onEnqueue: (track) => player.dispatch({ type: "enqueueLast", tracks: [track] }),
     onOpen: go,
@@ -197,6 +197,9 @@ export function App() {
             <FullPlayer
               track={player.track}
               queue={player.queue}
+              filling={player.filling}
+              autoplay={player.autoplay}
+              onAutoplay={player.setAutoplay}
               onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
               onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
               onClear={() => player.dispatch({ type: "clear" })}
@@ -279,7 +282,8 @@ function SearchResults(props: {
               currentId={actions.currentId}
               playing={actions.playing}
               onToggle={actions.onToggle}
-              onPlay={(id) => actions.onPlay(youtube.tracks, id)}
+              // As in YouTube Music: a song from search starts its radio.
+              onPlay={(id) => actions.onPlay(youtube.tracks, id, { kind: "radio" })}
               onEnqueue={actions.onEnqueue}
               onOpen={actions.onOpen}
             />

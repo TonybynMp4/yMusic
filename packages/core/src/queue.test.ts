@@ -59,7 +59,9 @@ describe("queueReducer", () => {
 
   it("holds the track on repeat one only when it ended on its own", () => {
     const repeating = apply(loaded(1), { type: "setRepeat", repeat: "one" });
-    expect(currentTrack(apply(repeating, { type: "next", reason: "trackEnded" }))?.id).toBe("local:b");
+    expect(currentTrack(apply(repeating, { type: "next", reason: "trackEnded" }))?.id).toBe(
+      "local:b",
+    );
     expect(currentTrack(apply(repeating, { type: "next", reason: "user" }))?.id).toBe("local:c");
   });
 
@@ -118,5 +120,70 @@ describe("queueReducer", () => {
   it("reports the same track for prefetching under repeat one", () => {
     const state = apply(loaded(0), { type: "setRepeat", repeat: "one" });
     expect(peekNext(state)?.id).toBe("local:a");
+  });
+
+  it("extends the queue in order when shuffle is off", () => {
+    const state = apply(loaded(1), { type: "extend", tracks: [track("e"), track("f")] });
+    expect(titles(state)).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(currentTrack(state)?.id).toBe("local:b");
+  });
+
+  it("shuffles extensions in among the tracks still to come", () => {
+    const shuffled = apply(loaded(0), { type: "setShuffle", shuffle: true, rng: () => 0 });
+    const state = apply(shuffled, {
+      type: "extend",
+      tracks: [track("e"), track("f")],
+      rng: () => 0,
+    });
+    // rng 0 puts each at the first upcoming slot, never before the current track.
+    expect(titles(state).slice(0, 3)).toEqual(["a", "f", "e"]);
+    expect(currentTrack(state)?.id).toBe("local:a");
+    expect(state.order).toHaveLength(6);
+  });
+
+  it("plays suggestions once the queue runs out", () => {
+    const withSuggestions = apply(loaded(3), {
+      type: "setSuggestions",
+      tracks: [track("x"), track("y")],
+    });
+    expect(peekNext(withSuggestions)?.id).toBe("local:x");
+    const state = apply(withSuggestions, { type: "next", reason: "trackEnded" });
+    expect(currentTrack(state)?.id).toBe("local:x");
+    expect(titles(state)).toEqual(["a", "b", "c", "d", "x"]);
+    expect(state.suggestions.map((t) => t.id)).toEqual(["local:y"]);
+  });
+
+  it("leaves suggestions alone while repeat is on", () => {
+    const state = apply(
+      loaded(3),
+      { type: "setSuggestions", tracks: [track("x")] },
+      { type: "setRepeat", repeat: "all" },
+      { type: "next", reason: "trackEnded" },
+    );
+    expect(currentTrack(state)?.id).toBe("local:a");
+  });
+
+  it("jumps to a suggestion, passing over the ones above it", () => {
+    const state = apply(
+      loaded(0),
+      { type: "setSuggestions", tracks: [track("x"), track("y"), track("z")] },
+      { type: "jumpTo", trackId: "local:y" as TrackId },
+    );
+    expect(currentTrack(state)?.id).toBe("local:y");
+    expect(state.suggestions.map((t) => t.id)).toEqual(["local:z"]);
+  });
+
+  it("leaves out suggestions that are already queued", () => {
+    const state = apply(loaded(0), { type: "setSuggestions", tracks: [track("b"), track("x")] });
+    expect(state.suggestions.map((t) => t.id)).toEqual(["local:x"]);
+  });
+
+  it("drops suggestions when a new queue is set", () => {
+    const state = apply(
+      loaded(0),
+      { type: "setSuggestions", tracks: [track("x")] },
+      { type: "setQueue", tracks, startIndex: 0 },
+    );
+    expect(state.suggestions).toEqual([]);
   });
 });

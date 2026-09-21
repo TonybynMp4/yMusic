@@ -8,8 +8,8 @@ import { YouTubeEngine } from "./engine.ts";
 import type { BotGuardVm } from "./po-token.ts";
 
 /**
- * The fallback path end to end: `botguard/frame.js` — the very file the app
- * serves into its isolated frame — runs BotGuard in jsdom, the engine mints
+ * The fallback path end to end: `botguard/frame.js`, the very file the app
+ * serves into its isolated frame, runs BotGuard in jsdom, the engine mints
  * with it, and the resulting stream has to answer mpv's request. The 206 at
  * the end is the only thing that proves the token was accepted; a URL that
  * merely resolves proves nothing.

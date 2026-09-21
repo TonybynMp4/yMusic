@@ -3,15 +3,15 @@
 //! BotGuard needs `eval` and a real DOM, and minting a PO token means running
 //! Google's code. Rather than loosen the app's CSP for that, the frontend puts
 //! it in a hidden frame on this origin, whose only CSP exception is eval and
-//! which can reach nothing — no network, no scripts but its own — and talks
+//! which can reach nothing (no network, no scripts but its own) and talks
 //! to the app only over a MessagePort. The files are compiled in, so the
 //! scheme serves exactly two fixed documents and nothing a path could name.
 //!
 //! One thing the scheme does not buy: Tauri treats every registered custom
 //! scheme as a local origin, so this frame's origin carries the app's
 //! capabilities, and WebKitGTK exposes the IPC message handler to every frame.
-//! What keeps Google's code off the IPC is that Tauri's init scripts — and
-//! with them the per-run invoke key every call must carry — are injected
+//! What keeps Google's code off the IPC is that Tauri's init scripts, and
+//! with them the per-run invoke key every call must carry, are injected
 //! into the main frame only. The frame reports whether that still holds on
 //! every load; `src/botguard.ts` logs loudly if not.
 

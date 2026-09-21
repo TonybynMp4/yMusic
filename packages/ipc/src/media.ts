@@ -3,7 +3,7 @@
  *
  * Rust reports play state and position to the OS on its own, straight from
  * mpv. What it cannot know is what is playing and how loud the slider is, so
- * those come from here — and the keys go the other way, because only the
+ * those come from here, and the keys go the other way, because only the
  * frontend owns the queue that "next" moves through.
  */
 

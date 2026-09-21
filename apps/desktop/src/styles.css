@@ -22,11 +22,11 @@
 :root {
   --radius: 0.5rem;
 
-  /* #030303 — the page itself. */
+  /* #030303: the page itself. */
   --background: oklch(0.0969 0 0);
   --foreground: oklch(1 0 0);
 
-  /* #212121 — anything that sits above the page: player bar, menus, dialogs. */
+  /* #212121: anything that sits above the page: player bar, menus, dialogs. */
   --card: oklch(0.2478 0 0);
   --card-foreground: oklch(1 0 0);
   --popover: oklch(0.2478 0 0);
@@ -37,15 +37,15 @@
   --primary: oklch(1 0 0);
   --primary-foreground: oklch(0.0969 0 0);
 
-  /* #0f0f0f — the quieter surface, for rows and inputs. */
+  /* #0f0f0f: the quieter surface, for rows and inputs. */
   --secondary: oklch(0.1684 0 0);
   --secondary-foreground: oklch(1 0 0);
 
   --muted: oklch(0.1684 0 0);
-  /* #aaa — YouTube Music's secondary text everywhere. */
+  /* #aaa: YouTube Music's secondary text everywhere. */
   --muted-foreground: oklch(0.738 0 0);
 
-  /* #2a2a2a — hover and pressed states. */
+  /* #2a2a2a: hover and pressed states. */
   --accent: oklch(0.285 0 0);
   --accent-foreground: oklch(1 0 0);
 

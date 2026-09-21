@@ -34,7 +34,7 @@ interface Props {
 /**
  * The full-page player: big artwork, and the queue as one tab among several.
  *
- * Deliberately not a persistent right-hand sidebar — that is Spotify's shape.
+ * Deliberately not a persistent right-hand sidebar, which is Spotify's shape.
  * YouTube Music keeps the queue inside the expanded player, which is also
  * what gives plugin panels somewhere to live.
  */

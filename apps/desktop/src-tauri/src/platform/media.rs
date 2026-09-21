@@ -170,7 +170,7 @@ impl MediaSession {
 /// Mirrors mpv's play state into the OS session.
 ///
 /// Positions are not pushed on every tick: MPRIS clients extrapolate from the
-/// last report while playing, so a report per status change is enough — plus
+/// last report while playing, so a report per status change is enough, plus
 /// one whenever the real position leaves the extrapolated one, which is what a
 /// seek looks like from here.
 impl EventSink for MediaSession {

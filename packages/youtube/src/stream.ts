@@ -147,7 +147,7 @@ export function leaseFrom(
  * A video id to a lease mpv can open.
  *
  * Needs a client built by `createPlayer` or `createFallbackPlayer`, not the
- * search client — see there for why the distinction is load-bearing.
+ * search client. See there for why the distinction is load-bearing.
  * `poToken` is the content-bound token the fallback client's player request
  * carries.
  */

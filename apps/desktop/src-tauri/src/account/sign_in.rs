@@ -3,13 +3,13 @@
 //! OAuth is not an option here. YouTube's InnerTube only accepts OAuth tokens
 //! from its own TV client, whose flow is a device code typed into
 //! google.com/device with no redirect to catch, and whose tokens YouTube began
-//! refusing in late 2024 — yt-dlp dropped that path for the same reason. What
+//! refusing in late 2024. yt-dlp dropped that path for the same reason. What
 //! every working third-party client uses instead is the browser session's
 //! cookies, so that is what this collects: the user signs in on Google's own
 //! page, and once it lands on YouTube Music the window's cookies are read back.
 //!
-//! The window is incognito, so its cookies never reach a persistent profile —
-//! the only copy is the sealed one `Account` keeps — and it has no capability,
+//! The window is incognito, so its cookies never reach a persistent profile
+//! (the only copy is the sealed one `Account` keeps), and it has no capability,
 //! so the remote page gets no IPC.
 
 use std::sync::mpsc;
@@ -24,7 +24,7 @@ const SIGN_IN_URL: &str = "https://accounts.google.com/ServiceLogin?service=yout
 const MUSIC_URL: &str = "https://music.youtube.com/";
 
 /// Google turns away sign-ins from browsers it does not recognise, and
-/// WebKitGTK's own user agent — "Safari", but on Linux — is one of them. This is
+/// WebKitGTK's own user agent, "Safari" but on Linux, is one of them. This is
 /// the same engine's desktop identity. WebView2 already presents itself as
 /// Edge, which Google accepts, so Windows keeps its own.
 #[cfg(target_os = "linux")]
@@ -80,8 +80,8 @@ pub async fn sign_in<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, S
                 let cookies = window
                     .cookies_for_url(MUSIC_URL.parse().expect("a valid URL"))
                     .map_err(|error| format!("could not read the session: {error}"))?;
-                // Landing on YouTube Music signed out — "skip" on some Google
-                // prompts does that — is not a sign-in. Keep the window open.
+                // Landing on YouTube Music signed out ("skip" on some Google
+                // prompts does that) is not a sign-in. Keep the window open.
                 if let Some(header) = cookie_header(&cookies) {
                     let _ = window.destroy();
                     return Ok(Some(header));

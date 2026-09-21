@@ -31,7 +31,7 @@ export type RustPlaybackEvent = z.infer<typeof RustPlaybackEvent>;
  * `PlaybackEngine` backed by libmpv in the Rust core.
  *
  * `load` replays the lease's headers, because googlevideo binds a stream URL to
- * the session that resolved it — mpv making the request with anything else gets
+ * the session that resolved it. mpv making the request with anything else gets
  * a 403 that looks like an unrelated bug.
  */
 export class MpvPlaybackEngine implements PlaybackEngine {

@@ -1,8 +1,8 @@
 /**
  * `fetch` across a worker boundary.
  *
- * The engine runs in a Web Worker, but Tauri's IPC — and with it the HTTP
- * plugin that gets past YouTube's missing CORS headers — only exists on the
+ * The engine runs in a Web Worker, but Tauri's IPC (and with it the HTTP
+ * plugin that gets past YouTube's missing CORS headers) only exists on the
  * main thread. So the worker's `fetch` flattens each request into plain data,
  * the main thread performs it, and the response comes back the same way. Bodies
  * travel as transferred `ArrayBuffer`s, so nothing is copied.
@@ -30,7 +30,7 @@ export interface SerializedResponse {
  *
  * Headers are gathered into a standalone `Headers` rather than read off a
  * `new Request(...)`: a Request's headers carry the "request" guard, which
- * silently drops `Origin`, `Referer` and `Cookie` — exactly the headers the
+ * silently drops `Origin`, `Referer` and `Cookie`, exactly the headers the
  * YouTube session depends on.
  *
  * Not forwarded: `signal`. An `AbortSignal` cannot be cloned into another

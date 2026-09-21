@@ -2,7 +2,7 @@
 //!
 //! The UI sends a slider position and relies on mpv to apply the perceptual
 //! taper. That is an assumption about somebody else's code, and the failure
-//! mode if it ever changes is not a crash — it is a volume slider that silently
+//! mode if it ever changes is not a crash. It is a volume slider that silently
 //! goes back to being linear and useless over most of its travel. So measure
 //! it: render a full-scale tone through `ao=pcm` at several volumes and compare
 //! the RMS of what comes out against the cubic curve `@ytbm/core` assumes.
@@ -92,7 +92,7 @@ fn rms_of(path: &Path) -> f64 {
 /// Walking the chunk list rather than assuming a 44-byte header matters more
 /// than it looks: header bytes read as `i16` are enormous, so a few of them
 /// left in the slice are invisible at full volume and swamp the signal at a
-/// quarter volume — which is exactly the measurement this test depends on.
+/// quarter volume, which is exactly the measurement this test depends on.
 fn pcm_data<'a>(bytes: &'a [u8], path: &Path) -> &'a [u8] {
     assert_eq!(&bytes[0..4], b"RIFF", "not a RIFF file: {}", path.display());
     assert_eq!(&bytes[8..12], b"WAVE", "not a WAVE file: {}", path.display());

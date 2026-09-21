@@ -65,7 +65,7 @@ export function toTrack(raw: RawSong): Track | null {
 
 /**
  * youtubei.js reads the album off a song row by column position, and playlist
- * and top-songs rows put a play count where it expects the album — so there
+ * and top-songs rows put a play count where it expects the album, so there
  * it finds none. The album is still there, as the one run linking to an album
  * page; that is looked for when youtubei.js comes back empty.
  */

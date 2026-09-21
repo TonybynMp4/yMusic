@@ -202,7 +202,7 @@ export function NowPlaying(props: Props) {
 }
 
 /** Reflects the slider position, so the icon tracks the handle rather than the
- *  amplitude — which at a quarter travel would already look muted. */
+ *  amplitude, which at a quarter travel would already look muted. */
 function VolumeIcon({ volume }: { volume: number }) {
   const className = "shrink-0 text-muted-foreground";
   if (volume === 0) return <IconVolume3 size={16} className={className} />;

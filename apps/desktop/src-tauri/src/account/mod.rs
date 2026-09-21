@@ -1,7 +1,7 @@
 //! The signed-in YouTube account.
 //!
-//! What YouTube accepts as a session is a cookie header — see `sign_in` for
-//! why it is not an OAuth token — and that header is the whole credential, so
+//! What YouTube accepts as a session is a cookie header (see `sign_in` for
+//! why it is not an OAuth token), and that header is the whole credential, so
 //! it is kept encrypted at rest.
 //!
 //! It does not go into the OS keyring directly: Windows Credential Manager
@@ -90,8 +90,8 @@ pub struct Account {
 }
 
 impl Account {
-    /// Loads a saved session if there is one. Anything unreadable — a missing
-    /// key, a corrupt file, a keyring that will not answer — starts the app
+    /// Loads a saved session if there is one. Anything unreadable, such as a missing
+    /// key, a corrupt file or a keyring that will not answer, starts the app
     /// signed out rather than failing it: signing in again is cheap.
     pub fn open(path: PathBuf, keys: impl KeyStore) -> Self {
         let account = Self { path, keys: Box::new(keys), cookie: Mutex::new(None) };
@@ -106,7 +106,7 @@ impl Account {
         self.cookie.lock().expect("cookie mutex").clone()
     }
 
-    /// Keeps the session for this run even if it cannot be persisted — a
+    /// Keeps the session for this run even if it cannot be persisted. A
     /// keyring that refuses is logged, and the user is simply asked to sign in
     /// again next launch instead of being refused now.
     pub fn save(&self, cookie: String) {

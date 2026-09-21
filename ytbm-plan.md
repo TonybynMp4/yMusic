@@ -68,7 +68,7 @@ Two mpv details that will otherwise cost a day each: googlevideo binds the strea
 pnpm workspaces plus Turborepo. `tsgo` (TypeScript 7 native compiler) for workspace type-checking; Vite for the app bundle.
 
 - `packages/core` — pure TypeScript, no Tauri and no DOM. Domain models and zod schemas, the playback queue and transport state machine, the `PlaybackEngine` interface, and the auth token-store interface. Framework-agnostic so mobile can reuse it verbatim.
-- `packages/data-engine` — runs in the Web Worker. The `youtubei.js` wrapper (search, browse, library, playlists, `getStreamingData`), the `bgutils-js` PO-token provider, and the Comlink-exposed engine API. No React, no direct Tauri window APIs.
+- `packages/youtube` — the data engine, run in a Web Worker. The `youtubei.js` wrapper (search, browse, library, playlists, `getStreamingData`), the `bgutils-js` PO-token provider, and the Comlink-exposed engine API, split into `worker` and `host` entry points so the main bundle never imports youtubei.js. Workers have no Tauri IPC, so the worker's `fetch` is serialised back to the host and sent through `tauri-plugin-http` there. No React, no direct Tauri window APIs.
 - `packages/ipc` — typed, zod-validated wrappers over Tauri commands and event channels. The only file in the repo that calls `invoke`.
 - `packages/ui` — shadcn components, theme tokens, and the player-specific primitives (seek bar, volume, queue row, marquee title).
 - `apps/desktop` — the Tauri app. `src/` is the React frontend; `src-tauri/` is the Rust core: mpv playback, keyring, deep-link OAuth callback, downloads, local-library indexing, media controls (`souvlaki`), single-instance, tray, and updater. Platform differences live in a `platform/` module with one trait per concern, not in `#[cfg]`s scattered through feature code.
@@ -82,7 +82,7 @@ In build order:
 
 1. Scaffold the pnpm/Turborepo workspace and the Tauri 2 app with React, Vite, Tailwind v4, and shadcn/ui. Empty window building and running on both targets, custom titlebar in place, Mica on Windows and the themed fallback on Linux.
 2. libmpv in Rust. Commands for load, play, pause, seek, and volume; a `Channel` emitting position and state. Prove it against a plain HTTPS audio URL before any YouTube code exists, on both platforms — this is where the bundled-versus-system linking split gets settled.
-3. The data-engine worker. `youtubei.js` over `tauri-plugin-http` fetch, the engine API exposed over Comlink, zod schemas for the response shapes, and `search` plus `getStreamingData` working end to end.
+3. The data-engine worker. `youtubei.js` over `tauri-plugin-http` fetch (proxied through the main thread), the engine API exposed over Comlink, zod schemas for the response shapes, and `search` plus `getStreamingData` working end to end.
 4. OAuth through the system browser with the `ytbm://` deep-link callback — installer-registered on Windows, `.desktop` handler on Linux — and the refresh token in the platform secret store.
 5. The PO-token provider (`bgutils-js`) in the worker, with JS-less client impersonation as the first-choice path and minting as the fallback.
 6. UI: search screen, now-playing bar, queue view. Wire `packages/core`'s queue and transport to the mpv commands. `souvlaki` for SMTC and MPRIS so media keys work on both.
@@ -114,7 +114,7 @@ In build order:
   - *Manual.* The user corrects a match, and the correction outranks any later rescan.
 
   The bulk identification pass is a separate pass from the filesystem scan: that one is local and fast, this one is network-bound and rate-limited, so it runs in the background, resumably, and a library with no links is fully functional without it.
-- Mobile via Tauri 2's iOS/Android targets, reusing `packages/core` and `packages/data-engine`. libmpv is heavy on iOS, so expect a platform player behind the `PlaybackEngine` interface — which is why that interface exists.
+- Mobile via Tauri 2's iOS/Android targets, reusing `packages/core` and `packages/youtube`. libmpv is heavy on iOS, so expect a platform player behind the `PlaybackEngine` interface — which is why that interface exists.
 
 ## Plugins
 
@@ -140,7 +140,7 @@ Ideas so far:
 
 - **PO-token and BotGuard fragility.** Breaks whenever Google changes BotGuard. Isolated in the data engine so fixes stay in one place; client impersonation reduces how often we depend on it at all.
 - **Stream-session binding.** Header, cookie, and token mismatch between the resolving fetch and mpv produces 403s that look like bugs elsewhere. Keep resolution and playback handoff in one code path.
-- **WebView2 is not WinUI.** Accepted deliberately, mitigated by the platform integration listed above. If native controls later prove essential, `packages/core` and `packages/data-engine` port to a `react-native-windows` shell without rewriting the engine.
+- **WebView2 is not WinUI.** Accepted deliberately, mitigated by the platform integration listed above. If native controls later prove essential, `packages/core` and `packages/youtube` port to a `react-native-windows` shell without rewriting the engine.
 - **WebKitGTK is the weaker of the two webviews**, and it is the one carrying BotGuard. It lags Chromium on JS features and performance, needs `WEBKIT_DISABLE_DMABUF_RENDERER=1` on several driver and compositor combinations to avoid a blank window, and is fingerprinted differently by Google. Expect the PO-token path to degrade on Linux before it degrades on Windows — another argument for treating JS-less client impersonation as the default path rather than an optimization.
 - **Linux distribution fragmentation.** libmpv version skew, a missing Secret Service, and WebKitGTK 4.0 versus 4.1 are the three that will actually bite. Pin the floor versions, detect at startup, and fail with a message that names the missing piece.
 - **The worker boundary is load-bearing; the RPC library is not.** If the data engine ever collapses back onto the main thread, Comlink goes with it and the engine is called directly. Nothing above it should be able to tell the difference, which is the property worth protecting.

@@ -1,0 +1,73 @@
+name: Release
+
+# Runs on the tag `pnpm release` pushes. Builds the Linux .deb and publishes a
+# GitHub release whose notes are the version's CHANGELOG.md section. Windows
+# joins once the build bundles libmpv-2.dll.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    # Build on the oldest distro we support, so the .deb's glibc and library
+    # versions are ones it can actually install against.
+    container: debian:13
+    timeout-minutes: 60
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl file git pkg-config \
+            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
+            libssl-dev librsvg2-dev
+
+      - uses: actions/checkout@v5
+
+      - name: Check the tag matches the version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' apps/desktop/package.json)
+          cargo=$(sed -n 's/^version = "\(.*\)"$/\1/p' apps/desktop/src-tauri/Cargo.toml | head -1)
+          echo "tag $tag, package.json $pkg, Cargo.toml $cargo"
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$cargo" ]
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - run: pnpm tauri build --bundles deb
+
+      - name: Write the release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## $version " '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: yMusic ${{ github.ref_name }}
+          body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: apps/desktop/src-tauri/target/release/bundle/deb/*.deb

@@ -118,7 +118,7 @@ impl Player {
             // Tests and headless machines have no audio device; `ao=null`
             // decodes everything and discards the samples, which still
             // exercises the whole path up to the sound card.
-            if let Ok(ao) = std::env::var("YTBM_AUDIO_OUTPUT") {
+            if let Ok(ao) = std::env::var("YMUSIC_AUDIO_OUTPUT") {
                 init.set_property("ao", ao.as_str())?;
             }
             Ok(())

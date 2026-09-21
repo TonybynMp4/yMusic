@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ytbm_lib::library::Library;
+use ymusic_lib::library::Library;
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/library")
@@ -19,7 +19,7 @@ struct TempHome(PathBuf);
 
 impl TempHome {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("ytbm-library-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ymusic-library-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp dir");
         Self(dir)

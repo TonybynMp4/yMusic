@@ -9,7 +9,7 @@ import {
   type LocalTrack,
   pickMusicFolder,
   type ScanReport,
-} from "@ytbm/ipc";
+} from "@ymusic/ipc";
 
 export interface LibraryState {
   /** Every local track, for the folder pages. */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ytbm/core";
+import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 

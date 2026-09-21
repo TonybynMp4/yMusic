@@ -7,7 +7,7 @@
  * frontend owns the queue that "next" moves through.
  */
 
-import type { Track } from "@ytbm/core";
+import type { Track } from "@ymusic/core";
 import { z } from "zod";
 
 import { localPathFromArtUrl } from "./library.ts";

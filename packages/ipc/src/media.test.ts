@@ -1,5 +1,5 @@
-import type { Track } from "@ytbm/core";
-import { TrackId } from "@ytbm/core";
+import type { Track } from "@ymusic/core";
+import { TrackId } from "@ymusic/core";
 import { describe, expect, it } from "vitest";
 
 import { localPathFromArtUrl } from "./library.ts";
@@ -32,7 +32,7 @@ describe("toMediaTrack", () => {
   });
 
   it("sends a local cover as a path, which is all the OS can open", () => {
-    const path = "/home/me/.cache/ytbm/art/my cover.jpg";
+    const path = "/home/me/.cache/ymusic/art/my cover.jpg";
     const media = toMediaTrack(
       {
         ...base,

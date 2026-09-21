@@ -3,8 +3,8 @@ import {
   type StreamLease,
   type TrackId,
   videoIdFromTrackId,
-} from "@ytbm/core";
-import { libraryResolve } from "@ytbm/ipc";
+} from "@ymusic/core";
+import { libraryResolve } from "@ymusic/ipc";
 
 import { engine } from "./engine.ts";
 

@@ -7,7 +7,7 @@
  * is the only place that knows local tracks have a filesystem path.
  */
 
-import { AudioCodec, StreamLease, type Track, TrackId } from "@ytbm/core";
+import { AudioCodec, StreamLease, type Track, TrackId } from "@ymusic/core";
 import { z } from "zod";
 
 import { invokeParsed, invokeVoid } from "./tauri.ts";

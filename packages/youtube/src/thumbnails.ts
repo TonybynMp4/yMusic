@@ -1,4 +1,4 @@
-import { Thumbnail } from "@ytbm/core";
+import { Thumbnail } from "@ymusic/core";
 
 /**
  * Google serves cover art from URLs that encode the size in the path, like

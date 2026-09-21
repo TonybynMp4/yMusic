@@ -1,5 +1,5 @@
 import { IconAlertTriangle, IconLoader2, IconLogin2, IconLogout } from "@tabler/icons-react";
-import { isTauri } from "@ytbm/ipc";
+import { isTauri } from "@ymusic/ipc";
 
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";

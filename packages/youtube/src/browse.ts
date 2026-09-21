@@ -6,7 +6,7 @@ import {
   PlaylistPage,
   type Thumbnail,
   type Track,
-} from "@ytbm/core";
+} from "@ymusic/core";
 import { YTNodes, type Innertube } from "youtubei.js";
 
 import { toArtists, toTrack, type RawSong } from "./parse.ts";

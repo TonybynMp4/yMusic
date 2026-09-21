@@ -1,4 +1,4 @@
-import { Track, trackIdForVideo, type Artist, type VideoId } from "@ytbm/core";
+import { Track, trackIdForVideo, type Artist, type VideoId } from "@ymusic/core";
 
 import { toThumbnails, type RawThumbnail } from "./thumbnails.ts";
 

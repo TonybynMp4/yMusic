@@ -12,7 +12,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use ytbm_lib::{
+use ymusic_lib::{
     library::Library,
     playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player},
 };
@@ -36,9 +36,9 @@ impl EventSink for Recorder {
 fn a_scanned_track_plays_through_its_lease() {
     // The fixture is a real 2s FLAC, so this decodes actual audio rather than
     // asserting against a stub.
-    std::env::set_var("YTBM_AUDIO_OUTPUT", "null");
+    std::env::set_var("YMUSIC_AUDIO_OUTPUT", "null");
 
-    let home = std::env::temp_dir().join(format!("ytbm-e2e-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("ymusic-e2e-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("temp home");
 

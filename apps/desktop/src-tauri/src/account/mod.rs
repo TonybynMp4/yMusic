@@ -38,7 +38,7 @@ pub struct OsKeyring;
 
 impl OsKeyring {
     fn entry() -> Result<keyring::Entry, String> {
-        keyring::Entry::new("ytbm", "account-key")
+        keyring::Entry::new("ymusic", "account-key")
             .map_err(|error| format!("the system keyring is unavailable: {error}"))
     }
 }
@@ -203,7 +203,7 @@ mod tests {
     }
 
     fn temp_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("ytbm-account-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ymusic-account-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir.join("account.bin")
     }

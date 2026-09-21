@@ -12,7 +12,7 @@ import {
   type QueueState,
   type TrackId,
   videoIdFromTrackId,
-} from "@ytbm/core";
+} from "@ymusic/core";
 import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";

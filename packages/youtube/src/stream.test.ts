@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type TrackId } from "@ytbm/core";
+import { type TrackId } from "@ymusic/core";
 
 import {
   bestAudioFormat,

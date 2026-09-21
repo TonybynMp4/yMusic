@@ -1,5 +1,5 @@
 import type { Innertube } from "youtubei.js";
-import type { Track } from "@ytbm/core";
+import type { Track } from "@ymusic/core";
 
 import { toTrack, type RawSong } from "./parse.ts";
 

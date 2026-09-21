@@ -12,7 +12,7 @@ import {
   IconVolume2,
   IconVolume3,
 } from "@tabler/icons-react";
-import { decibelsForVolume, type RepeatMode, type Track } from "@ytbm/core";
+import { decibelsForVolume, type RepeatMode, type Track } from "@ymusic/core";
 
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ interface Props {
   onNext: () => void;
   onPrevious: () => void;
   onSeek: (positionMs: number) => void;
-  /** A slider position in 0..1, not an amplitude. See `@ytbm/core`. */
+  /** A slider position in 0..1, not an amplitude. See `@ymusic/core`. */
   volume: number;
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
@@ -53,7 +53,7 @@ const BRAND_SLIDER = "[&_[data-slot=slider-range]]:bg-brand";
 
 export function NowPlaying(props: Props) {
   const { track, playback, repeat, shuffle } = props;
-  /** The slider works in whole percent; the curve lives in `@ytbm/core`. */
+  /** The slider works in whole percent; the curve lives in `@ymusic/core`. */
   const volume = Math.round(props.volume * 100);
   /**
    * While dragging, the scrubber shows the dragged value rather than the

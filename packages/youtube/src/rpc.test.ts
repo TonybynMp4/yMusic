@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { VideoId } from "@ytbm/core";
+import type { VideoId } from "@ymusic/core";
 
 import { connectEngine } from "./host.ts";
 import { exposeEngine } from "./worker.ts";
@@ -10,9 +10,9 @@ import { exposeEngine } from "./worker.ts";
  * Every request crosses the port twice, so a body that fails to transfer or a
  * header that gets dropped breaks this the same way it would break the app.
  *
- * Network-gated like `live.test.ts`; run with `YTBM_NETWORK_TESTS=1`.
+ * Network-gated like `live.test.ts`; run with `YMUSIC_NETWORK_TESTS=1`.
  */
-const live = process.env.YTBM_NETWORK_TESTS === "1" ? describe : describe.skip;
+const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
 
 live("the engine across a message port", () => {
   it("searches and resolves a stream", { timeout: 60_000 }, async () => {

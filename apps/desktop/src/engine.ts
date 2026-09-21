@@ -1,5 +1,5 @@
-import { appFetch, isTauri } from "@ytbm/ipc";
-import { connectEngine } from "@ytbm/youtube/host";
+import { appFetch, isTauri } from "@ymusic/ipc";
+import { connectEngine } from "@ymusic/youtube/host";
 
 import { botguard } from "./botguard.ts";
 

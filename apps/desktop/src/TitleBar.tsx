@@ -1,4 +1,4 @@
-import { isTauri } from "@ytbm/ipc";
+import { isTauri } from "@ymusic/ipc";
 
 /**
  * Custom titlebar. `data-tauri-drag-region` makes the bar draggable, and on

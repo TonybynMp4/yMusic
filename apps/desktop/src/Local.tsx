@@ -1,5 +1,5 @@
 import { IconDeviceDesktop, IconFolder } from "@tabler/icons-react";
-import type { LocalTrack } from "@ytbm/ipc";
+import type { LocalTrack } from "@ymusic/ipc";
 
 import { Header, type BrowseActions } from "./Browse.tsx";
 import { TrackList } from "./TrackList.tsx";

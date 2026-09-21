@@ -4,7 +4,7 @@ import {
   IconPlayerPlayFilled,
   IconPlaylistAdd,
 } from "@tabler/icons-react";
-import type { Track, TrackId } from "@ytbm/core";
+import type { Track, TrackId } from "@ymusic/core";
 import { Fragment, type ReactNode } from "react";
 
 import { IconButton } from "@/components/IconButton";

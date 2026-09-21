@@ -84,11 +84,11 @@ describe("performRequest", () => {
     const response = await performRequest(fake, {
       url: "https://www.youtube.com/ping",
       method: "POST",
-      headers: [["x-client", "ytbm"]],
+      headers: [["x-client", "ymusic"]],
       body: new TextEncoder().encode("ping").buffer,
     });
     expect(seen!.method).toBe("POST");
-    expect(seen!.headers.get("x-client")).toBe("ytbm");
+    expect(seen!.headers.get("x-client")).toBe("ymusic");
     expect(await seen!.text()).toBe("ping");
     expect(text(response.body)).toBe("pong");
   });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { accountCookie, accountSignIn, accountSignOut } from "@ytbm/ipc";
-import type { AccountSummary } from "@ytbm/youtube";
+import { accountCookie, accountSignIn, accountSignOut } from "@ymusic/ipc";
+import type { AccountSummary } from "@ymusic/youtube";
 
 import { engine } from "./engine.ts";
 

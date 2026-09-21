@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ytbm_lib::playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player};
+use ymusic_lib::playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player};
 
 #[derive(Clone, Default)]
 struct Recorder(Arc<Mutex<Vec<PlaybackEvent>>>);
@@ -63,7 +63,7 @@ impl Recorder {
 }
 
 fn player() -> (Player, Recorder) {
-    std::env::set_var("YTBM_AUDIO_OUTPUT", "null");
+    std::env::set_var("YMUSIC_AUDIO_OUTPUT", "null");
     let player = Player::new().expect("libmpv should be available");
     let recorder = Recorder::default();
     player.subscribe(recorder.clone());
@@ -186,7 +186,7 @@ fn seeking_while_paused_stays_paused() {
 fn streams_https_audio_with_custom_headers() {
     let (player, recorder) = player();
     let mut load = request("https://download.samplelib.com/mp3/sample-3s.mp3".into());
-    load.headers.insert("User-Agent".into(), "YTBM/0.1 (playback smoke test)".into());
+    load.headers.insert("User-Agent".into(), "YMUSIC/0.1 (playback smoke test)".into());
     player.load(load).expect("load");
 
     assert!(

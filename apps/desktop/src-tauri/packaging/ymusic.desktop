@@ -10,4 +10,4 @@ Categories=AudioVideo;Audio;Player;
 Keywords=music;youtube;player;audio;
 StartupNotify=true
 StartupWMClass=yMusic
-MimeType=x-scheme-handler/ytbm;
+MimeType=x-scheme-handler/ymusic;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BrowseCard } from "@ytbm/core";
+import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 

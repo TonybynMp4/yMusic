@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import type { VideoId } from "@ytbm/core";
+import type { VideoId } from "@ymusic/core";
 
 import { YouTubeEngine } from "./engine.ts";
 import type { BotGuardVm } from "./po-token.ts";
@@ -14,9 +14,9 @@ import type { BotGuardVm } from "./po-token.ts";
  * the end is the only thing that proves the token was accepted; a URL that
  * merely resolves proves nothing.
  *
- * Network-gated like `live.test.ts`; run with `YTBM_NETWORK_TESTS=1`.
+ * Network-gated like `live.test.ts`; run with `YMUSIC_NETWORK_TESTS=1`.
  */
-const live = process.env.YTBM_NETWORK_TESTS === "1" ? describe : describe.skip;
+const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
 
 function frameVm(): BotGuardVm {
   const dom = new JSDOM("<!doctype html>", { runScripts: "outside-only" });

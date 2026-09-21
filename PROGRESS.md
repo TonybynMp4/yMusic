@@ -86,4 +86,3 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - YouTube Music sometimes answers a radio request with nothing. Autoplay then waits until the queue's last song changes before asking again, so the queue can end with no suggestions.
 - In debug builds on Linux, tao logs `Couldn't get key from code` for the volume keys. It is harmless and gone in release builds.
-- Internal names still say `ytbm`: the `@ytbm/*` packages, the `YTBM_*` environment variables, the `dev.tony.ytbm` identifier and the `ytbm.desktop` file.

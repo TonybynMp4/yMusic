@@ -13,7 +13,7 @@ import type {
   Thumbnail,
   Track,
   TrackId,
-} from "@ytbm/core";
+} from "@ymusic/core";
 
 import { useState, type CSSProperties } from "react";
 

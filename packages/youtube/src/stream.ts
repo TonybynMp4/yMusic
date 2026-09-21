@@ -4,7 +4,7 @@ import {
   type TrackId,
   trackIdForVideo,
   type VideoId,
-} from "@ytbm/core";
+} from "@ymusic/core";
 import type { Innertube } from "youtubei.js";
 
 /**

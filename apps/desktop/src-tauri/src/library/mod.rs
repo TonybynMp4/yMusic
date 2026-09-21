@@ -33,7 +33,7 @@ pub enum LibraryError {
 
 pub type Result<T> = std::result::Result<T, LibraryError>;
 
-/// Mirrors `Thumbnail` in `@ytbm/core`. Cover art is extracted to the cache
+/// Mirrors `Thumbnail` in `@ymusic/core`. Cover art is extracted to the cache
 /// directory during a scan; the frontend converts `path` with Tauri's
 /// `convertFileSrc` because a bare `file://` will not load in the webview.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -44,7 +44,7 @@ pub struct CoverArt {
     pub height: u32,
 }
 
-/// Mirrors `Track` in `@ytbm/core`, in its local-file flavour.
+/// Mirrors `Track` in `@ymusic/core`, in its local-file flavour.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalTrack {
@@ -64,7 +64,7 @@ pub struct LocalTrack {
     pub cover_art: Option<CoverArt>,
 }
 
-/// Mirrors `StreamLease` in `@ytbm/core`.
+/// Mirrors `StreamLease` in `@ymusic/core`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalLease {

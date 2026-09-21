@@ -2,7 +2,7 @@
 //!
 //! They live in their own module because `#[tauri::command]` generates helper
 //! macros beside each function, and those collide with the crate root once the
-//! functions are public enough for `ytbm_commands!` to name them.
+//! functions are public enough for `ymusic_commands!` to name them.
 
 use crate::account::{sign_in, Account};
 use crate::platform::InstallFlavor;

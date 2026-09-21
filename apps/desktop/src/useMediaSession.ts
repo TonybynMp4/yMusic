@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { mediaSetTrack, mediaSetVolume, subscribeMediaKeys, toMediaTrack } from "@ytbm/ipc";
+import { mediaSetTrack, mediaSetVolume, subscribeMediaKeys, toMediaTrack } from "@ymusic/ipc";
 
 import type { usePlayer } from "./usePlayer.ts";
 

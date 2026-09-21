@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { VideoId } from "@ytbm/core";
+import type { VideoId } from "@ymusic/core";
 
 import { radioFrom } from "./radio.ts";
 

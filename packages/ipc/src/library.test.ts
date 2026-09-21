@@ -1,4 +1,4 @@
-import { isLeaseUsable, StreamLease, TrackId } from "@ytbm/core";
+import { isLeaseUsable, StreamLease, TrackId } from "@ymusic/core";
 import { describe, expect, it } from "vitest";
 
 import { ScanReport } from "./library.ts";
@@ -30,7 +30,7 @@ const remoteLease = {
   codec: "opus",
   bitrate: 160000,
   isPremiumFormat: false,
-  headers: { "User-Agent": "YTBM/0.1", Cookie: "a=1, b=2" },
+  headers: { "User-Agent": "YMUSIC/0.1", Cookie: "a=1, b=2" },
   expiresAt: Date.now() + 6 * 60 * 60 * 1000,
 };
 

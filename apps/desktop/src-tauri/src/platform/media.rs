@@ -245,8 +245,8 @@ fn create_controls<R: Runtime>(
 
     let config = PlatformConfig {
         display_name: "yMusic",
-        // Becomes `org.mpris.MediaPlayer2.ytbm` on the session bus.
-        dbus_name: "ytbm",
+        // Becomes `org.mpris.MediaPlayer2.ymusic` on the session bus.
+        dbus_name: "ymusic",
         hwnd,
     };
     let mut controls = MediaControls::new(config).map_err(|e| format!("{e:?}"))?;

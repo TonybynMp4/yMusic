@@ -1,3 +1,3 @@
-import { exposeEngine } from "@ytbm/youtube/worker";
+import { exposeEngine } from "@ymusic/youtube/worker";
 
 exposeEngine();

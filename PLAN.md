@@ -89,7 +89,7 @@ The t3code mirror (`/home/tony/code/t3code/mirror-fixes`) already does this in p
 
 `tauri-plugin-updater` has no `.deb` target, so on Linux it only checks `latest.json` and we write the download and install ourselves. Lessons from the mirror to take as given:
 
-- Record the install flavour at build time (`YTBM_INSTALL_FLAVOR`, already read in `platform/mod.rs`). A hand-run binary or a future Flatpak then gets "a new version is available" with a link, not a broken upgrade button.
+- Record the install flavour at build time (`YMUSIC_INSTALL_FLAVOR`, already read in `platform/mod.rs`). A hand-run binary or a future Flatpak then gets "a new version is available" with a link, not a broken upgrade button.
 - No `pkexec` means no auto-update. Detect it and point at a manual reinstall instead of failing halfway.
 - Log the updater's error cause. The mirror needed a whole patch (`0005`) for this.
 - A `.deb` needs real package metadata: maintainer, section, dependencies, and an AppStream metainfo file so GNOME Software and Discover can describe the app (mirror patches `0002` and `0003`).
@@ -114,7 +114,7 @@ Sign release assets with the updater's minisign key so the download is verified 
 
 Pear Desktop compiles its plugins into the app and runs them with full Electron access: no sandbox, no permissions. yMusic loads plugins at runtime, so it needs both.
 
-- **TypeScript only.** `@ytbm/plugin-sdk` is the whole authoring surface. Each plugin runs in its own Web Worker and talks to the app over Comlink.
+- **TypeScript only.** `@ymusic/plugin-sdk` is the whole authoring surface. Each plugin runs in its own Web Worker and talks to the app over Comlink.
 - **Declared capabilities.** A plugin lists what it needs (`network:<host>`, `library:read`, `playback:control`, `fs:write:<dir>`). The user sees the list on install, and an undeclared call does not exist on the proxy the plugin gets.
 - **Typed slots.** `player.panel` (a tab beside Up next, already built as `PlayerPanelTab`), `artist.section`, `home.shelf`. One plugin can fill several.
 - **Transforms.** A `tracks.transform` hook gets a list (search results, radio, suggestions) and returns it reordered or filtered.
@@ -142,7 +142,7 @@ Plugin ideas:
 
 - End to end on Windows and on Linux: `pnpm tauri dev`, sign in, search a known track, play, seek, queue. Log the resolved itag to confirm the premium format when signed into Premium.
 - Unit tests for the `packages/core` queue and the zod parsers against recorded InnerTube fixtures, with no Tauri. `tsgo` across the workspace.
-- Network tests are opt-in: `YTBM_NETWORK_TESTS=1 pnpm --filter @ytbm/youtube test`. They cover search, browse, radio, stream resolution, the requests mpv really makes, and the PO-token path (the frame's `frame.js` in jsdom, asserting 206 with a token and 403 without).
+- Network tests are opt-in: `YMUSIC_NETWORK_TESTS=1 pnpm --filter @ymusic/youtube test`. They cover search, browse, radio, stream resolution, the requests mpv really makes, and the PO-token path (the frame's `frame.js` in jsdom, asserting 206 with a token and 403 without).
 - Native feel. Windows: media keys and the volume flyout drive playback, Mica shows, snap layouts work, the app survives a WebView2 update. Linux: the GNOME/KDE media widget shows the track and its controls work, the titlebar follows light and dark, sign-in works with the keyring locked.
 - Install the built `.deb` in a clean `debian:13` container in CI and check `dpkg -L`, as the t3code mirror does.
 - Cut a bumped draft release and check the updater finds it, verifies the signature, installs through `pkexec dpkg -i`, relaunches, and leaves dpkg consistent. Then check a desktop without `pkexec` gets a clear manual-reinstall message.

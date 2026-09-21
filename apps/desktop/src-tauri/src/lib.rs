@@ -16,7 +16,7 @@ use tauri::Manager;
 /// A command that is implemented but never registered here is invisible to the
 /// frontend, which is the failure this exists to make impossible.
 #[macro_export]
-macro_rules! ytbm_commands {
+macro_rules! ymusic_commands {
     () => {
         tauri::generate_handler![
             $crate::commands::platform_summary,
@@ -92,9 +92,9 @@ pub fn run() {
             app.manage(open_account(app.handle()));
             Ok(())
         })
-        .invoke_handler(ytbm_commands!())
+        .invoke_handler(ymusic_commands!())
         .run(tauri::generate_context!())
-        .expect("error while running ytbm");
+        .expect("error while running ymusic");
 }
 
 /// Opens the on-disk library, falling back to an in-memory one if the data
@@ -117,13 +117,13 @@ fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
 }
 
 fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf {
-    app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ytbm"))
+    app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
 }
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {
     let dir = app.path().app_data_dir().unwrap_or_else(|err| {
         log::error!("no app data directory, the session will not persist: {err}");
-        std::env::temp_dir().join("ytbm")
+        std::env::temp_dir().join("ymusic")
     });
     Account::open(dir.join("account.bin"), OsKeyring)
 }

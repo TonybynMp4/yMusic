@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { VideoId } from "@ytbm/core";
+import type { VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
@@ -13,9 +13,9 @@ import { NotPlayableError, resolveStream } from "./stream.ts";
  * because a test suite that fails when the network is down or when YouTube is
  * rate limiting is a test suite people learn to ignore.
  *
- * Run with `YTBM_NETWORK_TESTS=1 pnpm --filter @ytbm/youtube test`.
+ * Run with `YMUSIC_NETWORK_TESTS=1 pnpm --filter @ymusic/youtube test`.
  */
-const live = process.env.YTBM_NETWORK_TESTS === "1" ? describe : describe.skip;
+const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
 
 live("search against the real InnerTube", () => {
   it("finds songs and fills in the fields the UI renders", { timeout: 30_000 }, async () => {

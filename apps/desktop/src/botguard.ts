@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { BotGuardVm } from "@ytbm/youtube/host";
+import type { BotGuardVm } from "@ymusic/youtube/host";
 
 /**
  * BotGuard for the engine worker, run in a hidden frame.

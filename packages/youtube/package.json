@@ -1,5 +1,5 @@
 {
-  "name": "@ytbm/youtube",
+  "name": "@ymusic/youtube",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -22,7 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ytbm/core": "workspace:*",
+    "@ymusic/core": "workspace:*",
     "bgutils-js": "^4.0.3",
     "comlink": "^4.4.2",
     "youtubei.js": "^18.0.0",

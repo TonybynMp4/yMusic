@@ -1,5 +1,5 @@
 {
-  "name": "ytbm",
+  "name": "ymusic",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.4.2",
@@ -12,8 +12,8 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "tauri": "pnpm --filter @ytbm/desktop tauri",
-    "app": "pnpm --filter @ytbm/desktop tauri dev"
+    "tauri": "pnpm --filter @ymusic/desktop tauri",
+    "app": "pnpm --filter @ymusic/desktop tauri dev"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",

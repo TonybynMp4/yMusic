@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Track } from "@ytbm/core";
+import type { Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 

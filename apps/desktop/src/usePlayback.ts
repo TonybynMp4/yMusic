@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { PlaybackStatus, StreamLease } from "@ytbm/core";
-import { MpvPlaybackEngine } from "@ytbm/ipc";
+import type { PlaybackStatus, StreamLease } from "@ymusic/core";
+import { MpvPlaybackEngine } from "@ymusic/ipc";
 
 export interface PlaybackState {
   status: PlaybackStatus;

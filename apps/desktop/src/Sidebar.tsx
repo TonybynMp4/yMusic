@@ -12,8 +12,8 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import type { BrowseCard } from "@ytbm/core";
-import type { ScanReport } from "@ytbm/ipc";
+import type { BrowseCard } from "@ymusic/core";
+import type { ScanReport } from "@ymusic/ipc";
 
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";

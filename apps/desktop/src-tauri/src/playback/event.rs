@@ -1,5 +1,5 @@
 //! Events the player pushes at the frontend. The shape mirrors `PlaybackEvent`
-//! in `@ytbm/core`, which is the interface the queue is written against.
+//! in `@ymusic/core`, which is the interface the queue is written against.
 
 use serde::Serialize;
 

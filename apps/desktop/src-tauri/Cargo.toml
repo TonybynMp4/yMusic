@@ -1,5 +1,5 @@
 [package]
-name = "ytbm"
+name = "ymusic"
 version = "0.1.0"
 description = "A native YouTube Music player"
 edition = "2021"
@@ -7,7 +7,7 @@ rust-version = "1.82"
 
 [lib]
 # Required so the same core can back the mobile targets later.
-name = "ytbm_lib"
+name = "ymusic_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -289,7 +289,7 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
-/// Matches the `AudioCodec` enum in `@ytbm/core`.
+/// Matches the `AudioCodec` enum in `@ymusic/core`.
 fn codec_name(file_type: FileType) -> String {
     match file_type {
         FileType::Mpeg => "mp3",

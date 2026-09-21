@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
-import type { QueueState, Track, TrackId } from "@ytbm/core";
+import type { QueueState, Track, TrackId } from "@ymusic/core";
 
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";

@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { Thumbnail } from "@ytbm/core";
-import { isTauri } from "@ytbm/ipc";
+import type { Thumbnail } from "@ymusic/core";
+import { isTauri } from "@ymusic/ipc";
 
 import { cn } from "@/lib/utils";
 

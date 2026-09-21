@@ -15,12 +15,12 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use ytbm_lib::{
+use ymusic_lib::{
     account::{Account, MemoryKeys},
     library::Library,
     platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
-    ytbm_commands,
+    ymusic_commands,
 };
 
 /// Flips once mpv reports a position, which only happens after `loadfile` has
@@ -50,10 +50,10 @@ fn request(command: &str, body: serde_json::Value) -> InvokeRequest {
 
 #[test]
 fn every_command_is_reachable_over_ipc() {
-    std::env::set_var("YTBM_AUDIO_OUTPUT", "null");
+    std::env::set_var("YMUSIC_AUDIO_OUTPUT", "null");
 
     let app = mock_builder()
-        .invoke_handler(ytbm_commands!())
+        .invoke_handler(ymusic_commands!())
         .build(tauri::generate_context!())
         .expect("mock app");
     let player = Player::new().expect("libmpv");
@@ -65,10 +65,10 @@ fn every_command_is_reachable_over_ipc() {
     // the path a desktop without a session bus takes.
     app.manage(MediaSession::default());
 
-    let art_dir = std::env::temp_dir().join(format!("ytbm-ipc-art-{}", std::process::id()));
+    let art_dir = std::env::temp_dir().join(format!("ymusic-ipc-art-{}", std::process::id()));
     app.manage(Library::open_in_memory(art_dir).expect("in-memory library"));
     let account_path = std::env::temp_dir()
-        .join(format!("ytbm-ipc-account-{}", std::process::id()))
+        .join(format!("ymusic-ipc-account-{}", std::process::id()))
         .join("account.bin");
     app.manage(Account::open(account_path, MemoryKeys::default()));
 
@@ -94,7 +94,7 @@ fn every_command_is_reachable_over_ipc() {
             "url": format!("{}/tests/fixtures/tone.wav", env!("CARGO_MANIFEST_DIR")),
             // A comma in a header value would corrupt a comma-joined header
             // list, so this pins the one-at-a-time change-list path.
-            "headers": { "User-Agent": "YTBM/0.1", "Cookie": "a=1, b=2" },
+            "headers": { "User-Agent": "YMUSIC/0.1", "Cookie": "a=1, b=2" },
             "startPaused": false
         }
     });
@@ -149,11 +149,11 @@ fn every_command_is_reachable_over_ipc() {
 #[test]
 fn library_commands_round_trip_over_ipc() {
     let app = mock_builder()
-        .invoke_handler(ytbm_commands!())
+        .invoke_handler(ymusic_commands!())
         .build(tauri::generate_context!())
         .expect("mock app");
 
-    let home = std::env::temp_dir().join(format!("ytbm-ipc-library-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("ymusic-ipc-library-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("temp home");
     app.manage(Library::open_in_memory(home.join("art")).expect("in-memory library"));

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { IconLoader2, IconX } from "@tabler/icons-react";
-import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ytbm/core";
+import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";

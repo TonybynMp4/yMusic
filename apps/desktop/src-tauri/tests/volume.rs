@@ -5,7 +5,7 @@
 //! mode if it ever changes is not a crash. It is a volume slider that silently
 //! goes back to being linear and useless over most of its travel. So measure
 //! it: render a full-scale tone through `ao=pcm` at several volumes and compare
-//! the RMS of what comes out against the cubic curve `@ytbm/core` assumes.
+//! the RMS of what comes out against the cubic curve `@ymusic/core` assumes.
 
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
@@ -15,7 +15,7 @@ const VOLUME_CURVE_EXPONENT: f64 = 3.0;
 
 #[test]
 fn mpv_applies_the_cubic_taper_the_volume_slider_assumes() {
-    let dir = std::env::temp_dir().join(format!("ytbm-volume-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("ymusic-volume-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
 

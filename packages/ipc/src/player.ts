@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { TrackId } from "@ytbm/core";
-import type { PlaybackEngine, PlaybackEvent, StreamLease } from "@ytbm/core";
+import { TrackId } from "@ymusic/core";
+import type { PlaybackEngine, PlaybackEvent, StreamLease } from "@ymusic/core";
 import { invokeVoid, isTauri } from "./tauri.ts";
 
 /**

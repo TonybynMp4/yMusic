@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
-import type { Track, TrackId } from "@ytbm/core";
+import type { Track, TrackId } from "@ymusic/core";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { useMediaSession } from "./useMediaSession.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
-const SIDEBAR_KEY = "ytbm.sidebar-collapsed";
+const SIDEBAR_KEY = "ymusic.sidebar-collapsed";
 /** How far back Back can go. */
 const HISTORY_LIMIT = 50;
 /** Local matches shown above YouTube's before "Show all". */

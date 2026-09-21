@@ -199,13 +199,13 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2.5.0
         version: 2.5.5
-      '@ytbm/core':
+      '@ymusic/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@ytbm/ipc':
+      '@ymusic/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc
-      '@ytbm/youtube':
+      '@ymusic/youtube':
         specifier: workspace:*
         version: link:../../packages/youtube
       class-variance-authority:
@@ -279,7 +279,7 @@ importers:
       '@tauri-apps/plugin-http':
         specifier: ^2.5.2
         version: 2.6.1
-      '@ytbm/core':
+      '@ymusic/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -292,7 +292,7 @@ importers:
 
   packages/youtube:
     dependencies:
-      '@ytbm/core':
+      '@ymusic/core':
         specifier: workspace:*
         version: link:../core
       bgutils-js:

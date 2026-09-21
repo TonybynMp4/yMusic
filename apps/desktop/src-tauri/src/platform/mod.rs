@@ -10,7 +10,7 @@ pub mod window;
 /// a future Flatpak must be told to update through its own channel instead of
 /// being handed a package it cannot install.
 ///
-/// Set at build time via `YTBM_INSTALL_FLAVOR`; `Unknown` is the honest default
+/// Set at build time via `YMUSIC_INSTALL_FLAVOR`; `Unknown` is the honest default
 /// for a `cargo run`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -22,7 +22,7 @@ pub enum InstallFlavor {
 
 impl InstallFlavor {
     pub fn current() -> Self {
-        match option_env!("YTBM_INSTALL_FLAVOR") {
+        match option_env!("YMUSIC_INSTALL_FLAVOR") {
             Some("deb") => Self::Deb,
             Some("windows-installer") => Self::WindowsInstaller,
             _ => Self::Unknown,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import type { AlbumPage, ArtistPage, PlaylistPage } from "@ytbm/core";
+import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ytbm/core";
 
 import { engine } from "./engine.ts";
 
@@ -128,4 +128,28 @@ export function useBrowse(route: Route): BrowseState {
     [entry],
   );
   return useSyncExternalStore(subscribe, () => entry.state);
+}
+
+/**
+ * Follows a playlist as it loads: `listener` gets every track so far, now and
+ * on each page that arrives, and whether more are still coming. For the queue,
+ * so playing a long playlist queues all of it and not just the first page.
+ */
+export function followPlaylist(
+  id: string,
+  listener: (tracks: readonly Track[], loading: boolean) => void,
+): () => void {
+  const entry = entryFor({ kind: "playlist", id });
+  const notify = () => {
+    const { state } = entry;
+    if (state.status === "loading") return;
+    if (state.status === "ready" && state.page.kind === "playlist") {
+      listener(state.page.page.tracks, state.loadingMore);
+    } else {
+      listener([], false);
+    }
+  };
+  entry.listeners.add(notify);
+  notify();
+  return () => void entry.listeners.delete(notify);
 }

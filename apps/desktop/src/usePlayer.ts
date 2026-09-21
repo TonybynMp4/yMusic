@@ -9,14 +9,37 @@ import {
   type RepeatMode,
   type StreamLease,
   type Track,
+  type QueueState,
   type TrackId,
+  videoIdFromTrackId,
 } from "@ytbm/core";
+import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
+import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
 
 /** A transport failure that has no user-visible consequence beyond not happening. */
 function logPlaybackFailure(error: unknown): void {
   console.error("playback command failed", error);
+}
+
+/**
+ * Where a queue came from, so it can keep growing: a playlist still loading
+ * its later pages, or a song radio (what YouTube Music starts when you play a
+ * search result).
+ */
+export type PlayFrom = { kind: "playlist"; id: string } | { kind: "radio" };
+
+/**
+ * The seed for autoplay: the last YouTube track in playing order. Local files
+ * have no radio, so a queue of only those gets no suggestions.
+ */
+function radioSeed(queue: QueueState): TrackId | null {
+  for (let i = queue.order.length - 1; i >= 0; i--) {
+    const track = queue.items[queue.order[i]!];
+    if (track && sourceOf(track.id) === "youtube") return track.id;
+  }
+  return null;
 }
 
 /**
@@ -36,6 +59,12 @@ export function usePlayer() {
    * because the OS can set it too, from the MPRIS volume control.
    */
   const [volume, setVolumeState] = useState(1);
+  /** On, as in YouTube Music: when the queue runs out, its suggestions play on. */
+  const [autoplay, setAutoplayState] = useState(true);
+  /** The queue's source is still arriving, so autoplay waits for its real end. */
+  const [filling, setFilling] = useState(false);
+  /** Stops following the current source. Replaced on every new queue. */
+  const unfollow = useRef<() => void>(() => {});
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -127,12 +156,113 @@ export function usePlayer() {
     [engine],
   );
 
-  const playTrack = useCallback((tracks: Track[], id: TrackId) => {
-    dispatch({
-      type: "setQueue",
-      tracks,
-      startIndex: tracks.findIndex((t) => t.id === id),
-    });
+  const stopFollowing = useCallback(() => {
+    unfollow.current();
+    unfollow.current = () => {};
+    setFilling(false);
+  }, []);
+
+  /** Clearing or replacing the queue also stops it growing from its old source. */
+  const send = useCallback(
+    (action: QueueAction) => {
+      if (action.type === "setQueue" || action.type === "clear") stopFollowing();
+      dispatch(action);
+    },
+    [stopFollowing],
+  );
+
+  const playTrack = useCallback(
+    (tracks: Track[], id: TrackId, from?: PlayFrom) => {
+      if (from?.kind === "radio") {
+        const seed = tracks.find((t) => t.id === id);
+        const videoId = seed ? videoIdFromTrackId(seed.id) : null;
+        if (!seed || videoId === null) return;
+        send({ type: "setQueue", tracks: [seed], startIndex: 0 });
+        let stopped = false;
+        unfollow.current = () => {
+          stopped = true;
+        };
+        setFilling(true);
+        void youtube
+          .radio(videoId)
+          .then((radio) => {
+            if (!stopped) dispatch({ type: "extend", tracks: radio });
+          })
+          .catch((error: unknown) => console.error("could not start the song radio", error))
+          .finally(() => {
+            if (!stopped) setFilling(false);
+          });
+        return;
+      }
+
+      send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+      if (from?.kind !== "playlist") return;
+      // Whatever the page had when it was clicked is queued already; each
+      // later page is added as it arrives, shuffled in if shuffle is on.
+      let known = tracks.length;
+      let done = false;
+      let stop = () => {};
+      const follow = (all: readonly Track[], loading: boolean) => {
+        if (done) return;
+        if (all.length > known) {
+          dispatch({ type: "extend", tracks: all.slice(known) });
+          known = all.length;
+        }
+        setFilling(loading);
+        if (!loading) {
+          done = true;
+          stop();
+        }
+      };
+      stop = followPlaylist(from.id, follow);
+      // The first call is synchronous, before `stop` was assigned.
+      if (done) stop();
+      unfollow.current = () => {
+        done = true;
+        stop();
+      };
+    },
+    [send],
+  );
+
+  // Autoplay: once the queue is complete, ask YouTube Music what would follow
+  // its last song, and keep that ready to play when the queue runs out.
+  const seed = radioSeed(queue);
+  const wantsSuggestions =
+    autoplay &&
+    queue.repeat === "off" &&
+    !filling &&
+    queue.cursor !== null &&
+    queue.suggestions.length === 0;
+  /** The seed last asked about, so one empty answer is not asked for again and again. */
+  const askedSeed = useRef<TrackId | null>(null);
+  useEffect(() => {
+    if (!wantsSuggestions || seed === null || askedSeed.current === seed) return;
+    const videoId = videoIdFromTrackId(seed);
+    if (videoId === null) return;
+    askedSeed.current = seed;
+    let cancelled = false;
+    void youtube
+      .radio(videoId)
+      .then((radio) => {
+        if (!cancelled) dispatch({ type: "setSuggestions", tracks: radio });
+      })
+      .catch((error: unknown) => {
+        console.error("could not load autoplay suggestions", error);
+        if (!cancelled) askedSeed.current = null;
+      });
+    return () => {
+      cancelled = true;
+      if (askedSeed.current === seed) askedSeed.current = null;
+    };
+  }, [wantsSuggestions, seed]);
+
+  const setAutoplay = useCallback((on: boolean) => {
+    setAutoplayState(on);
+    if (!on) {
+      askedSeed.current = null;
+      dispatch({ type: "setSuggestions", tracks: [] });
+    }
   }, []);
 
   const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
@@ -166,7 +296,10 @@ export function usePlayer() {
     },
     [engine],
   );
-  const setRepeat = useCallback((repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }), []);
+  const setRepeat = useCallback(
+    (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }),
+    [],
+  );
   const setShuffle = useCallback(
     (shuffle: boolean) => dispatch({ type: "setShuffle", shuffle }),
     [],
@@ -174,7 +307,10 @@ export function usePlayer() {
 
   return {
     queue,
-    dispatch: dispatch as React.Dispatch<QueueAction>,
+    dispatch: send as React.Dispatch<QueueAction>,
+    filling,
+    autoplay,
+    setAutoplay,
     track,
     playback: state,
     position,

@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
+import type { PlayFrom } from "./usePlayer.ts";
 
 /** What a browse page needs of the player and the navigation stack. */
 export interface BrowseActions {
@@ -30,8 +31,11 @@ export interface BrowseActions {
   /** Whether the current track is playing rather than paused. */
   playing: boolean;
   onToggle: () => void;
-  /** Plays `tracks` from `id`; with no `id`, from a random track, shuffled. */
-  onPlay: (tracks: Track[], id: TrackId | null) => void;
+  /**
+   * Plays `tracks` from `id`; with no `id`, from a random track, shuffled.
+   * `from` lets the queue keep growing, with the rest of a playlist or a radio.
+   */
+  onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => void;
   onEnqueue: (track: Track) => void;
   onOpen: (route: Route) => void;
 }
@@ -51,8 +55,15 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
   switch (page.kind) {
     case "album":
       return <Album page={page.page} actions={actions} />;
-    case "playlist":
-      return <Playlist page={page.page} loadingMore={state.loadingMore} actions={actions} />;
+    case "playlist": {
+      // Queue the whole playlist, including the rows still loading.
+      const from: PlayFrom = { kind: "playlist", id: route.id };
+      const following = {
+        ...actions,
+        onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
+      };
+      return <Playlist page={page.page} loadingMore={state.loadingMore} actions={following} />;
+    }
     case "artist":
       return <Artist page={page.page} actions={actions} />;
   }

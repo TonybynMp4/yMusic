@@ -15,6 +15,12 @@ export interface QueueState {
   readonly cursor: number | null;
   readonly repeat: RepeatMode;
   readonly shuffle: boolean;
+  /**
+   * Autoplay: what YouTube Music suggests after the queue. Kept apart from
+   * `items` so shuffle and repeat never touch it; a suggestion joins the queue
+   * only once it starts playing.
+   */
+  readonly suggestions: readonly Track[];
 }
 
 export const emptyQueue: QueueState = {
@@ -23,6 +29,7 @@ export const emptyQueue: QueueState = {
   cursor: null,
   repeat: "off",
   shuffle: false,
+  suggestions: [],
 };
 
 export type QueueAction =
@@ -32,6 +39,12 @@ export type QueueAction =
   | { type: "previous" }
   | { type: "enqueueNext"; tracks: readonly Track[] }
   | { type: "enqueueLast"; tracks: readonly Track[] }
+  /**
+   * More of what is already queued, such as the rest of a playlist that is
+   * still loading. Shuffled in among the tracks still to come when shuffle is on.
+   */
+  | { type: "extend"; tracks: readonly Track[]; rng?: () => number }
+  | { type: "setSuggestions"; tracks: readonly Track[] }
   | { type: "remove"; trackId: TrackId }
   | { type: "clear" }
   | { type: "setRepeat"; repeat: RepeatMode }
@@ -44,18 +57,22 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       const identity = items.map((_, i) => i);
       const startIndex = action.startIndex ?? 0;
       if (items.length === 0) {
-        return { ...state, items: [], order: [], cursor: null };
+        return { ...state, items: [], order: [], cursor: null, suggestions: [] };
       }
       const order = state.shuffle
         ? shuffledOrderStartingAt(identity, startIndex, Math.random)
         : identity;
       const cursor = order.indexOf(startIndex);
-      return { ...state, items, order, cursor };
+      return { ...state, items, order, cursor, suggestions: [] };
     }
 
     case "jumpTo": {
       const itemIndex = state.items.findIndex((t) => t.id === action.trackId);
-      if (itemIndex === -1) return state;
+      if (itemIndex === -1) {
+        // Picking a suggestion plays it now; the ones above it are passed over.
+        const suggested = state.suggestions.findIndex((t) => t.id === action.trackId);
+        return suggested === -1 ? state : promote(state, suggested);
+      }
       const cursor = state.order.indexOf(itemIndex);
       return cursor === -1 ? state : { ...state, cursor };
     }
@@ -68,15 +85,14 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       const nextCursor = state.cursor + 1;
       if (nextCursor < state.order.length) return { ...state, cursor: nextCursor };
       if (state.repeat === "all") return { ...state, cursor: 0 };
+      if (state.suggestions.length > 0) return promote(state, 0);
       return action.reason === "trackEnded" ? { ...state, cursor: null } : state;
     }
 
     case "previous": {
       if (state.cursor === null) return state;
       if (state.cursor > 0) return { ...state, cursor: state.cursor - 1 };
-      return state.repeat === "all"
-        ? { ...state, cursor: state.order.length - 1 }
-        : state;
+      return state.repeat === "all" ? { ...state, cursor: state.order.length - 1 } : state;
     }
 
     case "enqueueNext": {
@@ -102,6 +118,29 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       return { ...state, items, order, cursor: state.cursor ?? 0 };
     }
 
+    case "extend": {
+      if (action.tracks.length === 0) return state;
+      const items = [...state.items, ...action.tracks];
+      const newIndices = action.tracks.map((_, i) => state.items.length + i);
+      if (!state.shuffle) return { ...state, items, order: [...state.order, ...newIndices] };
+      // Each new track lands at a uniformly random place among those still to
+      // come, which keeps the upcoming order a uniform shuffle.
+      const rng = action.rng ?? Math.random;
+      const order = [...state.order];
+      const start = state.cursor === null ? 0 : state.cursor + 1;
+      for (const index of newIndices) {
+        const at = start + Math.floor(rng() * (order.length - start + 1));
+        order.splice(at, 0, index);
+      }
+      return { ...state, items, order };
+    }
+
+    case "setSuggestions": {
+      // A suggestion already queued would play twice.
+      const queued = new Set(state.items.map((t) => t.id));
+      return { ...state, suggestions: action.tracks.filter((t) => !queued.has(t.id)) };
+    }
+
     case "remove": {
       const itemIndex = state.items.findIndex((t) => t.id === action.trackId);
       if (itemIndex === -1) return state;
@@ -122,7 +161,7 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
     }
 
     case "clear":
-      return { ...state, items: [], order: [], cursor: null };
+      return { ...state, items: [], order: [], cursor: null, suggestions: [] };
 
     case "setRepeat":
       return { ...state, repeat: action.repeat };
@@ -140,11 +179,7 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
         };
       }
       const currentItem = currentItemIndex(state);
-      const order = shuffledOrderStartingAt(
-        identity,
-        currentItem ?? 0,
-        action.rng ?? Math.random,
-      );
+      const order = shuffledOrderStartingAt(identity, currentItem ?? 0, action.rng ?? Math.random);
       return {
         ...state,
         shuffle: true,
@@ -153,6 +188,21 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       };
     }
   }
+}
+
+/** Moves suggestion `index` onto the end of the queue and plays it, dropping those before it. */
+function promote(state: QueueState, index: number): QueueState {
+  const track = state.suggestions[index];
+  if (!track) return state;
+  const items = [...state.items, track];
+  const order = [...state.order, items.length - 1];
+  return {
+    ...state,
+    items,
+    order,
+    cursor: order.length - 1,
+    suggestions: state.suggestions.slice(index + 1),
+  };
 }
 
 /** The index into `items` of the track playing now. */
@@ -180,7 +230,8 @@ export function peekNext(state: QueueState): Track | null {
       : state.repeat === "all"
         ? state.order[0]
         : undefined;
-  return index === undefined ? null : (state.items[index] ?? null);
+  if (index === undefined) return state.suggestions[0] ?? null;
+  return state.items[index] ?? null;
 }
 
 /**

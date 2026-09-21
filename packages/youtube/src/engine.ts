@@ -1,4 +1,12 @@
-import type { AlbumPage, ArtistPage, BrowseCard, PlaylistPage, StreamLease, Track, VideoId } from "@ytbm/core";
+import type {
+  AlbumPage,
+  ArtistPage,
+  BrowseCard,
+  PlaylistPage,
+  StreamLease,
+  Track,
+  VideoId,
+} from "@ytbm/core";
 import type { Innertube } from "youtubei.js";
 
 import {
@@ -8,8 +16,15 @@ import {
   createYouTube,
   type FetchLike,
 } from "./client.ts";
-import { getAlbum, getArtist, getLibraryPlaylists, openPlaylist, type PlaylistMore } from "./browse.ts";
+import {
+  getAlbum,
+  getArtist,
+  getLibraryPlaylists,
+  openPlaylist,
+  type PlaylistMore,
+} from "./browse.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
+import { getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -90,6 +105,11 @@ export class YouTubeEngine {
 
   async search(query: string): Promise<Track[]> {
     return searchSongs(await this.#browseClient(), query);
+  }
+
+  /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */
+  async radio(videoId: VideoId): Promise<Track[]> {
+    return getRadio(await this.#browseClient(), videoId);
   }
 
   /** `id` is an album's browse id (`MPREb_…`). */
@@ -175,9 +195,12 @@ export class YouTubeEngine {
    * context, so one per search would cost more than the search.
    */
   #browseClient(): Promise<Innertube> {
-    this.#browse ??= retryable(createYouTube({ fetch: this.#fetch, cookie: this.#cookie ?? undefined }), () => {
-      this.#browse = null;
-    });
+    this.#browse ??= retryable(
+      createYouTube({ fetch: this.#fetch, cookie: this.#cookie ?? undefined }),
+      () => {
+        this.#browse = null;
+      },
+    );
     return this.#browse;
   }
 

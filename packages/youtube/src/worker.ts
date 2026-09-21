@@ -41,6 +41,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     setCookie: (cookie) => engine.setCookie(cookie),
     account: () => engine.account(),
     search: (query) => engine.search(query),
+    radio: (videoId) => engine.radio(videoId),
     album: (id) => engine.album(id),
     artist: (id) => engine.artist(id),
     playlist: (id) => engine.playlist(id),

@@ -203,6 +203,7 @@ export function App() {
               onAutoplay={player.setAutoplay}
               onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
               onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
+              onMove={(from, to) => player.dispatch({ type: "move", from, to })}
               onClear={() => player.dispatch({ type: "clear" })}
               onCollapse={() => setExpanded(false)}
             />

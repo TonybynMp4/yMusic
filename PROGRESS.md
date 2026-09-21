@@ -51,7 +51,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Shuffle mixes rows that arrive later into the tracks still to come
 - [x] A search result starts that song's radio
 - [x] Autoplay: YouTube Music's suggestions after the queue, with a switch
-- [ ] Reorder the queue by dragging
+- [x] Reorder the queue by dragging
 - [x] "Play next" and "Add to queue" in a track's menu
 
 ### Local library

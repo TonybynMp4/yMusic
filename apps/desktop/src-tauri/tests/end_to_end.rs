@@ -89,9 +89,12 @@ fn a_scanned_track_plays_through_its_lease() {
     assert!(errors.is_empty(), "playback reported errors: {errors:?}");
 
     assert!(
-        events
-            .iter()
-            .any(|e| matches!(e, PlaybackEvent::Status { status: PlaybackStatus::Playing })),
+        events.iter().any(|e| matches!(
+            e,
+            PlaybackEvent::Status {
+                status: PlaybackStatus::Playing
+            }
+        )),
         "mpv never reported playing"
     );
 
@@ -100,12 +103,17 @@ fn a_scanned_track_plays_through_its_lease() {
     let decoded = events
         .iter()
         .filter_map(|e| match e {
-            PlaybackEvent::Position { duration_ms: Some(ms), .. } => Some(*ms),
+            PlaybackEvent::Position {
+                duration_ms: Some(ms),
+                ..
+            } => Some(*ms),
             _ => None,
         })
         .next_back()
         .expect("mpv reported a duration");
-    let tagged = track.duration_ms.expect("the fixture is tagged with a duration") as u64;
+    let tagged = track
+        .duration_ms
+        .expect("the fixture is tagged with a duration") as u64;
     assert!(
         decoded.abs_diff(tagged) < 200,
         "tagged {tagged}ms but decoded {decoded}ms",

@@ -19,7 +19,8 @@ struct TempHome(PathBuf);
 
 impl TempHome {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("ymusic-library-test-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("ymusic-library-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp dir");
         Self(dir)
@@ -50,15 +51,25 @@ fn scans_a_folder_and_reads_tags() {
     let tracks = library.tracks().expect("tracks");
     assert_eq!(tracks.len(), 3);
 
-    let first = tracks.iter().find(|t| t.title == "First Light").expect("tagged flac");
+    let first = tracks
+        .iter()
+        .find(|t| t.title == "First Light")
+        .expect("tagged flac");
     assert_eq!(first.artist, "Nebula");
     assert_eq!(first.album.as_deref(), Some("Drift"));
     assert_eq!(first.track_number, Some(1));
     assert_eq!(first.year, Some(2021));
     assert_eq!(first.codec, "flac");
-    assert!(first.id.starts_with("local:"), "ids are namespaced: {}", first.id);
+    assert!(
+        first.id.starts_with("local:"),
+        "ids are namespaced: {}",
+        first.id
+    );
     let duration = first.duration_ms.expect("flac reports a duration");
-    assert!((1900..=2100).contains(&duration), "expected ~2s, got {duration}ms");
+    assert!(
+        (1900..=2100).contains(&duration),
+        "expected ~2s, got {duration}ms"
+    );
 }
 
 #[test]
@@ -87,7 +98,11 @@ fn ignores_files_that_are_not_audio() {
     library.add_folder(&fixture_dir()).expect("add folder");
     library.scan_folder(&fixture_dir()).expect("scan");
 
-    let readme = library.tracks().expect("tracks").into_iter().find(|t| t.path.ends_with(".txt"));
+    let readme = library
+        .tracks()
+        .expect("tracks")
+        .into_iter()
+        .find(|t| t.path.ends_with(".txt"));
     assert!(readme.is_none(), "readme.txt must not be indexed");
 }
 
@@ -105,12 +120,26 @@ fn extracts_embedded_cover_art_to_the_cache() {
         .find(|t| t.title == "Second Light")
         .expect("the mp3 fixture");
 
-    let art = with_art.cover_art.expect("the mp3 carries an attached picture");
-    assert!(Path::new(&art.path).exists(), "art is written to disk at {}", art.path);
-    assert_eq!((art.width, art.height), (64, 48), "dimensions are read from the JPEG header");
+    let art = with_art
+        .cover_art
+        .expect("the mp3 carries an attached picture");
+    assert!(
+        Path::new(&art.path).exists(),
+        "art is written to disk at {}",
+        art.path
+    );
+    assert_eq!(
+        (art.width, art.height),
+        (64, 48),
+        "dimensions are read from the JPEG header"
+    );
 
-    let without_art =
-        library.tracks().expect("tracks").into_iter().find(|t| t.title == "First Light").unwrap();
+    let without_art = library
+        .tracks()
+        .expect("tracks")
+        .into_iter()
+        .find(|t| t.title == "First Light")
+        .unwrap();
     assert!(without_art.cover_art.is_none());
 }
 
@@ -150,7 +179,12 @@ fn resolve_produces_a_lease_that_never_expires() {
     library.add_folder(&fixture_dir()).expect("add folder");
     library.scan_all().expect("scan");
 
-    let track = library.tracks().expect("tracks").into_iter().next().expect("at least one track");
+    let track = library
+        .tracks()
+        .expect("tracks")
+        .into_iter()
+        .next()
+        .expect("at least one track");
     let lease = library.resolve(&track.id).expect("resolve");
 
     assert_eq!(lease.track_id, track.id);
@@ -174,11 +208,18 @@ fn resolving_a_moved_file_reports_the_path_rather_than_failing_in_mpv() {
 
     library.add_folder(&scratch).expect("add folder");
     library.scan_all().expect("scan");
-    let track = library.tracks().expect("tracks").into_iter().next().expect("one track");
+    let track = library
+        .tracks()
+        .expect("tracks")
+        .into_iter()
+        .next()
+        .expect("one track");
 
     std::fs::remove_file(&copied).unwrap();
 
-    let err = library.resolve(&track.id).expect_err("a missing file is an error");
+    let err = library
+        .resolve(&track.id)
+        .expect_err("a missing file is an error");
     assert!(err.to_string().contains("no longer on disk"), "got: {err}");
 }
 
@@ -192,9 +233,15 @@ fn removing_a_folder_forgets_its_tracks() {
     library.scan_all().expect("scan");
     assert_eq!(library.tracks().expect("tracks").len(), 3);
 
-    library.remove_folder(&folder.to_string_lossy()).expect("remove");
+    library
+        .remove_folder(&folder.to_string_lossy())
+        .expect("remove");
     assert_eq!(library.folders().expect("folders"), Vec::<String>::new());
-    assert_eq!(library.tracks().expect("tracks").len(), 0, "tracks go with the folder");
+    assert_eq!(
+        library.tracks().expect("tracks").len(),
+        0,
+        "tracks go with the folder"
+    );
 }
 
 #[test]

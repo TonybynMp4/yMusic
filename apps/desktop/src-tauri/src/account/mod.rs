@@ -16,12 +16,7 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Key, Nonce,
 };
-use std::{
-    fs,
-    io::ErrorKind,
-    path::PathBuf,
-    sync::Mutex,
-};
+use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
 
 const NONCE_LEN: usize = 12;
 
@@ -94,7 +89,11 @@ impl Account {
     /// key, a corrupt file or a keyring that will not answer, starts the app
     /// signed out rather than failing it: signing in again is cheap.
     pub fn open(path: PathBuf, keys: impl KeyStore) -> Self {
-        let account = Self { path, keys: Box::new(keys), cookie: Mutex::new(None) };
+        let account = Self {
+            path,
+            keys: Box::new(keys),
+            cookie: Mutex::new(None),
+        };
         match account.load() {
             Ok(cookie) => *account.cookie.lock().expect("cookie mutex") = cookie,
             Err(error) => log::warn!("starting signed out: {error}"),
@@ -149,7 +148,8 @@ impl Account {
         };
         let sealed = seal(&key, cookie)?;
         if let Some(dir) = self.path.parent() {
-            fs::create_dir_all(dir).map_err(|error| format!("could not create {dir:?}: {error}"))?;
+            fs::create_dir_all(dir)
+                .map_err(|error| format!("could not create {dir:?}: {error}"))?;
         }
         // Written aside and renamed over, so a crash mid-write leaves the old
         // session rather than half of a new one.
@@ -203,7 +203,8 @@ mod tests {
     }
 
     fn temp_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("ymusic-account-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("ymusic-account-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir.join("account.bin")
     }

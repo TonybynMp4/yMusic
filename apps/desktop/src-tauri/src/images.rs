@@ -134,7 +134,10 @@ fn image(bytes: Vec<u8>) -> Response<Vec<u8>> {
 }
 
 fn status(code: StatusCode) -> Response<Vec<u8>> {
-    Response::builder().status(code).body(Vec::new()).expect("an empty response")
+    Response::builder()
+        .status(code)
+        .body(Vec::new())
+        .expect("an empty response")
 }
 
 /// Written to a temporary name and renamed, so a crash mid-write leaves no half image.
@@ -150,7 +153,10 @@ mod tests {
     use super::*;
 
     fn request(uri: &str) -> Request<Vec<u8>> {
-        Request::builder().uri(uri).body(Vec::new()).expect("request")
+        Request::builder()
+            .uri(uri)
+            .body(Vec::new())
+            .expect("request")
     }
 
     #[test]
@@ -171,7 +177,11 @@ mod tests {
             "http%3A%2F%2Flh3.googleusercontent.com%2Fa",
             "https%3A%2F%2Fgoogleusercontent.com.evil.test%2Fa",
         ] {
-            assert_eq!(target(&request(&format!("img://localhost/{url}"))), None, "{url}");
+            assert_eq!(
+                target(&request(&format!("img://localhost/{url}"))),
+                None,
+                "{url}"
+            );
         }
     }
 

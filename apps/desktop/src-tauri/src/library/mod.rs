@@ -93,7 +93,10 @@ impl Library {
         std::fs::create_dir_all(&art_dir)?;
         let conn = Connection::open(db_path)?;
         schema::migrate(&conn)?;
-        Ok(Self { conn: Mutex::new(conn), art_dir })
+        Ok(Self {
+            conn: Mutex::new(conn),
+            art_dir,
+        })
     }
 
     /// For tests, and for the case where the data directory is unwritable: an
@@ -102,7 +105,10 @@ impl Library {
         std::fs::create_dir_all(&art_dir)?;
         let conn = Connection::open_in_memory()?;
         schema::migrate(&conn)?;
-        Ok(Self { conn: Mutex::new(conn), art_dir })
+        Ok(Self {
+            conn: Mutex::new(conn),
+            art_dir,
+        })
     }
 
     fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
@@ -136,10 +142,7 @@ impl Library {
     pub fn remove_folder(&self, path: &str) -> Result<()> {
         self.with_conn(|conn| {
             conn.execute("DELETE FROM folders WHERE path = ?1", [path])?;
-            conn.execute(
-                "DELETE FROM tracks WHERE folder = ?1",
-                [path],
-            )?;
+            conn.execute("DELETE FROM tracks WHERE folder = ?1", [path])?;
             Ok(())
         })
     }
@@ -160,7 +163,13 @@ impl Library {
         if trimmed.is_empty() {
             return self.tracks();
         }
-        let pattern = format!("%{}%", trimmed.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let pattern = format!(
+            "%{}%",
+            trimmed
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
         self.with_conn(|conn| {
             let sql = format!(
                 "{} WHERE title LIKE ?1 ESCAPE '\\' OR artist LIKE ?1 ESCAPE '\\' \

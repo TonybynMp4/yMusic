@@ -38,11 +38,17 @@ pub enum MediaKeyEvent {
     Previous,
     Stop,
     #[serde(rename_all = "camelCase")]
-    SeekBy { offset_ms: i64 },
+    SeekBy {
+        offset_ms: i64,
+    },
     #[serde(rename_all = "camelCase")]
-    SetPosition { position_ms: u64 },
+    SetPosition {
+        position_ms: u64,
+    },
     /// A slider position in 0..=1, the same unit the player's volume takes.
-    SetVolume { volume: f64 },
+    SetVolume {
+        volume: f64,
+    },
 }
 
 /// What the frontend knows about the current track.
@@ -120,13 +126,17 @@ impl MediaSession {
 
     pub fn set_track(&self, track: Option<MediaTrack>) {
         let mut state = self.lock();
-        let Some(controls) = state.controls.as_mut() else { return };
+        let Some(controls) = state.controls.as_mut() else {
+            return;
+        };
 
-        let cover = track.as_ref().and_then(|t| match (&t.cover_path, &t.cover_url) {
-            (Some(path), _) => Some(file_cover_url(path)),
-            (None, Some(url)) => Some(url.clone()),
-            (None, None) => None,
-        });
+        let cover = track
+            .as_ref()
+            .and_then(|t| match (&t.cover_path, &t.cover_url) {
+                (Some(path), _) => Some(file_cover_url(path)),
+                (None, Some(url)) => Some(url.clone()),
+                (None, None) => None,
+            });
         let metadata = match &track {
             Some(track) => MediaMetadata {
                 title: Some(&track.title),
@@ -214,8 +224,14 @@ impl EventSink for MediaSession {
             PlaybackEvent::Ended { .. } | PlaybackEvent::Error { .. } => None,
         };
 
-        let Some((playing, position_ms)) = playback else { return };
-        state.reported = Some(Reported { playing, position_ms, at: Instant::now() });
+        let Some((playing, position_ms)) = playback else {
+            return;
+        };
+        state.reported = Some(Reported {
+            playing,
+            position_ms,
+            at: Instant::now(),
+        });
         let progress = Some(MediaPosition(Duration::from_millis(position_ms)));
         let playback = if playing {
             MediaPlayback::Playing { progress }
@@ -255,7 +271,9 @@ fn create_controls<R: Runtime>(
         .map_err(|e| format!("{e:?}"))?;
     // souvlaki starts out claiming "Playing", which puts an empty entry with a
     // pause button in the desktop's media widget before anything has loaded.
-    controls.set_playback(MediaPlayback::Stopped).map_err(|e| format!("{e:?}"))?;
+    controls
+        .set_playback(MediaPlayback::Stopped)
+        .map_err(|e| format!("{e:?}"))?;
     Ok(controls)
 }
 
@@ -271,12 +289,12 @@ fn handle<R: Runtime>(session: &MediaSession, app: &AppHandle<R>, event: MediaCo
         MediaControlEvent::Stop => MediaKeyEvent::Stop,
         MediaControlEvent::Seek(direction) => seek_by(direction, DEFAULT_SEEK_STEP),
         MediaControlEvent::SeekBy(direction, amount) => seek_by(direction, amount),
-        MediaControlEvent::SetPosition(MediaPosition(position)) => {
-            MediaKeyEvent::SetPosition { position_ms: position.as_millis() as u64 }
-        }
-        MediaControlEvent::SetVolume(volume) => {
-            MediaKeyEvent::SetVolume { volume: volume.clamp(0.0, 1.0) }
-        }
+        MediaControlEvent::SetPosition(MediaPosition(position)) => MediaKeyEvent::SetPosition {
+            position_ms: position.as_millis() as u64,
+        },
+        MediaControlEvent::SetVolume(volume) => MediaKeyEvent::SetVolume {
+            volume: volume.clamp(0.0, 1.0),
+        },
         MediaControlEvent::Raise => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
@@ -350,19 +368,31 @@ mod tests {
         let session = MediaSession::default();
         let reported = || session.lock().reported.map(|r| r.position_ms);
 
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Loading });
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Playing });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Loading,
+        });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Playing,
+        });
         assert_eq!(reported(), Some(0));
 
         // Ordinary ticks stay within the extrapolation, so nothing is re-sent.
-        session.send(PlaybackEvent::Position { position_ms: 250, duration_ms: None });
+        session.send(PlaybackEvent::Position {
+            position_ms: 250,
+            duration_ms: None,
+        });
         assert_eq!(reported(), Some(0));
 
         // A jump well past where playback could have got to is a seek.
-        session.send(PlaybackEvent::Position { position_ms: 60_000, duration_ms: None });
+        session.send(PlaybackEvent::Position {
+            position_ms: 60_000,
+            duration_ms: None,
+        });
         assert_eq!(reported(), Some(60_000));
 
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Idle });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Idle,
+        });
         assert_eq!(reported(), None);
     }
 
@@ -370,17 +400,28 @@ mod tests {
     fn an_empty_player_is_never_reported_as_playing() {
         let session = MediaSession::default();
         // What mpv sends when its `pause` property is first observed.
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Playing });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Playing,
+        });
         assert!(session.lock().reported.is_none());
     }
 
     #[test]
     fn pausing_reports_the_position_it_paused_at() {
         let session = MediaSession::default();
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Loading });
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Playing });
-        session.send(PlaybackEvent::Position { position_ms: 42_000, duration_ms: None });
-        session.send(PlaybackEvent::Status { status: PlaybackStatus::Paused });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Loading,
+        });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Playing,
+        });
+        session.send(PlaybackEvent::Position {
+            position_ms: 42_000,
+            duration_ms: None,
+        });
+        session.send(PlaybackEvent::Status {
+            status: PlaybackStatus::Paused,
+        });
         let reported = session.lock().reported.expect("reported");
         assert!(!reported.playing);
         assert_eq!(reported.position_ms, 42_000);

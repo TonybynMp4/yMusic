@@ -97,10 +97,7 @@ pub fn library_folders(library: State<'_, Library>) -> Result<Vec<String>, Strin
 }
 
 #[tauri::command]
-pub fn library_add_folder(
-    library: State<'_, Library>,
-    path: String,
-) -> Result<ScanReport, String> {
+pub fn library_add_folder(library: State<'_, Library>, path: String) -> Result<ScanReport, String> {
     let path = std::path::PathBuf::from(path);
     library.add_folder(&path).map_err(|e| e.to_string())?;
     // Scanning here rather than making the caller do it keeps "add a folder"

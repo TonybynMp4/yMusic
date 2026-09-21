@@ -2,8 +2,8 @@ pub mod account;
 pub mod botguard;
 pub mod commands;
 pub mod images;
-pub mod platform;
 pub mod library;
+pub mod platform;
 pub mod playback;
 
 use account::{Account, OsKeyring};
@@ -66,7 +66,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
         .register_asynchronous_uri_scheme_protocol(images::SCHEME, |context, request, responder| {
-            let images = context.app_handle().state::<images::Images>().inner().clone();
+            let images = context
+                .app_handle()
+                .state::<images::Images>()
+                .inner()
+                .clone();
             tauri::async_runtime::spawn(async move {
                 responder.respond(images.respond(&request).await);
             });
@@ -103,7 +107,10 @@ pub fn run() {
 fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
     let art_dir = cache_dir(app).join("art");
 
-    let db_path = app.path().app_data_dir().map(|dir| dir.join("library.sqlite3"));
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map(|dir| dir.join("library.sqlite3"));
 
     match db_path {
         Ok(path) => match Library::open(&path, art_dir.clone()) {
@@ -117,7 +124,9 @@ fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
 }
 
 fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf {
-    app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
+    app.path()
+        .app_cache_dir()
+        .unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
 }
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {

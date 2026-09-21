@@ -81,7 +81,15 @@ pnpm workspaces and Turborepo. `tsgo` (the TypeScript 7 native compiler) type-ch
 - `packages/ipc`: typed, zod-validated wrappers over Tauri commands and channels. The only package that calls `invoke`.
 - `apps/desktop`: the Tauri app. `src/` is the React frontend and its shadcn components. `src-tauri/` is the Rust core: mpv playback, the sealed session and sign-in window, the local library, the `img` scheme, media controls and window chrome. Platform differences live in `platform/`, one module per concern, rather than `#[cfg]`s scattered through features.
 
+## Versions and releases
+
+Semantic versions, one source: `apps/desktop/package.json`. `tauri.conf.json` points at it, and Cargo keeps a copy that `pnpm release` writes. Before 1.0, a minor bump means new features and a patch means fixes.
+
+`CHANGELOG.md` is the release history. A commit that changes something a user would notice adds a line under Unreleased. `pnpm release 0.2.0` checks for a clean `main`, turns Unreleased into `## 0.2.0 (date)`, bumps both versions, commits `Release v0.2.0` and tags `v0.2.0`. Pushing the tag runs `.github/workflows/release.yml`, which builds the `.deb` in `debian:13` (the oldest target, so the glibc floor is right) and publishes a GitHub release with that changelog section as its notes. A version with a suffix (`0.2.0-beta.1`) becomes a prerelease.
+
 ## Packaging and updates
+
+This comes after the MVP. Until then a release carries the plain `.deb` Tauri builds, with no updater.
 
 Windows: MSI/NSIS with the WebView2 bootstrapper, updated by `tauri-plugin-updater`. Linux: a `.deb` attached to a GitHub release, updated in the app. No AppImage, no hosted apt repo.
 

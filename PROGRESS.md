@@ -6,7 +6,7 @@ Everything ticked has been run on Linux. Nothing has been run on Windows yet.
 
 ## MVP
 
-The MVP is done when you can sign in, search, play and manage a queue, on both platforms, from one commit, installed from a release.
+The MVP is done when you can sign in, search, play and manage a queue, on both platforms, from a tagged GitHub release.
 
 ### Shell
 
@@ -56,17 +56,27 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Scan folders into SQLite and play from disk
 - [x] Folders and all files in the sidebar
 
-### Packaging and updates
+### Releases
 
-- [ ] Linux `.deb` with AppStream metadata and a build-time install flavour
-- [ ] In-app updater for the `.deb`: check `latest.json`, download, `pkexec dpkg -i`, relaunch
-- [ ] Clear manual-update message when `pkexec` is missing
-- [ ] Signed release assets (minisign)
-- [ ] CI: build the `.deb`, install it in `debian:13`, check `dpkg -L`
-- [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
+- [x] One version, in `apps/desktop/package.json`; Tauri reads it and `pnpm release` copies it into Cargo
+- [x] `CHANGELOG.md`, with an Unreleased section that `pnpm release` turns into the version's
+- [x] `pnpm release <version>`: bump, commit and tag from a clean `main`
+- [ ] A pushed tag builds the `.deb` in `debian:13` and publishes a GitHub release with the changelog section as notes (written, not run yet)
+- [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
 - [ ] Run the whole MVP on Windows
 
 ## After the MVP
+
+### Packaging and updates
+
+- [ ] `.deb` with AppStream metadata, a build-time install flavour, and the package named `ymusic` (Tauri names it `y-music` after the product name)
+- [ ] In-app updater for the `.deb`: check `latest.json`, download, `pkexec dpkg -i`, relaunch
+- [ ] Clear manual-update message when `pkexec` is missing
+- [ ] Signed release assets (minisign)
+- [ ] CI: install the `.deb` in `debian:13` and check `dpkg -L`
+- [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
+
+### Features
 
 - [ ] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
 - [ ] Metadata cache in SQLite for playlist, album and artist pages

@@ -1,6 +1,6 @@
 # Working on yMusic
 
-The design and its reasoning live in `PLAN.md`; read it before starting a new area. `PROGRESS.md` tracks what is built and what is left: tick items off in the commit that finishes them.
+The design and its reasoning live in `PLAN.md`; read it before starting a new area. `PROGRESS.md` tracks what is built and what is left: tick items off in the commit that finishes them. A user-visible change also gets a line under Unreleased in `CHANGELOG.md`.
 
 ## Writing
 

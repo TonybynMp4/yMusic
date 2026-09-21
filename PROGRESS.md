@@ -14,7 +14,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] shadcn on Base UI, YouTube Music's dark palette, Tabler icons
 - [x] Custom titlebar
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
-- [ ] Single instance
+- [x] Single instance: a second launch focuses the running window
 - [ ] Explicit libmpv version floor with a clear startup error
 
 ### Playback

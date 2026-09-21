@@ -101,8 +101,15 @@ fn plays_a_local_file_through_to_the_end() {
         recorder.events()
     );
 
-    assert!(recorder.errors().is_empty(), "unexpected errors: {:?}", recorder.errors());
-    assert!(recorder.saw_status(PlaybackStatus::Playing), "never reported playing");
+    assert!(
+        recorder.errors().is_empty(),
+        "unexpected errors: {:?}",
+        recorder.errors()
+    );
+    assert!(
+        recorder.saw_status(PlaybackStatus::Playing),
+        "never reported playing"
+    );
     assert!(
         recorder.max_position_ms() > 500,
         "position never advanced past 500ms, got {}",
@@ -114,11 +121,17 @@ fn plays_a_local_file_through_to_the_end() {
         .events()
         .iter()
         .find_map(|event| match event {
-            PlaybackEvent::Position { duration_ms: Some(ms), .. } => Some(*ms),
+            PlaybackEvent::Position {
+                duration_ms: Some(ms),
+                ..
+            } => Some(*ms),
             _ => None,
         })
         .expect("a duration should have been reported");
-    assert!((1900..=2100).contains(&duration), "unexpected duration {duration}ms");
+    assert!(
+        (1900..=2100).contains(&duration),
+        "unexpected duration {duration}ms"
+    );
 }
 
 #[test]
@@ -126,13 +139,15 @@ fn pause_and_seek_are_reflected_in_the_event_stream() {
     let (player, recorder) = player();
     player.load(request(fixture_url("tone.wav"))).expect("load");
     assert!(
-        recorder.wait_for(Duration::from_secs(10), |r| r.saw_status(PlaybackStatus::Playing)),
+        recorder.wait_for(Duration::from_secs(10), |r| r
+            .saw_status(PlaybackStatus::Playing)),
         "never started playing"
     );
 
     player.pause().expect("pause");
     assert!(
-        recorder.wait_for(Duration::from_secs(5), |r| r.saw_status(PlaybackStatus::Paused)),
+        recorder.wait_for(Duration::from_secs(5), |r| r
+            .saw_status(PlaybackStatus::Paused)),
         "pause was never reported; events: {:?}",
         recorder.events()
     );
@@ -153,12 +168,14 @@ fn seeking_while_paused_stays_paused() {
     let (player, recorder) = player();
     player.load(request(fixture_url("tone.wav"))).expect("load");
     assert!(
-        recorder.wait_for(Duration::from_secs(10), |r| r.saw_status(PlaybackStatus::Playing)),
+        recorder.wait_for(Duration::from_secs(10), |r| r
+            .saw_status(PlaybackStatus::Playing)),
         "never started playing"
     );
     player.pause().expect("pause");
     assert!(
-        recorder.wait_for(Duration::from_secs(5), |r| r.saw_status(PlaybackStatus::Paused)),
+        recorder.wait_for(Duration::from_secs(5), |r| r
+            .saw_status(PlaybackStatus::Paused)),
         "pause was never reported"
     );
 
@@ -172,9 +189,12 @@ fn seeking_while_paused_stays_paused() {
     std::thread::sleep(Duration::from_millis(300));
     let after_seek = &recorder.events()[before..];
     assert!(
-        !after_seek
-            .iter()
-            .any(|e| matches!(e, PlaybackEvent::Status { status: PlaybackStatus::Playing })),
+        !after_seek.iter().any(|e| matches!(
+            e,
+            PlaybackEvent::Status {
+                status: PlaybackStatus::Playing
+            }
+        )),
         "a paused seek reported playing: {after_seek:?}"
     );
 }
@@ -186,7 +206,10 @@ fn seeking_while_paused_stays_paused() {
 fn streams_https_audio_with_custom_headers() {
     let (player, recorder) = player();
     let mut load = request("https://download.samplelib.com/mp3/sample-3s.mp3".into());
-    load.headers.insert("User-Agent".into(), "YMUSIC/0.1 (playback smoke test)".into());
+    load.headers.insert(
+        "User-Agent".into(),
+        "YMUSIC/0.1 (playback smoke test)".into(),
+    );
     player.load(load).expect("load");
 
     assert!(
@@ -194,5 +217,9 @@ fn streams_https_audio_with_custom_headers() {
         "never got 500ms into the stream; events: {:?}",
         recorder.events()
     );
-    assert!(recorder.errors().is_empty(), "unexpected errors: {:?}", recorder.errors());
+    assert!(
+        recorder.errors().is_empty(),
+        "unexpected errors: {:?}",
+        recorder.errors()
+    );
 }

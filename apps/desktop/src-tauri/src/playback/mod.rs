@@ -10,7 +10,6 @@ mod event;
 
 pub use event::{PlaybackEvent, PlaybackStatus};
 
-
 use event::seconds_to_ms;
 use libmpv2::{events::Event, Format, Mpv};
 use serde::Deserialize;
@@ -123,9 +122,7 @@ impl Player {
             }
             Ok(())
         })
-        .map_err(|error| {
-            format!("could not start libmpv (is libmpv2 installed?): {error}")
-        })?;
+        .map_err(|error| format!("could not start libmpv (is libmpv2 installed?): {error}"))?;
 
         let mpv = Arc::new(mpv);
         let sink = Sink::default();
@@ -153,7 +150,11 @@ impl Player {
 
     /// Adds a permanent listener alongside the frontend's.
     pub fn observe(&self, observer: impl EventSink) {
-        self.sink.observers.lock().expect("observer mutex").push(Box::new(observer));
+        self.sink
+            .observers
+            .lock()
+            .expect("observer mutex")
+            .push(Box::new(observer));
     }
 
     pub fn load(&self, request: LoadRequest) -> Result<(), String> {
@@ -201,7 +202,12 @@ impl Player {
     pub fn stop(&self) -> Result<(), String> {
         *self.current_track.lock().expect("track mutex") = None;
         self.command("stop", &[])?;
-        emit(&self.sink, PlaybackEvent::Status { status: PlaybackStatus::Idle });
+        emit(
+            &self.sink,
+            PlaybackEvent::Status {
+                status: PlaybackStatus::Idle,
+            },
+        );
         Ok(())
     }
 
@@ -241,20 +247,33 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                 match event {
                     Event::StartFile => {
                         duration_ms = None;
-                        emit(&sink, PlaybackEvent::Status { status: PlaybackStatus::Loading });
+                        emit(
+                            &sink,
+                            PlaybackEvent::Status {
+                                status: PlaybackStatus::Loading,
+                            },
+                        );
                     }
                     // mpv restarts playback after every seek too, including a
                     // seek while paused, so "playing" has to be checked rather
                     // than assumed or a paused scrub flips the UI to playing.
                     Event::PlaybackRestart => {
                         let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
-                        let status =
-                            if paused { PlaybackStatus::Paused } else { PlaybackStatus::Playing };
+                        let status = if paused {
+                            PlaybackStatus::Paused
+                        } else {
+                            PlaybackStatus::Playing
+                        };
                         emit(&sink, PlaybackEvent::Status { status });
                     }
                     Event::EndFile(reason) => match reason {
                         libmpv2::mpv_end_file_reason::Eof => {
-                            emit(&sink, PlaybackEvent::Status { status: PlaybackStatus::Ended });
+                            emit(
+                                &sink,
+                                PlaybackEvent::Status {
+                                    status: PlaybackStatus::Ended,
+                                },
+                            );
                             emit(&sink, PlaybackEvent::Ended { track_id: track() });
                         }
                         libmpv2::mpv_end_file_reason::Error => {
@@ -274,7 +293,11 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                         // resolving the URL, not the end of anything.
                         _ => {}
                     },
-                    Event::PropertyChange { change, reply_userdata, .. } => match reply_userdata {
+                    Event::PropertyChange {
+                        change,
+                        reply_userdata,
+                        ..
+                    } => match reply_userdata {
                         OBSERVE_TIME_POS => {
                             if let libmpv2::events::PropertyData::Double(seconds) = change {
                                 emit(

@@ -3,7 +3,6 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
 use lofty::file::{AudioFile, FileType, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::{Accessor, ItemKey, Tag};
@@ -84,7 +83,11 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
     let mut report = ScanReport::default();
     let mut seen: Vec<String> = Vec::new();
 
-    for entry in WalkDir::new(folder).follow_links(false).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(folder)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if !entry.file_type().is_file() || !is_supported_audio(entry.path()) {
             continue;
         }
@@ -95,7 +98,9 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         let mtime = mtime_of(path);
         let known_mtime: Option<i64> = library.with_conn(|conn| {
             Ok(conn
-                .query_row("SELECT mtime FROM tracks WHERE id = ?1", [&id], |row| row.get(0))
+                .query_row("SELECT mtime FROM tracks WHERE id = ?1", [&id], |row| {
+                    row.get(0)
+                })
                 .ok())
         })?;
 
@@ -144,11 +149,7 @@ fn index_file(
     path: &Path,
     mtime: i64,
 ) -> Result<()> {
-    let tagged = Probe::open(path)
-        .map_err(to_io)?
-        
-        .read()
-        .map_err(to_io)?;
+    let tagged = Probe::open(path).map_err(to_io)?.read().map_err(to_io)?;
 
     let properties = tagged.properties();
     let duration_ms = {
@@ -170,13 +171,17 @@ fn index_file(
         .and_then(|t| t.title().map(|s| s.to_string()))
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| {
-            path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+            path.file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default()
         });
     let artist = tag
         .and_then(|t| t.artist().map(|s| s.to_string()))
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "Unknown Artist".to_string());
-    let album = tag.and_then(|t| t.album().map(|s| s.to_string())).filter(|s| !s.trim().is_empty());
+    let album = tag
+        .and_then(|t| t.album().map(|s| s.to_string()))
+        .filter(|s| !s.trim().is_empty());
     let album_artist = tag
         .and_then(|t| t.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string()))
         .filter(|s| !s.trim().is_empty());
@@ -186,7 +191,10 @@ fn index_file(
 
     let art = tag.and_then(|t| extract_cover_art(library, id, t).ok().flatten());
 
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
 
     library.with_conn(|conn| {
         conn.execute(
@@ -231,11 +239,7 @@ fn index_file(
 /// Writes the first embedded picture to the art cache and returns
 /// (path, width, height). Art is written once per track id and overwritten on
 /// rescan, so the cache cannot grow without bound.
-fn extract_cover_art(
-    library: &Library,
-    id: &str,
-    tag: &Tag,
-) -> Result<Option<(String, u32, u32)>> {
+fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(String, u32, u32)>> {
     let Some(picture) = tag.pictures().first() else {
         return Ok(None);
     };

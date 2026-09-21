@@ -49,14 +49,14 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-pub const SELECT_TRACK_COLUMNS_NO_ORDER: &str = "SELECT id, path, title, artist, album, album_artist, \
+pub const SELECT_TRACK_COLUMNS_NO_ORDER: &str =
+    "SELECT id, path, title, artist, album, album_artist, \
      track_number, disc_number, year, duration_ms, codec, bitrate, art_path, art_width, art_height \
      FROM tracks";
 
 /// Album order, not filesystem order: within an album, disc then track number,
 /// with untagged entries falling back to title.
-pub const TRACK_ORDER: &str =
-    "ORDER BY artist COLLATE NOCASE, IFNULL(album, '') COLLATE NOCASE, \
+pub const TRACK_ORDER: &str = "ORDER BY artist COLLATE NOCASE, IFNULL(album, '') COLLATE NOCASE, \
      IFNULL(disc_number, 0), IFNULL(track_number, 0), title COLLATE NOCASE";
 
 pub fn select_all() -> String {

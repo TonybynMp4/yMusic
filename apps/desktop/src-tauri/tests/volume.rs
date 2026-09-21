@@ -22,7 +22,10 @@ fn mpv_applies_the_cubic_taper_the_volume_slider_assumes() {
     let tone = dir.join("tone.wav");
     write_full_scale_tone(&tone);
     let reference = render_at(&tone, &dir, 100.0);
-    assert!(reference > 1000.0, "the reference tone should be near full scale, got {reference}");
+    assert!(
+        reference > 1000.0,
+        "the reference tone should be near full scale, got {reference}"
+    );
 
     // Well clear of both ends: at low volumes a cubed 16-bit sample rounds into
     // the noise floor, which would test quantisation rather than the curve.
@@ -95,7 +98,12 @@ fn rms_of(path: &Path) -> f64 {
 /// quarter volume, which is exactly the measurement this test depends on.
 fn pcm_data<'a>(bytes: &'a [u8], path: &Path) -> &'a [u8] {
     assert_eq!(&bytes[0..4], b"RIFF", "not a RIFF file: {}", path.display());
-    assert_eq!(&bytes[8..12], b"WAVE", "not a WAVE file: {}", path.display());
+    assert_eq!(
+        &bytes[8..12],
+        b"WAVE",
+        "not a WAVE file: {}",
+        path.display()
+    );
     let mut offset = 12;
     while offset + 8 <= bytes.len() {
         let id = &bytes[offset..offset + 4];

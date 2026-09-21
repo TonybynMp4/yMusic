@@ -65,7 +65,9 @@ pub async fn sign_in<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, S
     if let Some(agent) = USER_AGENT {
         builder = builder.user_agent(agent);
     }
-    let window = builder.build().map_err(|error| format!("could not open sign-in: {error}"))?;
+    let window = builder
+        .build()
+        .map_err(|error| format!("could not open sign-in: {error}"))?;
     window.on_window_event(move |event| {
         if let WindowEvent::Destroyed = event {
             let _ = tx.send(Step::Closed);
@@ -108,8 +110,10 @@ pub fn cookie_header(cookies: &[Cookie<'_>]) -> Option<String> {
     if !signed_in {
         return None;
     }
-    let pairs: Vec<String> =
-        cookies.iter().map(|c| format!("{}={}", c.name(), c.value())).collect();
+    let pairs: Vec<String> = cookies
+        .iter()
+        .map(|c| format!("{}={}", c.name(), c.value()))
+        .collect();
     Some(pairs.join("; "))
 }
 
@@ -119,11 +123,20 @@ mod tests {
 
     #[test]
     fn a_session_needs_sapisid() {
-        let anonymous = [Cookie::new("VISITOR_INFO1_LIVE", "v"), Cookie::new("YSC", "y")];
+        let anonymous = [
+            Cookie::new("VISITOR_INFO1_LIVE", "v"),
+            Cookie::new("YSC", "y"),
+        ];
         assert_eq!(cookie_header(&anonymous), None);
 
-        let signed_in = [Cookie::new("YSC", "y"), Cookie::new("__Secure-3PAPISID", "a/b")];
-        assert_eq!(cookie_header(&signed_in).as_deref(), Some("YSC=y; __Secure-3PAPISID=a/b"));
+        let signed_in = [
+            Cookie::new("YSC", "y"),
+            Cookie::new("__Secure-3PAPISID", "a/b"),
+        ];
+        assert_eq!(
+            cookie_header(&signed_in).as_deref(),
+            Some("YSC=y; __Secure-3PAPISID=a/b")
+        );
 
         assert_eq!(cookie_header(&[Cookie::new("SAPISID", "")]), None);
     }
@@ -132,7 +145,9 @@ mod tests {
     fn only_youtube_music_counts_as_landing() {
         assert!(is_music(&"https://music.youtube.com/".parse().unwrap()));
         assert!(!is_music(&"https://accounts.google.com/".parse().unwrap()));
-        assert!(!is_music(&"https://music.youtube.com.evil.test/".parse().unwrap()));
+        assert!(!is_music(
+            &"https://music.youtube.com.evil.test/".parse().unwrap()
+        ));
         assert!(!is_music(&"http://music.youtube.com/".parse().unwrap()));
     }
 }

@@ -50,7 +50,12 @@ mod tests {
     use super::*;
 
     fn get(uri: &str) -> Response<Vec<u8>> {
-        respond(&Request::builder().uri(uri).body(Vec::new()).expect("request"))
+        respond(
+            &Request::builder()
+                .uri(uri)
+                .body(Vec::new())
+                .expect("request"),
+        )
     }
 
     #[test]
@@ -64,14 +69,25 @@ mod tests {
 
             let script = get(&format!("{base}/frame.js"));
             assert_eq!(script.status(), StatusCode::OK);
-            assert!(script.headers()[header::CONTENT_TYPE].to_str().unwrap().contains("javascript"));
+            assert!(script.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .contains("javascript"));
         }
     }
 
     #[test]
     fn serves_nothing_else() {
-        for path in ["/../Cargo.toml", "/secrets", "/frame.js/x", "/index.html.bak"] {
-            assert_eq!(get(&format!("botguard://localhost{path}")).status(), StatusCode::NOT_FOUND);
+        for path in [
+            "/../Cargo.toml",
+            "/secrets",
+            "/frame.js/x",
+            "/index.html.bak",
+        ] {
+            assert_eq!(
+                get(&format!("botguard://localhost{path}")).status(),
+                StatusCode::NOT_FOUND
+            );
         }
     }
 }

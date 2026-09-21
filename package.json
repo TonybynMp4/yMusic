@@ -13,8 +13,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "tauri": "pnpm --filter @ymusic/desktop tauri",
-    "app": "pnpm --filter @ymusic/desktop tauri dev",
-    "release": "node scripts/release.mjs"
+    "app": "pnpm --filter @ymusic/desktop tauri dev"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",

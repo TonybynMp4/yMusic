@@ -1,19 +1,56 @@
 name: Release
 
-# Runs on the tag `pnpm release` pushes. Builds the Linux .deb and publishes a
-# GitHub release whose notes group the commits since the previous tag by
-# Conventional Commits type (scripts/release-notes.mjs). Windows
-# joins once the build bundles libmpv-2.dll.
+# Run by hand from the Actions tab. Builds the Linux .deb at the new version
+# first, and only once that works commits the bump to main, tags it and
+# publishes a GitHub release. The notes group the commits since the previous
+# tag by Conventional Commits type (scripts/release-notes.mjs). Windows joins
+# once the build bundles libmpv-2.dll.
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "patch, minor, major, or an exact version such as 0.2.0 or 0.2.0-beta.1"
+        required: true
+        default: patch
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Work out the version
+        id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          version=$(node scripts/bump.mjs "$INPUT" --dry-run)
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version is already released"
+            exit 1
+          fi
+          echo "Releasing v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   linux:
+    needs: prepare
     runs-on: ubuntu-latest
     # Build on the oldest distro we support, so the .deb's glibc and library
     # versions are ones it can actually install against.
@@ -30,17 +67,7 @@ jobs:
 
       - uses: actions/checkout@v5
         with:
-          # The whole history and tags, for the release notes.
-          fetch-depth: 0
-
-      - name: Check the tag matches the version
-        shell: bash
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          pkg=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' apps/desktop/package.json)
-          cargo=$(sed -n 's/^version = "\(.*\)"$/\1/p' apps/desktop/src-tauri/Cargo.toml | head -1)
-          echo "tag $tag, package.json $pkg, Cargo.toml $cargo"
-          [ "$tag" = "$pkg" ] && [ "$tag" = "$cargo" ]
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
@@ -52,23 +79,55 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
+      - run: node scripts/bump.mjs "${{ needs.prepare.outputs.version }}"
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-
       - run: pnpm tauri build --bundles deb
 
-      - name: Write the release notes
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          node scripts/release-notes.mjs "$GITHUB_REF_NAME" > notes.md
-
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          name: yMusic ${{ github.ref_name }}
-          body_path: notes.md
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          name: deb
+          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, linux]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # Fails if main moved during the build; run the workflow again.
+      - name: Commit the bump and tag it
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/bump.mjs "$VERSION"
+          # Nothing to commit when the version is already this one, as for the first release.
+          if ! git diff --quiet; then
+            git commit -am "chore: release v$VERSION"
+          fi
+          git tag -a "v$VERSION" -m "yMusic v$VERSION"
+          git push origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+
+      - name: Publish the release
+        run: |
+          node scripts/release-notes.mjs "v$VERSION" > notes.md
+          prerelease=$([[ "$VERSION" == *-* ]] && echo --prerelease || true)
+          gh release create "v$VERSION" dist/*.deb \
+            --title "yMusic v$VERSION" --notes-file notes.md $prerelease

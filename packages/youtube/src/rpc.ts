@@ -1,6 +1,7 @@
 import type { ProxyMarked, Remote } from "comlink";
 
 import type { YouTubeEngine } from "./engine.ts";
+import type { BotGuardVm } from "./po-token.ts";
 import type { SerializedRequest, SerializedResponse } from "./remote-fetch.ts";
 
 /**
@@ -9,13 +10,23 @@ import type { SerializedRequest, SerializedResponse } from "./remote-fetch.ts";
  */
 export interface EngineHost {
   fetch(request: SerializedRequest): Promise<SerializedResponse>;
+  /**
+   * BotGuard, when the host has one. It needs a DOM, which a worker lacks, so
+   * the host runs it in an isolated frame and relays. See `po-token.ts`.
+   */
+  botguardLoad: BotGuardVm["load"];
+  botguardCreateMinter: BotGuardVm["createMinter"];
+  botguardMint: BotGuardVm["mint"];
 }
 
 /** What the worker offers the main thread. */
 export interface EngineWorkerApi {
-  /** Must be the first call; every other one fetches through the host. */
-  /** Comlink unwraps a `proxy()`-marked argument into this remote on arrival. */
-  connect(host: Remote<EngineHost & ProxyMarked>): void;
+  /**
+   * Must be the first call; every other one fetches through the host. Comlink
+   * unwraps a `proxy()`-marked argument into this remote on arrival. Without
+   * `hasBotGuard` the host's BotGuard methods reject and there is no fallback.
+   */
+  connect(host: Remote<EngineHost & ProxyMarked>, hasBotGuard: boolean): void;
   setCookie: YouTubeEngine["setCookie"];
   account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];

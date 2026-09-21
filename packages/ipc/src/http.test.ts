@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { youtubeHeaders } from "./http.ts";
 
 describe("youtubeHeaders", () => {
+  it("sends no origin when the caller asks for none with an empty one", () => {
+    const headers = youtubeHeaders("https://jnn-pa.googleapis.com/$rpc/x", {
+      headers: { Origin: "" },
+    });
+
+    expect(headers.get("Origin")).toBe("");
+    expect(headers.has("Referer")).toBe(false);
+  });
+
   it("replaces the webview's own origin, which YouTube answers with 403", () => {
     const headers = youtubeHeaders("https://www.youtube.com/youtubei/v1/search", {
       headers: { Origin: "http://tauri.localhost" },

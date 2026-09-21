@@ -1,4 +1,5 @@
 pub mod account;
+pub mod botguard;
 pub mod commands;
 pub mod platform;
 pub mod library;
@@ -58,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
         .setup(|app| {
             let window = app
                 .get_webview_window("main")

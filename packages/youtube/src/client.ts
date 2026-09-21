@@ -1,4 +1,4 @@
-import { ClientType, Innertube } from "youtubei.js";
+import { ClientType, Innertube, Platform } from "youtubei.js";
 
 export type FetchLike = typeof fetch;
 
@@ -70,4 +70,51 @@ export async function createPlayer(options: YouTubeOptions): Promise<Innertube> 
     client_type: ClientType.VISIONOS,
     fetch: options.fetch,
   });
+}
+
+/**
+ * The client for when `VISIONOS` stops working, which is a question of when.
+ *
+ * `TV_SIMPLY` was the one other client whose URLs answer mpv's open-ended
+ * range request — but only with a PO token bound to the session's visitor id:
+ * 403 without, 206 with. Its formats are also signature-ciphered, which
+ * `VISIONOS`'s are not, so this is the path that needs both BotGuard and a
+ * JavaScript evaluator. `sessionToken` must have been minted for
+ * `visitorData`; youtubei.js appends it to every deciphered URL.
+ */
+export async function createFallbackPlayer(
+  options: YouTubeOptions & { visitorData: string; sessionToken: string },
+): Promise<Innertube> {
+  installEvaluator();
+  return Innertube.create({
+    retrieve_player: true,
+    client_type: ClientType.TV_SIMPLY,
+    visitor_data: options.visitorData,
+    po_token: options.sessionToken,
+    fetch: options.fetch,
+  });
+}
+
+/** A fresh anonymous visitor id, for binding a session token to. */
+export async function createVisitor(options: YouTubeOptions): Promise<string> {
+  const youtube = await Innertube.create({ retrieve_player: false, fetch: options.fetch });
+  const visitorData = youtube.session.context.client.visitorData;
+  if (!visitorData) throw new Error("YouTube did not issue a visitor id");
+  return visitorData;
+}
+
+/**
+ * youtubei.js extracts the signature and `n` transforms from YouTube's player
+ * script but ships no way to run them, leaving that to the platform. This runs
+ * them with `new Function`, which is why it only belongs in the engine worker:
+ * worker scripts carry no CSP in the app, the page does, and the page's
+ * forbids eval. Everything evaluated here is YouTube's own player code.
+ */
+function installEvaluator(): void {
+  Platform.shim.eval = (data, env) => {
+    const calls: string[] = [];
+    if (env.n) calls.push(`n: exportedVars.nFunction(${JSON.stringify(env.n)})`);
+    if (env.sig) calls.push(`sig: exportedVars.sigFunction(${JSON.stringify(env.sig)})`);
+    return new Function(`${data.output}\nreturn { ${calls.join(", ")} }`)() as never;
+  };
 }

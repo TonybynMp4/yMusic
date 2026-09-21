@@ -16,14 +16,21 @@ import { engine } from "./engine.ts";
  * `StreamLease` and stays source-agnostic, which is what lets a mixed queue
  * exist at all.
  */
-export async function resolveTrack(id: TrackId): Promise<StreamLease> {
+/**
+ * `fallback` skips YouTube's usual client for the PO-token one — for a stream
+ * that resolved but that mpv could not play. Meaningless for local files.
+ */
+export async function resolveTrack(
+  id: TrackId,
+  options: { fallback?: boolean } = {},
+): Promise<StreamLease> {
   switch (sourceOf(id)) {
     case "local":
       return libraryResolve(id);
     case "youtube": {
       const videoId = videoIdFromTrackId(id);
       if (videoId === null) throw new Error(`not a YouTube track id: ${id}`);
-      return engine.resolve(videoId);
+      return engine.resolve(videoId, options);
     }
   }
 }

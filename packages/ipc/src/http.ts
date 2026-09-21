@@ -36,6 +36,13 @@ export function youtubeHeaders(input: RequestInfo | URL, init?: RequestInit): He
     for (const [name, value] of input.headers) headers.set(name, value);
   }
   for (const [name, value] of new Headers(init?.headers)) headers.set(name, value);
+  // An explicitly empty Origin means "send none", which the plugin honours by
+  // dropping the header. BotGuard's challenge is bound to the requesting
+  // origin and refused later if that was YouTube's, so it asks for this.
+  if (headers.get("Origin") === "") {
+    headers.delete("Referer");
+    return headers;
+  }
   headers.set("Origin", YOUTUBE_ORIGIN);
   headers.set("Referer", `${YOUTUBE_ORIGIN}/`);
   return headers;

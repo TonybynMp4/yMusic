@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com data:; media-src 'self' asset: http://asset.localhost https://*.googlevideo.com; connect-src 'self' ipc: http://ipc.localhost https://*.youtube.com https://*.googleapis.com; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://*.ytimg.com https://*.googleusercontent.com https://*.ggpht.com data:; media-src 'self' asset: http://asset.localhost https://*.googlevideo.com; connect-src 'self' ipc: http://ipc.localhost https://*.youtube.com https://*.googleapis.com; frame-src botguard: http://botguard.localhost; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": true,
         "scope": [

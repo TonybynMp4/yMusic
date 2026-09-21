@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The shadcn Base UI components style by orientation with these, but Base UI
+   marks it as `data-orientation`. Without them, slider tracks and scrollbars
+   have no size at all. */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 /**
  * The palette is YouTube Music's, sampled from it rather than invented, so the
  * app reads as a companion to the service instead of a generic dark theme.

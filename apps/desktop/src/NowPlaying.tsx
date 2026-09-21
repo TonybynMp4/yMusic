@@ -88,7 +88,7 @@ export function NowPlaying(props: Props) {
           </IconButton>
           {track ? (
             <>
-              <Artwork track={track} size="size-12" />
+              <Artwork track={track} size={48} />
               <span className="min-w-0">
                 <span className="block truncate text-sm">{track.title}</span>
                 <span className="block truncate text-xs text-muted-foreground">

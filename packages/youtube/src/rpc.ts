@@ -33,5 +33,6 @@ export interface EngineWorkerApi {
   album: YouTubeEngine["album"];
   artist: YouTubeEngine["artist"];
   playlist: YouTubeEngine["playlist"];
+  libraryPlaylists: YouTubeEngine["libraryPlaylists"];
   resolve: YouTubeEngine["resolve"];
 }

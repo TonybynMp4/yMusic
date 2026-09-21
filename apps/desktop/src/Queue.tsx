@@ -62,7 +62,7 @@ export function Queue({ queue, onJump, onRemove, onClear }: Props) {
                   onClick={() => onJump(track.id)}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
                 >
-                  <Artwork track={track} size="size-9" />
+                  <Artwork track={track} size={36} />
                   <span className="min-w-0">
                     <span className={cn("block truncate text-sm", isCurrent && "text-brand")}>
                       {track.title}

@@ -9,15 +9,17 @@ function Slider({
   max = 100,
   ...props
 }: SliderPrimitive.Root.Props) {
-  const _values = Array.isArray(value)
-    ? value
-    : Array.isArray(defaultValue)
-      ? defaultValue
+  // One thumb per value. A plain number is one value, not a range.
+  const current = value ?? defaultValue
+  const _values = Array.isArray(current)
+    ? current
+    : current !== undefined
+      ? [current]
       : [min, max]
 
   return (
     <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
+      className={cn("w-full data-vertical:h-full data-vertical:w-auto", className)}
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}

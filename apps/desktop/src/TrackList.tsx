@@ -3,6 +3,7 @@ import type { Track, TrackId } from "@ytbm/core";
 import { Fragment, type ReactNode } from "react";
 
 import { IconButton } from "@/components/IconButton";
+import { Art } from "@/components/Art";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format.ts";
 import type { Route } from "./useBrowse.ts";
@@ -107,7 +108,7 @@ function Byline({
       ))}
       {!hideAlbum && track.album && (
         <>
-          {track.artists.length > 0 && " — "}
+          {track.artists.length > 0 && " • "}
           {onOpen && albumId ? (
             <BylineLink onClick={() => onOpen({ kind: "album", id: albumId })}>
               {track.album}
@@ -137,19 +138,14 @@ function BylineLink({ onClick, children }: { onClick: () => void; children: Reac
 }
 
 /** Falls back to the first letter, so a missing cover still reads as a row. */
-export function Artwork({ track, size = "size-9" }: { track: Track; size?: string }) {
-  const art = track.thumbnails[0];
-  const shared = cn(size, "shrink-0 rounded object-cover");
-  if (!art) {
-    return (
-      <span
-        className={cn(shared, "flex items-center justify-center bg-secondary text-xs text-muted-foreground")}
-      >
-        {track.title.slice(0, 1).toUpperCase()}
-      </span>
-    );
-  }
-  // The backdrop shows through if the image fails, which it does now and then
-  // for a burst of artwork loaded at once.
-  return <img src={art.url} alt="" className={cn(shared, "bg-secondary")} loading="lazy" />;
+export function Artwork({ track, size = 36 }: { track: Track; size?: number }) {
+  return (
+    <Art
+      thumbnails={track.thumbnails}
+      width={size}
+      className="shrink-0 rounded text-xs"
+      style={{ width: size, height: size }}
+      fallback={track.title.slice(0, 1).toUpperCase()}
+    />
+  );
 }

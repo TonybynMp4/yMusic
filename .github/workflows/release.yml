@@ -35,6 +35,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # This job only runs scripts/ and has no pnpm. Without this,
+          # setup-node sees packageManager in package.json and looks for it.
+          package-manager-cache: false
       - name: Work out the version
         id: version
         env:
@@ -106,6 +109,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
 
       # Fails if main moved during the build; run the workflow again.
       - name: Commit the bump and tag it

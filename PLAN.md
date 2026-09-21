@@ -88,6 +88,8 @@ Semantic versions, one source: `apps/desktop/package.json`. `tauri.conf.json` po
 
 Commits follow Conventional Commits (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:` and so on). A release is the Release workflow, run by hand from the Actions tab with `patch`, `minor`, `major` or an exact version. It builds the `.deb` at the new version in `debian:13` (the oldest target, so the glibc floor is right), and only if that succeeds commits `chore: release v0.2.0` to `main`, tags `v0.2.0` and publishes the GitHub release. `scripts/release-notes.mjs` writes its notes: every commit since the previous tag, grouped by type, as "**title** by @author in #pull", with the short hash when there is no pull request. Commits without a type land under "Other changes". A version with a suffix (`0.2.0-beta.1`) becomes a prerelease.
 
+The CI workflow runs on every push to `main` and every pull request: typecheck and tests for the TypeScript, and rustfmt, clippy (warnings fail) and tests for the Rust core in `debian:13`.
+
 ## Packaging and updates
 
 This comes after the MVP. Until then a release carries the plain `.deb` Tauri builds, with no updater.

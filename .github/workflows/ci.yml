@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          cache: true
+          require-lockfile: true
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @ymusic/desktop build
+
+  rust:
+    runs-on: ubuntu-latest
+    # Same image and packages as the release build, which also gives the
+    # playback tests a real libmpv.
+    container: debian:13
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: rm -f /etc/apt/apt.conf.d/docker-clean
+      - uses: actions/cache@v6
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: apt-debian13-
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl file git pkg-config \
+            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
+            libssl-dev librsvg2-dev
+
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          cache: true
+          require-lockfile: true
+      # generate_context! embeds apps/desktop/dist, so it has to exist before
+      # the crate compiles.
+      - run: pnpm --filter @ymusic/desktop build
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          cache-on-failure: true
+
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked

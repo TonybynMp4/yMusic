@@ -60,6 +60,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] One version, in `apps/desktop/package.json`; Tauri reads it and `scripts/bump.mjs` copies it into Cargo
 - [ ] Release workflow, run by hand: builds the `.deb` in `debian:13`, then commits the bump, tags and publishes a GitHub release with notes grouped by commit type (written, not run yet)
+- [x] CI on every push to `main` and every pull request: typecheck, tests, rustfmt and clippy
 - [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
 - [ ] Run the whole MVP on Windows
 

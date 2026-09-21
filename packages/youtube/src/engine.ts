@@ -1,4 +1,4 @@
-import type { AlbumPage, ArtistPage, PlaylistPage, StreamLease, Track, VideoId } from "@ytbm/core";
+import type { AlbumPage, ArtistPage, BrowseCard, PlaylistPage, StreamLease, Track, VideoId } from "@ytbm/core";
 import type { Innertube } from "youtubei.js";
 
 import {
@@ -8,7 +8,7 @@ import {
   createYouTube,
   type FetchLike,
 } from "./client.ts";
-import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
+import { getAlbum, getArtist, getLibraryPlaylists, getPlaylist } from "./browse.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -100,6 +100,12 @@ export class YouTubeEngine {
   /** `id` with or without the `VL` browse prefix. */
   async playlist(id: string): Promise<PlaylistPage> {
     return getPlaylist(await this.#browseClient(), id);
+  }
+
+  /** The signed-in account's playlists, Liked Music first. Empty when signed out. */
+  async libraryPlaylists(): Promise<BrowseCard[]> {
+    if (this.#cookie === null) return [];
+    return getLibraryPlaylists(await this.#browseClient());
   }
 
   /**

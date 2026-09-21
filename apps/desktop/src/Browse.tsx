@@ -1,10 +1,14 @@
 import {
   IconArrowsShuffle,
+  IconDisc,
   IconPlayerPlayFilled,
   IconUser,
 } from "@tabler/icons-react";
 import type { AlbumPage, ArtistPage, BrowseCard, PlaylistPage, Thumbnail, Track, TrackId } from "@ytbm/core";
 
+import { useState, type CSSProperties } from "react";
+
+import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -46,7 +50,7 @@ function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
   return (
     <>
       <Header
-        art={page.thumbnails[0]}
+        thumbnails={page.thumbnails}
         title={page.title}
         byline={page.artists.map((artist, i) => (
           <span key={`${artist.name}:${i}`}>
@@ -84,7 +88,7 @@ function Playlist({ page, actions }: { page: PlaylistPage; actions: BrowseAction
   return (
     <>
       <Header
-        art={page.thumbnails[0]}
+        thumbnails={page.thumbnails}
         title={page.title}
         subtitle={page.subtitle}
         tracks={page.tracks}
@@ -102,28 +106,31 @@ function Playlist({ page, actions }: { page: PlaylistPage; actions: BrowseAction
 }
 
 /**
- * YouTube Music's artist page: a wide banner with the name over it, the top
- * songs, then a row of cards per shelf.
+ * YouTube Music's artist page: the name, description and buttons over the
+ * banner's lower edge, the top songs, then a row of cards per shelf.
  */
 function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions }) {
-  const banner = page.thumbnails[0];
   const playlistId = page.topSongsPlaylistId;
   return (
     <>
-      <div className="relative mb-4 overflow-hidden rounded-xl">
-        {banner ? (
-          <img src={banner.url} alt="" className="aspect-[12/5] w-full bg-secondary object-cover" />
-        ) : (
-          <div className="aspect-[12/5] w-full bg-secondary" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 px-4 pb-4">
+      {/* The banner is a backdrop of fixed height rather than a full-width
+          image at its own aspect, which on a wide window fills the screen.
+          The head sits in normal flow over its faded lower part, so an
+          expanded description pushes the page down instead of overflowing. */}
+      <div className="relative mb-4" style={{ "--banner": "clamp(220px, 40vh, 380px)" } as CSSProperties}>
+        <div className="absolute inset-x-0 top-0 h-(--banner) overflow-hidden rounded-xl">
+          <Art
+            thumbnails={page.thumbnails}
+            width={1200}
+            lazy={false}
+            className="size-full object-[center_25%]"
+            fallback={null}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/0" />
+        </div>
+        <div className="relative flex flex-col gap-3 px-4 pt-[calc(var(--banner)_-_10rem)]">
           <h1 className="text-4xl font-bold tracking-tight">{page.name}</h1>
-          {page.description && (
-            <p className="line-clamp-2 max-w-2xl text-sm text-muted-foreground">
-              {page.description}
-            </p>
-          )}
+          {page.description && <Description text={page.description} />}
           <PlayButtons tracks={page.topSongs} actions={actions} />
         </div>
       </div>
@@ -160,8 +167,25 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
   );
 }
 
-function Header(props: {
-  art: Thumbnail | undefined;
+/** Two lines until clicked, then the whole thing; clicking again folds it. */
+function Description({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={() => setOpen((o) => !o)}
+      className="max-w-2xl cursor-pointer text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
+    >
+      <span className={cn("whitespace-pre-line", !open && "line-clamp-2")}>{text}</span>
+    </button>
+  );
+}
+
+export function Header(props: {
+  thumbnails: Thumbnail[];
+  /** Drawn in place of artwork, for pages that have none. */
+  fallback?: React.ReactNode;
   title: string;
   byline?: React.ReactNode;
   subtitle: string | null;
@@ -170,15 +194,13 @@ function Header(props: {
 }) {
   return (
     <div className="mb-4 flex items-end gap-6 px-3 pt-2">
-      {props.art ? (
-        <img
-          src={props.art.url}
-          alt=""
-          className="size-48 shrink-0 rounded-lg bg-secondary object-cover shadow-lg"
-        />
-      ) : (
-        <div className="size-48 shrink-0 rounded-lg bg-secondary" />
-      )}
+      <Art
+        thumbnails={props.thumbnails}
+        width={192}
+        lazy={false}
+        className="size-48 shrink-0 rounded-lg shadow-lg"
+        fallback={props.fallback}
+      />
       <div className="flex min-w-0 flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">{props.title}</h1>
         {props.byline && <p className="text-sm">{props.byline}</p>}
@@ -237,8 +259,7 @@ function Shelf({
 }
 
 function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
-  const art = card.thumbnails[0];
-  // Artists are round, everything else square — YouTube Music's own cue.
+  // Artists are round, everything else square: YouTube Music's own cue.
   const round = card.kind === "artist";
   return (
     <button
@@ -246,26 +267,15 @@ function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => vo
       onClick={() => onOpen({ kind: card.kind, id: card.id })}
       className="group flex w-40 shrink-0 flex-col gap-2 text-left outline-none"
     >
-      {art ? (
-        <img
-          src={art.url}
-          alt=""
-          loading="lazy"
-          className={cn(
-            "size-40 bg-secondary object-cover transition-opacity group-hover:opacity-80",
-            round ? "rounded-full" : "rounded-md",
-          )}
-        />
-      ) : (
-        <span
-          className={cn(
-            "flex size-40 items-center justify-center bg-secondary text-muted-foreground",
-            round ? "rounded-full" : "rounded-md",
-          )}
-        >
-          <IconUser size={32} stroke={1.5} />
-        </span>
-      )}
+      <Art
+        thumbnails={card.thumbnails}
+        width={160}
+        className={cn(
+          "size-40 transition-opacity group-hover:opacity-80",
+          round ? "rounded-full" : "rounded-md",
+        )}
+        fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
+      />
       <span className={cn("min-w-0", round && "text-center")}>
         <span className="line-clamp-2 text-sm group-focus-visible:underline">{card.title}</span>
         {card.subtitle && (

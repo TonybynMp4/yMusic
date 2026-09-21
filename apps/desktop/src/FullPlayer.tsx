@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
-import type { QueueState, Thumbnail, Track, TrackId } from "@ytbm/core";
+import type { QueueState, Track, TrackId } from "@ytbm/core";
 
+import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Queue } from "./Queue.tsx";
@@ -114,25 +115,21 @@ function Tab(props: { active: boolean; onClick: () => void; children: ReactNode 
   );
 }
 
-/** The largest thumbnail on offer, since this is the one place it is shown big. */
 function CoverArt({ track }: { track: Track | null }) {
-  const art = track?.thumbnails.reduce<Thumbnail | null>(
-    (best, candidate) => (best === null || candidate.width > best.width ? candidate : best),
-    null,
-  );
-
-  if (!track || !art) {
+  if (!track) {
     return (
       <div className="flex aspect-square w-full max-w-md items-center justify-center rounded-xl bg-secondary text-sm text-muted-foreground">
-        {track ? track.title.slice(0, 1).toUpperCase() : "Nothing playing"}
+        Nothing playing
       </div>
     );
   }
   return (
-    <img
-      src={art.url}
-      alt=""
-      className="aspect-square w-full max-w-md rounded-xl bg-secondary object-cover shadow-2xl"
+    <Art
+      thumbnails={track.thumbnails}
+      width={448}
+      lazy={false}
+      className="aspect-square w-full max-w-md rounded-xl text-sm shadow-2xl"
+      fallback={track.title.slice(0, 1).toUpperCase()}
     />
   );
 }

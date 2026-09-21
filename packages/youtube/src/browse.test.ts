@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { albumFrom, artistFrom, playlistFrom, toCard } from "./browse.ts";
+import { albumFrom, artistFrom, libraryFrom, playlistFrom, toCard } from "./browse.ts";
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
@@ -107,6 +107,21 @@ describe("toCard", () => {
   it("drops a card with no title or of a kind the app cannot open", () => {
     expect(toCard({ item_type: "album", endpoint: { payload: { browseId: "MPREb_1" } } })).toBeNull();
     expect(toCard({ item_type: "episode", id: "x", title: "x" })).toBeNull();
+  });
+});
+
+describe("libraryFrom", () => {
+  it("keeps the playlists, Liked Music included, and drops the New playlist tile", () => {
+    const cards = libraryFrom([
+      { item_type: "playlist", title: text("New playlist") },
+      { item_type: "playlist", title: text("Liked Music"), endpoint: { payload: { browseId: "VLLM" } } },
+      { item_type: "playlist", title: text("Mix"), endpoint: { payload: { browseId: "VLPLx" } } },
+      { item_type: "album", title: text("Album"), endpoint: { payload: { browseId: "MPREb_1" } } },
+    ]);
+    expect(cards.map((card) => [card.id, card.title])).toEqual([
+      ["LM", "Liked Music"],
+      ["PLx", "Mix"],
+    ]);
   });
 });
 

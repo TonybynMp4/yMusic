@@ -9,6 +9,16 @@ export type Route =
   | { kind: "artist"; id: string }
   | { kind: "playlist"; id: string };
 
+/**
+ * Anything the main area can show besides search: a YouTube Music page, or
+ * local files (`id` is a folder path, or empty for all of them).
+ */
+export type View = Route | { kind: "local"; id: string };
+
+export function viewKey(view: View): string {
+  return `${view.kind}:${view.id}`;
+}
+
 export type Page =
   | { kind: "album"; page: AlbumPage }
   | { kind: "artist"; page: ArtistPage }

@@ -7,7 +7,7 @@ import {
   type Thumbnail,
   type Track,
 } from "@ytbm/core";
-import type { Innertube } from "youtubei.js";
+import { YTNodes, type Innertube } from "youtubei.js";
 
 import { toArtists, toTrack, type RawSong } from "./parse.ts";
 import { toThumbnails, type RawThumbnail } from "./thumbnails.ts";
@@ -191,6 +191,45 @@ export function artistFrom(
     topSongsPlaylistId,
     shelves,
   });
+}
+
+/**
+ * The signed-in account's playlists, as YouTube Music's library lists them:
+ * Liked Music (`LM`) first, then saved and created playlists. Read straight
+ * from the browse page rather than through `music.getLibrary`, whose landing
+ * page shows whatever tab YouTube last defaulted to.
+ */
+export async function getLibraryPlaylists(youtube: Innertube): Promise<BrowseCard[]> {
+  type RawGrid = { items?: readonly unknown[] | null; continuation?: string | null };
+  const first = await youtube.actions.execute("/browse", {
+    browseId: LIBRARY_PLAYLISTS,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const grid = first.contents_memo?.getType(YTNodes.Grid)[0] as RawGrid | undefined;
+  const items = [...(grid?.items ?? [])];
+  let token = grid?.continuation ?? null;
+  for (let pages = 1; token && pages < MAX_LIBRARY_PAGES; pages++) {
+    const next = await youtube.actions.execute("/browse", {
+      continuation: token,
+      client: "YTMUSIC",
+      parse: true,
+    });
+    const more = next.continuation_contents as RawGrid | undefined;
+    items.push(...(more?.items ?? []));
+    token = more?.continuation ?? null;
+  }
+  return libraryFrom(items);
+}
+
+const LIBRARY_PLAYLISTS = "FEmusic_liked_playlists";
+const MAX_LIBRARY_PAGES = 10;
+
+/** The "New playlist" tile has no browse id, so it drops out with anything else unopenable. */
+export function libraryFrom(items: readonly unknown[]): BrowseCard[] {
+  return items
+    .map((item) => toCard(item as RawCard))
+    .filter((card): card is BrowseCard => card?.kind === "playlist");
 }
 
 const CARD_KINDS: Record<string, BrowseCard["kind"]> = {

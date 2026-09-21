@@ -1,11 +1,13 @@
 import { IconAlertTriangle, IconLoader2, IconLogin2, IconLogout } from "@tabler/icons-react";
 import { isTauri } from "@ytbm/ipc";
 
+import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -52,17 +54,22 @@ export function AccountMenu({ state }: { state: AccountState }) {
           />
         }
       >
-        {account.photoUrl ? (
-          <img src={account.photoUrl} alt="" className="size-full object-cover" />
-        ) : (
-          account.name.slice(0, 1).toUpperCase()
-        )}
+        <Art
+          thumbnails={account.photoUrl ? [{ url: account.photoUrl, width: 88, height: 88 }] : []}
+          width={32}
+          lazy={false}
+          className="size-full"
+          fallback={account.name.slice(0, 1).toUpperCase()}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="py-2">
-          <p className="truncate text-sm text-foreground">{account.name}</p>
-          {account.handle && <p className="truncate">{account.handle}</p>}
-        </DropdownMenuLabel>
+        {/* Base UI throws when a label sits outside a group. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="py-2">
+            <p className="truncate text-sm text-foreground">{account.name}</p>
+            {account.handle && <p className="truncate">{account.handle}</p>}
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={state.signOut}>
           <IconLogout />

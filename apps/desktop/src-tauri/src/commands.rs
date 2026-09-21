@@ -67,6 +67,25 @@ pub fn player_stop(player: State<'_, Player>) -> Result<(), String> {
     player.stop()
 }
 
+// -- OS media session ---------------------------------------------------------
+
+use crate::platform::media::{MediaKeyEvent, MediaSession, MediaTrack};
+
+#[tauri::command]
+pub fn media_subscribe(media: State<'_, MediaSession>, channel: Channel<MediaKeyEvent>) {
+    media.subscribe(channel);
+}
+
+#[tauri::command]
+pub fn media_set_track(media: State<'_, MediaSession>, track: Option<MediaTrack>) {
+    media.set_track(track);
+}
+
+#[tauri::command]
+pub fn media_set_volume(media: State<'_, MediaSession>, volume: f64) {
+    media.set_volume(volume);
+}
+
 // -- Local library -----------------------------------------------------------
 
 use crate::library::{Library, LocalLease, LocalTrack, ScanReport};

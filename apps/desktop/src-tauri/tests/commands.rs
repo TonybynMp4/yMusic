@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use ytbm_lib::{
     library::Library,
+    platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
     ytbm_commands,
 };
@@ -58,6 +59,10 @@ fn every_command_is_reachable_over_ipc() {
     let loaded = LoadedFlag::default();
     player.subscribe(loaded.clone());
     app.manage(player);
+
+    // Default rather than `attach`: no OS session is registered, which is also
+    // the path a desktop without a session bus takes.
+    app.manage(MediaSession::default());
 
     let art_dir = std::env::temp_dir().join(format!("ytbm-ipc-art-{}", std::process::id()));
     app.manage(Library::open_in_memory(art_dir).expect("in-memory library"));
@@ -106,6 +111,19 @@ fn every_command_is_reachable_over_ipc() {
         ("player_pause", serde_json::json!({})),
         ("player_seek", serde_json::json!({ "positionMs": 1000 })),
         ("player_stop", serde_json::json!({})),
+        (
+            "media_set_track",
+            serde_json::json!({ "track": {
+                "title": "Tone",
+                "artist": "Fixture",
+                "album": null,
+                "coverUrl": null,
+                "coverPath": "/tmp/cover art.jpg",
+                "durationMs": 3000
+            } }),
+        ),
+        ("media_set_track", serde_json::json!({ "track": null })),
+        ("media_set_volume", serde_json::json!({ "volume": 0.5 })),
     ];
     for (command, body) in calls {
         get_ipc_response(&webview, request(command, body))

@@ -2,6 +2,7 @@
 //! `#[cfg]` branches. Each concern gets a module with the same surface on every
 //! target and a no-op or fallback where the platform has nothing to offer.
 
+pub mod media;
 pub mod window;
 
 /// Which package this build was produced as. The Linux updater needs it: a

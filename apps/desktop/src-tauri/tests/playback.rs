@@ -146,6 +146,39 @@ fn pause_and_seek_are_reflected_in_the_event_stream() {
     );
 }
 
+/// mpv restarts playback after every seek, paused or not. Reading that as
+/// "playing" would flip the play button while the user scrubs a paused track.
+#[test]
+fn seeking_while_paused_stays_paused() {
+    let (player, recorder) = player();
+    player.load(request(fixture_url("tone.wav"))).expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_status(PlaybackStatus::Playing)),
+        "never started playing"
+    );
+    player.pause().expect("pause");
+    assert!(
+        recorder.wait_for(Duration::from_secs(5), |r| r.saw_status(PlaybackStatus::Paused)),
+        "pause was never reported"
+    );
+
+    let before = recorder.events().len();
+    player.seek(1_500).expect("seek");
+    assert!(
+        recorder.wait_for(Duration::from_secs(5), |r| r.max_position_ms() >= 1_400),
+        "the seek never landed"
+    );
+    // Give a stray restart event time to arrive before judging its absence.
+    std::thread::sleep(Duration::from_millis(300));
+    let after_seek = &recorder.events()[before..];
+    assert!(
+        !after_seek
+            .iter()
+            .any(|e| matches!(e, PlaybackEvent::Status { status: PlaybackStatus::Playing })),
+        "a paused seek reported playing: {after_seek:?}"
+    );
+}
+
 /// The point of the whole design: mpv streams an HTTPS audio URL itself, over
 /// range requests, with the headers we hand it. Requires network access.
 #[test]

@@ -35,7 +35,14 @@ impl EventSink for tauri::ipc::Channel<PlaybackEvent> {
     }
 }
 
-type Sink = Arc<Mutex<Option<Box<dyn EventSink>>>>;
+/// The frontend's sink, which `subscribe` replaces, plus observers that live
+/// for the whole run — the OS media session is one. Kept apart so a webview
+/// reload re-subscribing cannot knock the media session off the event stream.
+#[derive(Clone, Default)]
+struct Sink {
+    frontend: Arc<Mutex<Option<Box<dyn EventSink>>>>,
+    observers: Arc<Mutex<Vec<Box<dyn EventSink>>>>,
+}
 
 /// Property observer ids. Only used to tell `PropertyChange` events apart.
 const OBSERVE_TIME_POS: u64 = 1;
@@ -59,9 +66,9 @@ pub struct LoadRequest {
 
 pub struct Player {
     mpv: Arc<Mpv>,
-    /// The frontend's event sink, set by `player_subscribe`. None until the UI
-    /// has asked for events, which is why the event thread tolerates its
-    /// absence rather than treating it as an error.
+    /// The frontend's event sink is None until the UI has asked for events,
+    /// which is why the event thread tolerates its absence rather than
+    /// treating it as an error.
     sink: Sink,
     current_track: Arc<Mutex<Option<String>>>,
 }
@@ -121,7 +128,7 @@ impl Player {
         })?;
 
         let mpv = Arc::new(mpv);
-        let sink: Sink = Arc::new(Mutex::new(None));
+        let sink = Sink::default();
         let current_track = Arc::new(Mutex::new(None));
 
         mpv.observe_property("time-pos", Format::Double, OBSERVE_TIME_POS)
@@ -131,7 +138,7 @@ impl Player {
         mpv.observe_property("pause", Format::Flag, OBSERVE_PAUSE)
             .map_err(|error| format!("could not observe pause: {error}"))?;
 
-        spawn_event_thread(Arc::clone(&mpv), Arc::clone(&sink), Arc::clone(&current_track));
+        spawn_event_thread(Arc::clone(&mpv), sink.clone(), Arc::clone(&current_track));
 
         Ok(Self {
             mpv,
@@ -141,7 +148,12 @@ impl Player {
     }
 
     pub fn subscribe(&self, sink: impl EventSink) {
-        *self.sink.lock().expect("sink mutex") = Some(Box::new(sink));
+        *self.sink.frontend.lock().expect("sink mutex") = Some(Box::new(sink));
+    }
+
+    /// Adds a permanent listener alongside the frontend's.
+    pub fn observe(&self, observer: impl EventSink) {
+        self.sink.observers.lock().expect("observer mutex").push(Box::new(observer));
     }
 
     pub fn load(&self, request: LoadRequest) -> Result<(), String> {
@@ -231,8 +243,14 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                         duration_ms = None;
                         emit(&sink, PlaybackEvent::Status { status: PlaybackStatus::Loading });
                     }
+                    // mpv restarts playback after every seek too, including a
+                    // seek while paused, so "playing" has to be checked rather
+                    // than assumed or a paused scrub flips the UI to playing.
                     Event::PlaybackRestart => {
-                        emit(&sink, PlaybackEvent::Status { status: PlaybackStatus::Playing });
+                        let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
+                        let status =
+                            if paused { PlaybackStatus::Paused } else { PlaybackStatus::Playing };
+                        emit(&sink, PlaybackEvent::Status { status });
                     }
                     Event::EndFile(reason) => match reason {
                         libmpv2::mpv_end_file_reason::Eof => {
@@ -298,8 +316,10 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
 }
 
 fn emit(sink: &Sink, event: PlaybackEvent) {
-    let guard = sink.lock().expect("sink mutex");
-    if let Some(sink) = guard.as_ref() {
-        sink.send(event);
+    for observer in sink.observers.lock().expect("observer mutex").iter() {
+        observer.send(event.clone());
+    }
+    if let Some(frontend) = sink.frontend.lock().expect("sink mutex").as_ref() {
+        frontend.send(event);
     }
 }

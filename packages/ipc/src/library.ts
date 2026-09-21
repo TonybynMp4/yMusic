@@ -67,6 +67,17 @@ async function artUrl(path: string): Promise<string> {
   return convertFileSrc(path);
 }
 
+/**
+ * The inverse of `artUrl`: the file path behind an asset-protocol URL, or null
+ * for anything else. The OS media session needs the file, not the webview's
+ * view of it. Both spellings are matched because `convertFileSrc` writes
+ * `asset://localhost/` on Linux and `http(s)://asset.localhost/` on Windows.
+ */
+export function localPathFromArtUrl(url: string): string | null {
+  const match = /^(?:asset:\/\/localhost\/|https?:\/\/asset\.localhost\/)(.+)$/.exec(url);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
   const thumbnails = row.coverArt
     ? [

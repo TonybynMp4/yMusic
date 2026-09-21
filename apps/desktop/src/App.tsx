@@ -13,6 +13,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useLibrary } from "./useLibrary.ts";
+import { useMediaSession } from "./useMediaSession.ts";
 import { usePlayer } from "./usePlayer.ts";
 import { useYouTubeSearch } from "./useYouTubeSearch.ts";
 
@@ -29,6 +30,7 @@ export function App() {
   const library = useLibrary(queries.library);
   const youtube = useYouTubeSearch(queries.youtube, source === "youtube");
   const player = usePlayer();
+  useMediaSession(player);
 
   const results: readonly Track[] = source === "library" ? library.tracks : youtube.tracks;
   const loading = source === "library" ? library.loading : youtube.loading;
@@ -112,6 +114,7 @@ export function App() {
         onNext={player.next}
         onPrevious={player.previous}
         onSeek={player.seek}
+        volume={player.volume}
         onVolume={player.setVolume}
         onRepeat={player.setRepeat}
         onShuffle={player.setShuffle}

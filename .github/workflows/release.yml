@@ -29,15 +29,9 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       sha: ${{ steps.version.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          # This job only runs scripts/ and has no pnpm. Without this,
-          # setup-node sees packageManager in package.json and looks for it.
-          package-manager-cache: false
       - name: Work out the version
         id: version
         env:
@@ -62,14 +56,14 @@ jobs:
     steps:
       # Without git in the image yet, checkout downloads the tree instead of
       # cloning it. Nothing here needs the history.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
       # The Debian image deletes downloaded .debs after every install; keep
       # them so the cache below can skip the downloads next time.
       - run: rm -f /etc/apt/apt.conf.d/docker-clean
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives/*.deb
           key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
@@ -82,15 +76,13 @@ jobs:
             libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
             libssl-dev librsvg2-dev
 
-      # Node before pnpm: pnpm 12 runs node to install itself, and the
-      # container has none of its own. pnpm then caches its store.
-      - uses: actions/setup-node@v5
+      # Installs pnpm (the version in packageManager), Node, and the
+      # dependencies from the lockfile, with the pnpm store cached.
+      - uses: pnpm/setup@v2
         with:
-          node-version: 24
-          package-manager-cache: false
-      - uses: pnpm/action-setup@v4
-        with:
+          runtime: node@24
           cache: true
+          require-lockfile: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -100,12 +92,11 @@ jobs:
           cache-on-failure: true
 
       - run: node scripts/bump.mjs "${{ needs.prepare.outputs.version }}"
-      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm tauri build --bundles deb
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deb
           path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
@@ -119,14 +110,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          package-manager-cache: false
 
       # Fails if main moved during the build; run the workflow again.
       - name: Commit the bump and tag it
@@ -141,7 +128,7 @@ jobs:
           git tag -a "v$VERSION" -m "yMusic v$VERSION"
           git push origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: deb
           path: dist

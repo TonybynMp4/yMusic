@@ -77,7 +77,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] In-app updater for the `.deb`: check `latest.json`, download, `pkexec dpkg -i`, relaunch
 - [ ] Clear manual-update message when `pkexec` is missing
 - [ ] Signed release assets (minisign)
-- [ ] CI: install the `.deb` in `debian:13` and check `dpkg -L`
+- [ ] CI: install the `.deb` in `debian:13`, check `dpkg -L` and start the app under Xvfb (written, not run yet)
 - [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
 
 ### Features

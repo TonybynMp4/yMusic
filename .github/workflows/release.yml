@@ -102,8 +102,46 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/deb/SHA256SUMS
           if-no-files-found: error
 
+  # Installs the .deb the way a user would, in a Debian with nothing else on
+  # it, and starts the app. A missing dependency or library fails here rather
+  # than on someone's machine.
+  verify-deb:
+    needs: linux
+    runs-on: ubuntu-latest
+    container: debian:13
+    timeout-minutes: 10
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: dist
+      - name: Install the package
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ./dist/*.deb xvfb xauth dbus
+      - name: Check its files
+        shell: bash
+        run: |
+          package=$(dpkg-deb -f dist/*.deb Package)
+          files=$(dpkg -L "$package")
+          grep -qx /usr/bin/ymusic <<<"$files" || { echo "::error::/usr/bin/ymusic is missing from $package"; exit 1; }
+          grep -q '^/usr/share/applications/.*\.desktop$' <<<"$files" || { echo "::error::$package has no .desktop file"; exit 1; }
+      # Still running when the timeout kills it (124) is a pass. Anything
+      # else, such as 127 for a missing library, means it failed to start.
+      - name: Start the app
+        shell: bash
+        run: |
+          status=0
+          dbus-run-session -- xvfb-run -a timeout 10 ymusic || status=$?
+          if [[ $status -ne 124 ]]; then
+            echo "::error::ymusic exited with $status within 10 seconds of starting"
+            exit 1
+          fi
+
   publish:
-    needs: [prepare, ci, linux]
+    needs: [prepare, ci, linux, verify-deb]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -10,6 +10,7 @@
 //! instead, and the cookie sits beside the app's other data, sealed with it.
 //! Deleting either one signs the user out, which is the right failure.
 
+pub mod import;
 pub mod sign_in;
 
 use chacha20poly1305::{

@@ -39,6 +39,8 @@ macro_rules! ymusic_commands {
             $crate::commands::library_resolve,
             $crate::commands::account_cookie,
             $crate::commands::account_sign_in,
+            $crate::commands::account_browsers,
+            $crate::commands::account_import,
             $crate::commands::account_sign_out
         ]
     };

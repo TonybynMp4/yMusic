@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { accountCookie, accountSignIn, accountSignOut } from "@ymusic/ipc";
+import { accountCookie, accountImport, accountSignIn, accountSignOut } from "@ymusic/ipc";
 import type { AccountSummary } from "@ymusic/youtube";
 
 import { engine } from "./engine.ts";
@@ -9,6 +9,8 @@ export interface AccountState {
   busy: boolean;
   error: string | null;
   signIn: () => void;
+  /** Takes the session from a browser profile, by its id from `accountBrowsers`. */
+  importFrom: (browserId: string) => void;
   signOut: () => void;
 }
 
@@ -60,6 +62,22 @@ export function useAccount(): AccountState {
     })();
   }, [adopt]);
 
+  const importFrom = useCallback(
+    (browserId: string) => {
+      setBusy(true);
+      void (async () => {
+        try {
+          await adopt(await accountImport(browserId));
+        } catch (e) {
+          setError(describe("Import failed", e));
+        } finally {
+          setBusy(false);
+        }
+      })();
+    },
+    [adopt],
+  );
+
   const signOut = useCallback(() => {
     setBusy(true);
     void (async () => {
@@ -74,7 +92,7 @@ export function useAccount(): AccountState {
     })();
   }, [adopt]);
 
-  return { account, busy, error, signIn, signOut };
+  return { account, busy, error, signIn, importFrom, signOut };
 }
 
 function describe(prefix: string, error: unknown): string {

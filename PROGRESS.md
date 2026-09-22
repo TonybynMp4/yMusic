@@ -34,6 +34,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Stream resolution on `VISIONOS`
 - [x] PO-token fallback on `TV_SIMPLY`, with BotGuard in an isolated frame
 - [x] Sign-in through Google's page, session sealed with a keyring-held key
+- [x] Import the session from Firefox-family browsers, and on Linux from Chromium browsers
+- [ ] Import tested against a signed-in Chromium profile and on Windows
 - [x] Account menu with the profile picture
 - [x] Album, artist and playlist pages
 - [x] Library playlists in the sidebar, Liked Music first

@@ -46,6 +46,13 @@ window-vibrancy = "0.6"
 [target."cfg(unix)".dependencies]
 libc = "0.2.189"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+aes = "0.9"
+cbc = "0.2"
+pbkdf2 = "0.12.2"
+secret-service = { version = "5", default-features = false, features = ["crypto-rust"] }
+sha1 = "0.10.7"
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -58,6 +58,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  # The same checks as every push, on the commit being released.
+  ci:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
   linux:
     needs: prepare
     runs-on: ubuntu-latest
@@ -78,8 +86,6 @@ jobs:
 
       # Only in this workspace. publish commits the bump for stable releases.
       - run: node scripts/bump.mjs "$VERSION"
-      - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm tauri build --bundles deb
         env:
           # Tells the app dpkg installed it, for the updater.
@@ -97,7 +103,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [prepare, linux]
+    needs: [prepare, ci, linux]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

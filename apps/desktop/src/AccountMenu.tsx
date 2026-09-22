@@ -1,5 +1,18 @@
-import { IconAlertTriangle, IconLoader2, IconLogin2, IconLogout } from "@tabler/icons-react";
-import { isTauri } from "@ymusic/ipc";
+import { useState } from "react";
+import {
+  IconAlertTriangle,
+  IconBrandChrome,
+  IconBrandEdge,
+  IconBrandFirefox,
+  IconBrandGoogle,
+  IconBrandOpera,
+  IconBrandVivaldi,
+  IconBrowser,
+  IconLoader2,
+  IconLogin2,
+  IconLogout,
+} from "@tabler/icons-react";
+import { accountBrowsers, isTauri, type Browser } from "@ymusic/ipc";
 
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
@@ -35,10 +48,7 @@ export function AccountMenu({ state }: { state: AccountState }) {
             <IconAlertTriangle size={16} className="text-amber-500" />
           </IconButton>
         )}
-        <Button variant="outline" onClick={state.signIn} className="h-9 rounded-full">
-          <IconLogin2 size={16} stroke={1.75} />
-          Sign in
-        </Button>
+        <SignInMenu state={state} />
       </div>
     );
   }
@@ -78,4 +88,75 @@ export function AccountMenu({ state }: { state: AccountState }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * Signing in through Google's page, or taking the session from a browser that
+ * is already signed in. The browsers are looked up each time the menu opens.
+ */
+function SignInMenu({ state }: { state: AccountState }) {
+  const [browsers, setBrowsers] = useState<Browser[] | null>(null);
+  const load = (open: boolean) => {
+    if (!open) return;
+    accountBrowsers()
+      .then(setBrowsers)
+      .catch((error: unknown) => {
+        console.error("could not list browsers", error);
+        setBrowsers([]);
+      });
+  };
+  return (
+    <DropdownMenu onOpenChange={load}>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" className="h-9 rounded-full" />}
+      >
+        <IconLogin2 size={16} stroke={1.75} />
+        Sign in
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuItem onClick={state.signIn}>
+          <IconBrandGoogle />
+          Sign in with Google
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Import from a browser</DropdownMenuLabel>
+          {browsers === null ? (
+            <DropdownMenuItem disabled>
+              <IconLoader2 className="animate-spin" />
+              Looking for browsers
+            </DropdownMenuItem>
+          ) : browsers.length === 0 ? (
+            <DropdownMenuItem disabled>No supported browser found</DropdownMenuItem>
+          ) : (
+            browsers.map((browser) => (
+              <DropdownMenuItem key={browser.id} onClick={() => state.importFrom(browser.id)}>
+                <BrowserIcon name={browser.name} />
+                <span className="truncate">{browser.name}</span>
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The browser's logo where Tabler has one. */
+function BrowserIcon({ name }: { name: string }) {
+  const browser = name.split(" (")[0];
+  switch (browser) {
+    case "Firefox":
+      return <IconBrandFirefox />;
+    case "Chrome":
+      return <IconBrandChrome />;
+    case "Edge":
+      return <IconBrandEdge />;
+    case "Opera":
+      return <IconBrandOpera />;
+    case "Vivaldi":
+      return <IconBrandVivaldi />;
+    default:
+      return <IconBrowser />;
+  }
 }

@@ -62,6 +62,10 @@ OAuth is not an option. InnerTube only takes OAuth tokens from YouTube's TV clie
 
 Google's own sign-in page opens in an incognito app window with no IPC. Once it lands on `music.youtube.com`, Rust reads the window's cookies, seals them with ChaCha20-Poly1305 under a random key held in the OS keyring, and hands them to the worker. The keyring holds only the key because Credential Manager caps a secret at 2560 bytes and a Google cookie header runs close to that. With no Secret Service running, sign-in still works for the session and the failure to persist is logged.
 
+The Sign in button opens a menu: Google's page as above, or importing the session from a browser that is already signed in. Firefox and its forks store cookies in the clear. Chromium browsers encrypt them; on Linux the key is in the Secret Service. Any config folder whose `Local State` lists profiles counts as a Chromium browser, so forks like Helium turn up without being listed; Electron apps keep the same files but no profile list. Several apps file their key as "Chromium Safe Storage", so the import tries each Chromium key in the keyring and keeps the one whose decrypted values carry the right domain hash. On Windows, Chromium uses app-bound encryption that only the browser can undo, so Windows offers Firefox-family browsers only. An imported session stays shared with the browser, so signing out there signs out here too.
+
+Passkeys do not work in the sign-in window on Linux: WebKitGTK (2.52) ships without WebAuthn, so `PublicKeyCredential` is undefined and Google falls back to the password. WebView2 on Windows has WebAuthn. Importing from a browser is the Linux way to sign in without typing a password.
+
 Only the browsing client is signed in. The `VISIONOS` player client stays anonymous, because a web cookie on a non-web client is exactly the mismatch YouTube flags.
 
 ### Libraries and why each is here

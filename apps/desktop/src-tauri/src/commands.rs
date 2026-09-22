@@ -4,7 +4,7 @@
 //! macros beside each function, and those collide with the crate root once the
 //! functions are public enough for `ymusic_commands!` to name them.
 
-use crate::account::{sign_in, Account};
+use crate::account::{import, sign_in, Account};
 use crate::platform::InstallFlavor;
 use crate::playback::{LoadRequest, PlaybackEvent, Player};
 use tauri::{ipc::Channel, Runtime, State};
@@ -153,6 +153,25 @@ pub async fn account_sign_in<R: Runtime>(
     if let Some(cookie) = &cookie {
         account.save(cookie.clone());
     }
+    Ok(cookie)
+}
+
+/// The browser profiles a session can be imported from.
+#[tauri::command]
+pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
+    tauri::async_runtime::spawn_blocking(import::browsers)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Takes the YouTube session from a browser profile listed by `account_browsers`.
+#[tauri::command]
+pub async fn account_import(account: State<'_, Account>, id: String) -> Result<String, String> {
+    // Reading the keyring can wait on an unlock prompt.
+    let cookie = tauri::async_runtime::spawn_blocking(move || import::import(&id))
+        .await
+        .map_err(|error| error.to_string())??;
+    account.save(cookie.clone());
     Ok(cookie)
 }
 

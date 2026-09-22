@@ -79,7 +79,7 @@ Only the browsing client is signed in. The `VISIONOS` player client stays anonym
 
 ## Monorepo layout
 
-pnpm workspaces and Turborepo. `tsgo` (the TypeScript 7 native compiler) type-checks the workspace; Vite bundles the app.
+pnpm workspaces and Turborepo. TypeScript 7 (the native `tsc`) type-checks the workspace; Vite bundles the app.
 
 - `packages/core`: pure TypeScript, no Tauri, no DOM. Domain models and zod schemas, the queue reducer, and the `PlaybackEngine` interface. Mobile can reuse it as is.
 - `packages/youtube`: the data engine. The youtubei.js wrapper, the PO-token minter, and the Comlink API, split into `worker` and `host` entry points so the main bundle never imports youtubei.js.
@@ -156,7 +156,7 @@ Plugin ideas:
 ## Verification
 
 - End to end on Windows and on Linux: `pnpm tauri dev`, sign in, search a known track, play, seek, queue. Log the resolved itag to confirm the premium format when signed into Premium.
-- Unit tests for the `packages/core` queue and the zod parsers against recorded InnerTube fixtures, with no Tauri. `tsgo` across the workspace.
+- Unit tests for the `packages/core` queue and the zod parsers against recorded InnerTube fixtures, with no Tauri. `tsc` across the workspace.
 - Network tests are opt-in: `YMUSIC_NETWORK_TESTS=1 pnpm --filter @ymusic/youtube test`. They cover search, browse, radio, stream resolution, the requests mpv really makes, and the PO-token path (the frame's `frame.js` in jsdom, asserting 206 with a token and 403 without).
 - Native feel. Windows: media keys and the volume flyout drive playback, Mica shows, snap layouts work, the app survives a WebView2 update. Linux: the GNOME/KDE media widget shows the track and its controls work, the titlebar follows light and dark, sign-in works with the keyring locked.
 - Install the built `.deb` in a clean `debian:13` container in CI and check `dpkg -L`, as the t3code mirror does.

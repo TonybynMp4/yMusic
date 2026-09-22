@@ -74,38 +74,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      # The Debian image deletes downloaded .debs after every install; keep
-      # them so the cache below can skip the downloads next time.
-      - run: rm -f /etc/apt/apt.conf.d/docker-clean
-      - uses: actions/cache@v6
-        with:
-          path: /var/cache/apt/archives/*.deb
-          key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: apt-debian13-
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl file git pkg-config \
-            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-            libssl-dev librsvg2-dev
-
-      # Installs pnpm (the version in packageManager), Node, and the
-      # dependencies from the lockfile, with the pnpm store cached.
-      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
-        with:
-          runtime: node@24
-          cache: true
-          require-lockfile: true
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: apps/desktop/src-tauri
-          # Keep the compiled dependencies even when a later step fails, so
-          # the rerun doesn't start cold.
-          cache-on-failure: true
+      - uses: ./.github/actions/setup-linux
 
       # Only in this workspace. publish commits the bump for stable releases.
       - run: node scripts/bump.mjs "$VERSION"

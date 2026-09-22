@@ -68,6 +68,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] CI on every push to `main` and every pull request: oxlint, typecheck, tests, rustfmt and clippy
 - [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
 - [ ] Run the whole MVP on Windows
+- [ ] Nightly run of the live YouTube tests that opens an issue when they fail (written, not run yet)
 
 ## After the MVP
 

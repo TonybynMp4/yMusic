@@ -1,0 +1,51 @@
+name: Nightly
+
+# Runs the tests that talk to the real YouTube, which CI skips. When YouTube
+# changes something the app relies on, this fails before a user notices, and
+# opens an issue (or comments on the open one) so the failure isn't missed.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  youtube:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          runtime: node@24
+          cache: true
+          require-lockfile: true
+      - run: pnpm --filter @ymusic/youtube test
+        env:
+          YMUSIC_NETWORK_TESTS: "1"
+
+  report:
+    needs: youtube
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or update the issue
+        run: |
+          gh label create nightly --color B60205 --description "Nightly live test failures" --force
+          open=$(gh issue list --label nightly --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$open" ]]; then
+            gh issue comment "$open" --body "Failed again: $RUN"
+          else
+            gh issue create --label nightly --title "Live YouTube tests are failing" \
+              --body "The nightly run against the real InnerTube failed: $RUN"
+          fi

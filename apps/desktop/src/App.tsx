@@ -16,7 +16,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useAccount } from "./useAccount.ts";
-import { viewKey, type Route, type View } from "./useBrowse.ts";
+import { viewKey, type View } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";

@@ -289,8 +289,8 @@ export function usePlayer() {
 
   const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
   const setVolume = useCallback(
-    (position: number) => {
-      const clamped = Math.min(1, Math.max(0, position));
+    (fraction: number) => {
+      const clamped = Math.min(1, Math.max(0, fraction));
       setVolumeState(clamped);
       void engine.setVolume(clamped).catch(logPlaybackFailure);
     },

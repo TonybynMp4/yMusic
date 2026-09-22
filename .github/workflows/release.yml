@@ -80,7 +80,7 @@ jobs:
       # dependencies from the lockfile, with the pnpm store cached.
       - uses: pnpm/setup@v3
         with:
-          runtime: node@24
+          runtime: node@26
           cache: true
           require-lockfile: true
       - uses: dtolnay/rust-toolchain@stable

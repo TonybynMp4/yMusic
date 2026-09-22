@@ -94,7 +94,7 @@ Commits follow Conventional Commits (`feat:`, `fix:`, `perf:`, `refactor:`, `doc
 
 `scripts/release-notes.mjs` writes the notes: every commit since the previous tag, grouped by type, as "**full commit subject** by @author in #pull", with the short hash when there is no pull request. A stable release counts from the previous stable tag, so it repeats what its prereleases shipped. Commits without a type land under "Other changes", and Dependabot bumps fold into one line.
 
-The CI workflow runs on every push to `main` and every pull request: typecheck and tests for the TypeScript, and rustfmt, clippy (warnings fail) and tests for the Rust core in `debian:13`.
+The CI workflow runs on every push to `main` and every pull request: oxlint (warnings fail), typecheck and tests for the TypeScript, and rustfmt, clippy (warnings fail) and tests for the Rust core in `debian:13`.
 
 ## Packaging and updates
 

@@ -65,7 +65,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Release workflow, run by hand: builds the `.deb` in `debian:13`, then commits the bump, tags and publishes a GitHub release with notes grouped by commit type
 - [ ] Prereleases tag the built commit without a bump commit, and dry runs stop at a draft (written, not run yet)
 - [ ] Release assets carry `SHA256SUMS` and a build provenance attestation (written, not run yet)
-- [x] CI on every push to `main` and every pull request: typecheck, tests, rustfmt and clippy
+- [x] CI on every push to `main` and every pull request: oxlint, typecheck, tests, rustfmt and clippy
 - [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
 - [ ] Run the whole MVP on Windows
 

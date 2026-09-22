@@ -23,6 +23,7 @@ jobs:
           runtime: node@24
           cache: true
           require-lockfile: true
+      - run: pnpm lint --format github
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @ymusic/desktop build

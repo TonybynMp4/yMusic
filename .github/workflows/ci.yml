@@ -4,13 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The Release workflow runs this on the commit it is about to publish.
+  workflow_call:
 
 permissions:
   contents: read
 
+# A new push to a pull request replaces its running checks. Runs on main all
+# finish, so every commit there gets a result.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   web:
@@ -18,11 +22,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/setup@v3
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           runtime: node@24
           cache: true
           require-lockfile: true
+      - run: pnpm lint --format github
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @ymusic/desktop build
@@ -38,38 +43,50 @@ jobs:
         working-directory: apps/desktop/src-tauri
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-linux
 
-      - run: rm -f /etc/apt/apt.conf.d/docker-clean
-      - uses: actions/cache@v6
-        with:
-          path: /var/cache/apt/archives/*.deb
-          key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: apt-debian13-
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl file git pkg-config \
-            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-            libssl-dev librsvg2-dev
-
-      - uses: pnpm/setup@v3
-        with:
-          runtime: node@24
-          cache: true
-          require-lockfile: true
       # generate_context! embeds apps/desktop/dist, so it has to exist before
       # the crate compiles.
       - run: pnpm --filter @ymusic/desktop build
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri
-          cache-on-failure: true
-
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+
+  # The squash merge uses the PR title as the commit subject, which the
+  # release notes group by type, so it has to be a Conventional Commit.
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          # The types scripts/release-notes.mjs has sections for.
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            style
+            revert
+            chore
+
+  # The one check the main ruleset requires, so jobs can change without
+  # touching the ruleset. Skipped jobs pass; failed or cancelled ones don't.
+  ci-ok:
+    if: always()
+    needs: [web, rust, pr-title]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

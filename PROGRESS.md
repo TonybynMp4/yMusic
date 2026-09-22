@@ -62,10 +62,13 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 ### Releases
 
 - [x] One version, in `apps/desktop/package.json`; Tauri reads it and `scripts/bump.mjs` copies it into Cargo
-- [ ] Release workflow, run by hand: builds the `.deb` in `debian:13`, then commits the bump, tags and publishes a GitHub release with notes grouped by commit type (written, not run yet)
-- [x] CI on every push to `main` and every pull request: typecheck, tests, rustfmt and clippy
+- [x] Release workflow, run by hand: builds the `.deb` in `debian:13`, then commits the bump, tags and publishes a GitHub release with notes grouped by commit type
+- [ ] Prereleases tag the built commit without a bump commit, and dry runs stop at a draft (written, not run yet)
+- [ ] Release assets carry `SHA256SUMS` and a build provenance attestation (written, not run yet)
+- [x] CI on every push to `main` and every pull request: oxlint, typecheck, tests, rustfmt and clippy
 - [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
 - [ ] Run the whole MVP on Windows
+- [ ] Nightly run of the live YouTube tests that opens an issue when they fail (written, not run yet)
 
 ## After the MVP
 
@@ -75,7 +78,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] In-app updater for the `.deb`: check `latest.json`, download, `pkexec dpkg -i`, relaunch
 - [ ] Clear manual-update message when `pkexec` is missing
 - [ ] Signed release assets (minisign)
-- [ ] CI: install the `.deb` in `debian:13` and check `dpkg -L`
+- [ ] CI: install the `.deb` in `debian:13`, check `dpkg -L` and start the app under Xvfb (written, not run yet)
 - [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
 
 ### Features

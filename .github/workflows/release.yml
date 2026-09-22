@@ -1,10 +1,13 @@
 name: Release
 
-# Run by hand from the Actions tab. Builds the Linux .deb at the new version
-# first, and only once that works commits the bump to main, tags it and
-# publishes a GitHub release. The notes group the commits since the previous
-# tag by Conventional Commits type (scripts/release-notes.mjs). Windows joins
-# once the build bundles libmpv-2.dll.
+# Run by hand from the Actions tab. Builds the Linux .deb at the new version,
+# then publishes it as a GitHub release. The notes group the commits since the
+# previous tag by Conventional Commits type (scripts/release-notes.mjs).
+# Windows joins once the build bundles libmpv-2.dll.
+#
+# A stable release commits the bump to main and tags that commit. A prerelease
+# (0.2.0-beta.1) tags the built commit as it is and leaves main alone, so
+# package.json only ever holds stable versions.
 
 on:
   workflow_dispatch:
@@ -13,9 +16,13 @@ on:
         description: "patch, minor, major, or an exact version such as 0.2.0 or 0.2.0-beta.1"
         required: true
         default: patch
+      dry_run:
+        description: "Build and leave a draft release, without tagging or pushing"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
@@ -23,12 +30,17 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
       sha: ${{ steps.version.outputs.sha }}
     steps:
+      - name: Check the branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run releases from main, not ${GITHUB_REF#refs/heads/}"
+          exit 1
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -46,6 +58,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  # The same checks as every push, on the commit being released.
+  ci:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
   linux:
     needs: prepare
     runs-on: ubuntu-latest
@@ -53,6 +73,8 @@ jobs:
     # versions are ones it can actually install against.
     container: debian:13
     timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       # Without git in the image yet, checkout downloads the tree instead of
       # cloning it. Nothing here needs the history.
@@ -60,53 +82,76 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      # The Debian image deletes downloaded .debs after every install; keep
-      # them so the cache below can skip the downloads next time.
-      - run: rm -f /etc/apt/apt.conf.d/docker-clean
-      - uses: actions/cache@v6
-        with:
-          path: /var/cache/apt/archives/*.deb
-          key: apt-debian13-${{ hashFiles('.github/workflows/release.yml') }}
-          restore-keys: apt-debian13-
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl file git pkg-config \
-            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-            libssl-dev librsvg2-dev
+      - uses: ./.github/actions/setup-linux
 
-      # Installs pnpm (the version in packageManager), Node, and the
-      # dependencies from the lockfile, with the pnpm store cached.
-      - uses: pnpm/setup@v3
-        with:
-          runtime: node@24
-          cache: true
-          require-lockfile: true
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri
-          # Keep the compiled dependencies even when a later step fails, so
-          # the rerun doesn't start cold.
-          cache-on-failure: true
-
-      - run: node scripts/bump.mjs "${{ needs.prepare.outputs.version }}"
-      - run: pnpm typecheck
-      - run: pnpm test
+      # Only in this workspace. publish commits the bump for stable releases.
+      - run: node scripts/bump.mjs "$VERSION"
       - run: pnpm tauri build --bundles deb
+        env:
+          # Tells the app dpkg installed it, for the updater.
+          YMUSIC_INSTALL_FLAVOR: deb
+      - name: Write checksums
+        working-directory: apps/desktop/src-tauri/target/release/bundle/deb
+        run: sha256sum -- *.deb > SHA256SUMS
 
       - uses: actions/upload-artifact@v7
         with:
           name: deb
-          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/deb/SHA256SUMS
           if-no-files-found: error
 
-  publish:
-    needs: [prepare, linux]
+  # Installs the .deb the way a user would, in a Debian with nothing else on
+  # it, and starts the app. A missing dependency or library fails here rather
+  # than on someone's machine.
+  verify-deb:
+    needs: linux
     runs-on: ubuntu-latest
+    container: debian:13
+    timeout-minutes: 10
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: dist
+      - name: Install the package
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ./dist/*.deb xvfb xauth dbus
+      - name: Check its files
+        shell: bash
+        run: |
+          package=$(dpkg-deb -f dist/*.deb Package)
+          files=$(dpkg -L "$package")
+          grep -qx /usr/bin/ymusic <<<"$files" || { echo "::error::/usr/bin/ymusic is missing from $package"; exit 1; }
+          grep -q '^/usr/share/applications/.*\.desktop$' <<<"$files" || { echo "::error::$package has no .desktop file"; exit 1; }
+      # Still running when the timeout kills it (124) is a pass. Anything
+      # else, such as 127 for a missing library, means it failed to start.
+      - name: Start the app
+        shell: bash
+        run: |
+          status=0
+          dbus-run-session -- xvfb-run -a timeout 10 ymusic || status=$?
+          if [[ $status -ne 124 ]]; then
+            echo "::error::ymusic exited with $status within 10 seconds of starting"
+            exit 1
+          fi
+
+  publish:
+    needs: [prepare, ci, linux, verify-deb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
+      SHA: ${{ needs.prepare.outputs.sha }}
+      DRY_RUN: ${{ inputs.dry_run }}
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -118,8 +163,19 @@ jobs:
           # and GITHUB_TOKEN cannot, so the bump is pushed over SSH.
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: dist
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: ${{ !inputs.dry_run }}
+        with:
+          subject-path: dist/*.deb
+
       # Fails if main moved during the build; run the workflow again.
       - name: Commit the bump and tag it
+        if: ${{ !inputs.dry_run && !contains(needs.prepare.outputs.version, '-') }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -132,14 +188,20 @@ jobs:
           # Atomic, so the tag never lands without the bump.
           git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: deb
-          path: dist
-
+      # A draft first, published last, so a failed upload leaves a draft to
+      # delete rather than a half-made release. For a prerelease, publishing
+      # the draft is what creates the tag, on the built commit.
       - name: Publish the release
         run: |
-          node scripts/release-notes.mjs "v$VERSION" > notes.md
-          prerelease=$([[ "$VERSION" == *-* ]] && echo --prerelease || true)
-          gh release create "v$VERSION" dist/*.deb \
-            --title "v$VERSION" --notes-file notes.md $prerelease
+          # Clear out a draft left by an earlier dry run of this version.
+          if [[ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)" == true ]]; then
+            gh release delete "v$VERSION" --yes
+          fi
+          node scripts/release-notes.mjs "v$VERSION" "$SHA" > notes.md
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "v$VERSION" dist/* --draft --target "$SHA" \
+            --title "v$VERSION" --notes-file notes.md "${prerelease[@]}"
+          if [[ "$DRY_RUN" != true ]]; then
+            gh release edit "v$VERSION" --draft=false
+          fi

@@ -70,6 +70,7 @@ export function useLibrary(query: string) {
       cancelled = true;
       clearTimeout(timer);
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- version reruns the search after a change
   }, [query, version]);
 
   /** Runs a change to the library, then reloads it and any search showing. */

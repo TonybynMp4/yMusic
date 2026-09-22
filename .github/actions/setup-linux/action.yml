@@ -1,0 +1,55 @@
+name: Set up the Linux build
+description: >
+  Installs the Tauri and libmpv build dependencies, pnpm with Node and the
+  workspace's packages, and the Rust toolchain pinned in rust-toolchain.toml,
+  with apt, pnpm and cargo caches. Runs inside a debian:13 container, after
+  checkout.
+
+runs:
+  using: composite
+  steps:
+    # The Debian image deletes downloaded .debs after every install; keep
+    # them so the cache below can skip the downloads next time.
+    - shell: bash
+      run: rm -f /etc/apt/apt.conf.d/docker-clean
+    - uses: actions/cache@v6
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: apt-debian13-${{ hashFiles('.github/actions/setup-linux/action.yml') }}
+        restore-keys: apt-debian13-
+    - name: Install build dependencies
+      shell: bash
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          build-essential ca-certificates curl file git pkg-config \
+          libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
+          libssl-dev librsvg2-dev
+
+    # Installs pnpm (the version in packageManager), Node, and the
+    # dependencies from the lockfile, with the pnpm store cached.
+    - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+      with:
+        runtime: node@24
+        cache: true
+        require-lockfile: true
+
+    - name: Read the Rust toolchain
+      id: toolchain
+      shell: bash
+      run: |
+        channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/desktop/src-tauri/rust-toolchain.toml)
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+    - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+      with:
+        toolchain: ${{ steps.toolchain.outputs.channel }}
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        workspaces: apps/desktop/src-tauri
+        # Keep the compiled dependencies even when a later step fails, so the
+        # rerun doesn't start cold.
+        cache-on-failure: true
+        # Pull requests restore main's cache but don't save their own, which
+        # would crowd main's out of the 10 GB limit.
+        save-if: ${{ github.ref == 'refs/heads/main' }}

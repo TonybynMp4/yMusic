@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "ignorePatterns": ["**/dist/**", "**/src-tauri/**"],
+  "rules": {
+    // The automatic JSX runtime needs no React import.
+    "react/react-in-jsx-scope": "off",
+
+    // React Compiler rules. The app doesn't use the compiler, and these flag
+    // patterns it relies on on purpose: the latest-value ref, loading state
+    // set from an effect, and scrolling a DOM node held in state.
+    "react/set-state-in-effect": "off",
+    "react/refs": "off",
+    "react/immutability": "off",
+    "react/use-memo": "off",
+    "react/incompatible-library": "off",
+
+    // Every hit sets the one handler a MessagePort or Worker has.
+    "unicorn/prefer-add-event-listener": "off",
+    // Only flags small helpers in tests; hoisting them reads worse.
+    "unicorn/consistent-function-scoping": "off",
+    // Every sort here is on a fresh copy.
+    "unicorn/no-array-sort": "off",
+    // Zod parse failures; the message is Zod's, not ours.
+    "vitest/require-to-throw-message": "off",
+    // shadcn components keep their upstream names.
+    "no-underscore-dangle": "off",
+    // AggregateError carries both causes already.
+    "preserve-caught-error": "off",
+
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
+  },
+  "overrides": [
+    {
+      // postMessage on a MessagePort takes no target origin.
+      "files": ["apps/desktop/src/botguard.ts"],
+      "rules": { "unicorn/require-post-message-target-origin": "off" }
+    }
+  ]
+}

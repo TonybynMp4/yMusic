@@ -1,6 +1,6 @@
 # Working on yMusic
 
-The design and its reasoning live in `PLAN.md`; read it before starting a new area. `PROGRESS.md` tracks what is built and what is left: tick items off in the commit that finishes them.
+How the built parts work, and why, is in `docs/`, one file per area. What is planned is in `PLAN.md`. Read both before starting a new area, and when an area gets built, move its design from `PLAN.md` into `docs/`. `PROGRESS.md` tracks what is built and what is left: tick items off in the commit that finishes them.
 
 ## Writing
 

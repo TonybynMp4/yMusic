@@ -1,6 +1,6 @@
 # Progress
 
-Where yMusic stands. The design and its reasons are in [PLAN.md](PLAN.md). Tick items off here in the same commit that finishes them.
+Where yMusic stands. How the built parts work is in [docs/](docs/README.md), and what is planned is in [PLAN.md](PLAN.md). Tick items off here in the same commit that finishes them.
 
 Everything ticked has been run on Linux. Nothing has been run on Windows yet.
 

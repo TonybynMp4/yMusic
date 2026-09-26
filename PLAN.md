@@ -1,6 +1,6 @@
 # yMusic: a native YouTube Music player
 
-This file is the design and the reasons behind it. What is built and what is left lives in [PROGRESS.md](PROGRESS.md).
+This file is what is planned and why. What is built is documented in [docs/](docs/README.md), and [PROGRESS.md](PROGRESS.md) tracks both.
 
 ## Goal and constraints
 
@@ -16,96 +16,6 @@ Two facts shape the design:
 
 1. YouTube Music has no official API. The workable path is `youtubei.js` (LuanRT), a TypeScript client for YouTube's internal InnerTube API with a dedicated `YTMUSIC` client. It covers search, browse, library, playlists and stream resolution.
 2. Premium's offline downloads are DRM-locked blobs that cannot be extracted. What we can do is resolve the premium-quality stream (256k AAC, or opus itag 774 when signed into Premium) and save it ourselves. So "offline" and "download to local files" are one feature, built once.
-
-## Architecture
-
-**Tauri 2**: a Rust core and a React frontend in the system webview (WebView2 on Windows, WebKitGTK on Linux). The binary is a few MB and the same code runs on both targets.
-
-The tradeoff: Tauri gives us HTML, not real WinUI controls. We make up for it with platform integration:
-
-| | Windows | Linux |
-|---|---|---|
-| Webview | WebView2 (bootstrapper in the installer) | WebKitGTK 4.1 |
-| Window chrome | Custom titlebar with snap-layout hit-testing, Mica via `window-vibrancy` | Custom titlebar as CSD, flat themed surface |
-| Media controls | SMTC: volume flyout and media keys | MPRIS: GNOME/KDE media widgets and media keys |
-| Secrets | Windows Credential Manager | Secret Service (gnome-keyring, KWallet) |
-
-The colours are YouTube Music's own dark palette on both platforms, not the system theme, so the app reads as a companion to the service.
-
-`souvlaki` covers SMTC and MPRIS behind one API, and `keyring` covers Credential Manager and Secret Service behind another. One code path each, two backends.
-
-### Playback
-
-**libmpv in Rust** (`libmpv2`), driven by Tauri commands, with state and position pushed to the frontend over a Tauri `Channel`. Linux links the system `libmpv` and declares it as a package dependency; Windows ships `libmpv-2.dll` beside the binary. The mpv version floor should be explicit, so an old distro libmpv fails at startup with a message rather than a missing symbol.
-
-The engine resolves an audio-only stream URL and mpv streams it over HTTP range requests, with no local proxy. The raw audio stream has no ads: those live in the web player.
-
-Two details that each cost a day if missed:
-
-- googlevideo binds a stream to the session that resolved it, so mpv gets the same `User-Agent`, cookies and PO token through `http-header-fields`.
-- Stream URLs expire after about six hours, so the player re-resolves a track whose lease is stale.
-
-Volume is perceptual. mpv's `volume` property already applies a cubic taper, so the UI sends the slider position as a linear fraction and never applies the curve again.
-
-### The data engine
-
-`youtubei.js` runs in a **Web Worker**, so InnerTube parsing and BotGuard work stay off the UI thread. The worker is exposed over **Comlink**, which keeps the engine's TypeScript type across the boundary. Engine methods take and return only structured-cloneable values (ids, strings, `Track`s, leases). A youtubei.js continuation is a closure, so it stays in the worker under a handle.
-
-- **CORS.** InnerTube rejects browser-origin requests. The worker has no Tauri IPC, so its `fetch` is serialised to the main thread and sent through `tauri-plugin-http` there, which makes the request in Rust.
-- **Stream resolution.** `VISIONOS` first: it needs no token and no evaluator. On failure, or when mpv is refused a stream that resolved, the engine falls back to `TV_SIMPLY` with a PO token.
-- **PO tokens.** Google's BotGuard VM mints them, and it needs a real DOM and `eval`. The worker has no DOM, and the app page has a strict CSP and IPC next to Google's code. So BotGuard runs in a hidden iframe on its own `botguard:` scheme, served by Rust with a CSP that allows eval and nothing else, reached only over a MessagePort. Tauri's init scripts, which carry the IPC key, reach the main frame only, and the frame checks this on every load.
-- BotGuard's challenge is bound to the `Origin` it was requested from. None and `tauri://localhost` pass; YouTube's own origins and the dev server's are refused, so those requests go out with none.
-
-### Interactions
-
-An interaction is what you can do with a song, album, playlist or artist. A right click and the dots button open the same menu, built in `Interactions.tsx` from one list per kind, in YouTube Music's order. A collection's page loads when its menu opens, through the same cache that opening the page uses, so the menu knows the saved or subscribed state and has the tracks to queue. Actions that need every row of a long playlist wait for the rest to arrive.
-
-YouTube Music's own buttons name what to call:
-
-- *Start mix* on an album or playlist plays the radio playlist `RDAMPL` + its playlist id. An album's playlist id (`OLAK5uy_…`) is the one on its header's play button. An artist's mix is the header's own `RDEM…` playlist.
-- *Save to library* likes the playlist id, the album's `OLAK5uy_…` one included. The header's bookmark toggle says whether it is saved. Your own playlists have no toggle, so they get no item.
-- *Save to playlist* lists the playlists `playlist/get_add_to_playlist` offers, which are the ones you can edit.
-- Signed out, anything that writes to the account is hidden.
-
-### Sign-in
-
-OAuth is not an option. InnerTube only takes OAuth tokens from YouTube's TV client, and YouTube began refusing those in late 2024 (yt-dlp dropped them for that reason). So sign-in is a cookie session, like every working third-party client.
-
-Google's own sign-in page opens in an incognito app window with no IPC. Once it lands on `music.youtube.com`, Rust reads the window's cookies, seals them with ChaCha20-Poly1305 under a random key held in the OS keyring, and hands them to the worker. The keyring holds only the key because Credential Manager caps a secret at 2560 bytes and a Google cookie header runs close to that. With no Secret Service running, sign-in still works for the session and the failure to persist is logged.
-
-The Sign in button opens a menu: Google's page as above, or importing the session from a browser that is already signed in. Firefox and its forks store cookies in the clear. Chromium browsers encrypt them; on Linux the key is in the Secret Service. Any config folder whose `Local State` lists profiles counts as a Chromium browser, so forks like Helium turn up without being listed; Electron apps keep the same files but no profile list. Several apps file their key as "Chromium Safe Storage", so the import tries each Chromium key in the keyring and keeps the one whose decrypted values carry the right domain hash. On Windows, Chromium uses app-bound encryption that only the browser can undo, so Windows offers Firefox-family browsers only. An imported session stays shared with the browser, so signing out there signs out here too.
-
-Passkeys do not work in the sign-in window on Linux: WebKitGTK (2.52) ships without WebAuthn, so `PublicKeyCredential` is undefined and Google falls back to the password. WebView2 on Windows has WebAuthn. Importing from a browser is the Linux way to sign in without typing a password.
-
-Only the browsing client is signed in. The `VISIONOS` player client stays anonymous, because a web cookie on a non-web client is exactly the mismatch YouTube flags.
-
-### Libraries and why each is here
-
-- **zod** parses every InnerTube response at the engine boundary into a domain model, so a changed response becomes a clear error instead of an `undefined` three layers down. Also used for the Rust/TS payloads in `packages/ipc`. Types derive from schemas, never the reverse.
-- **Comlink** for the worker, and later for the plugin sandbox, so the app has one worker-RPC mechanism.
-- **tRPC** is not in the core. It recovers types lost across a network, and the worker and the UI are compiled together, so nothing is lost. It comes back for plugin backends, where there is a real process boundary (see Plugins).
-- **shadcn/ui on Base UI** (not Radix), with Tailwind v4. Owned source, which a music player needs for its sliders, menus and virtualized lists. Icons come from `@tabler/icons-react`.
-- **SQLite** (`rusqlite`) for the local library index.
-- **T3 Env** (`@t3-oss/env-core`), once the app needs an environment value. Nothing does yet, and the repo has no `.env`. The first value brings in one `env.ts` that declares every variable with a zod schema, and code reads them from there, never from `import.meta.env` or `process.env` directly. Client-side values need the `VITE_` prefix, and anything bundled into the frontend is public, so secrets never go there. Build and test tooling (`vite.config.ts`, the `YMUSIC_NETWORK_TESTS` gate, the release scripts) can keep reading `process.env`.
-
-## Monorepo layout
-
-pnpm workspaces and Turborepo. TypeScript 7 (the native `tsc`) type-checks the workspace; Vite bundles the app.
-
-- `packages/core`: pure TypeScript, no Tauri, no DOM. Domain models and zod schemas, the queue reducer, and the `PlaybackEngine` interface. Mobile can reuse it as is.
-- `packages/youtube`: the data engine. The youtubei.js wrapper, the PO-token minter, and the Comlink API, split into `worker` and `host` entry points so the main bundle never imports youtubei.js.
-- `packages/ipc`: typed, zod-validated wrappers over Tauri commands and channels. The only package that calls `invoke`.
-- `apps/desktop`: the Tauri app. `src/` is the React frontend and its shadcn components. `src-tauri/` is the Rust core: mpv playback, the sealed session and sign-in window, the local library, the `img` scheme, media controls and window chrome. Platform differences live in `platform/`, one module per concern, rather than `#[cfg]`s scattered through features.
-
-## Versions and releases
-
-Semantic versions, one source: `apps/desktop/package.json`. `tauri.conf.json` points at it, and Cargo keeps a copy; `scripts/bump.mjs` writes both. Before 1.0, a minor bump means new features and a patch means fixes.
-
-Commits follow Conventional Commits (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:` and so on). A release is the Release workflow, run by hand from the Actions tab with `patch`, `minor`, `major` or an exact version. It builds the `.deb` at the new version in `debian:13` (the oldest target, so the glibc floor is right) and publishes it with a `SHA256SUMS` file and a build provenance attestation. A stable version commits `chore: release v0.2.0` to `main` over a deploy key, which bypasses the ruleset, and tags that commit. A version with a suffix (`0.2.0-beta.1`) is a prerelease: it tags the built commit and leaves `main` alone, so `package.json` only ever holds stable versions. A dry run stops at a draft release, with no tag and no push.
-
-`scripts/release-notes.mjs` writes the notes: every commit since the previous tag, grouped by type, as "**full commit subject** by @author in #pull", with the short hash when there is no pull request. A stable release counts from the previous stable tag, so it repeats what its prereleases shipped. Commits without a type land under "Other changes", and Dependabot bumps fold into one line.
-
-The CI workflow runs on every push to `main` and every pull request: oxlint (warnings fail), typecheck and tests for the TypeScript, and rustfmt, clippy (warnings fail) and tests for the Rust core in `debian:13`. Pull requests also check that their title is a Conventional Commit, since the squash merge makes it the commit subject. One `ci-ok` job sums these up and is the check the `main` ruleset requires. The Release workflow runs the same CI on the commit it publishes.
 
 ## Packaging and updates
 
@@ -175,11 +85,11 @@ Plugin ideas:
 ## Verification
 
 - End to end on Windows and on Linux: `pnpm tauri dev`, sign in, search a known track, play, seek, queue. Log the resolved itag to confirm the premium format when signed into Premium.
-- Unit tests for the `packages/core` queue and the zod parsers against recorded InnerTube fixtures, with no Tauri. `tsc` across the workspace.
-- Network tests are opt-in: `YMUSIC_NETWORK_TESTS=1 pnpm --filter @ymusic/youtube test`. They cover search, browse, radio, stream resolution, the requests mpv really makes, and the PO-token path (the frame's `frame.js` in jsdom, asserting 206 with a token and 403 without).
 - Native feel. Windows: media keys and the volume flyout drive playback, Mica shows, snap layouts work, the app survives a WebView2 update. Linux: the GNOME/KDE media widget shows the track and its controls work, the titlebar follows light and dark, sign-in works with the keyring locked.
 - Install the built `.deb` in a clean `debian:13` container in CI and check `dpkg -L`, as the t3code mirror does.
 - Cut a bumped draft release and check the updater finds it, verifies the signature, installs through `pkexec dpkg -i`, relaunches, and leaves dpkg consistent. Then check a desktop without `pkexec` gets a clear manual-reinstall message.
+
+The automated tests are described in [docs/testing.md](docs/testing.md).
 
 ## Reference projects
 

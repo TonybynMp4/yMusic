@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: pnpm/setup@v3
         with:
-          runtime: node@24
+          runtime: node@26
           cache: true
           require-lockfile: true
       - run: pnpm typecheck
@@ -55,7 +55,7 @@ jobs:
 
       - uses: pnpm/setup@v3
         with:
-          runtime: node@24
+          runtime: node@26
           cache: true
           require-lockfile: true
       # generate_context! embeds apps/desktop/dist, so it has to exist before

@@ -14,7 +14,7 @@ pub mod import;
 pub mod sign_in;
 
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, Generate, KeyInit},
     ChaCha20Poly1305, Key, Nonce,
 };
 use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
@@ -142,7 +142,7 @@ impl Account {
         let key = match self.keys.get()? {
             Some(key) if key.len() == 32 => key,
             _ => {
-                let key = ChaCha20Poly1305::generate_key(&mut OsRng).to_vec();
+                let key = Key::generate().to_vec();
                 self.keys.set(&key)?;
                 key
             }
@@ -162,8 +162,9 @@ impl Account {
 }
 
 fn seal(key: &[u8], plaintext: &str) -> Result<Vec<u8>, String> {
-    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
-    let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let key = Key::try_from(key).map_err(|_| "the session key is malformed".to_string())?;
+    let cipher = ChaCha20Poly1305::new(&key);
+    let nonce = Nonce::generate();
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|_| "could not encrypt the session".to_string())?;
@@ -175,8 +176,11 @@ fn open_sealed(key: &[u8], sealed: &[u8]) -> Result<String, String> {
         return Err("the saved session is malformed".into());
     }
     let (nonce, ciphertext) = sealed.split_at(NONCE_LEN);
-    let plaintext = ChaCha20Poly1305::new(Key::from_slice(key))
-        .decrypt(Nonce::from_slice(nonce), ciphertext)
+    let (Ok(key), Ok(nonce)) = (Key::try_from(key), Nonce::try_from(nonce)) else {
+        return Err("the saved session is malformed".into());
+    };
+    let plaintext = ChaCha20Poly1305::new(&key)
+        .decrypt(&nonce, ciphertext)
         .map_err(|_| "the saved session does not match its key".to_string())?;
     String::from_utf8(plaintext).map_err(|_| "the saved session is not text".into())
 }

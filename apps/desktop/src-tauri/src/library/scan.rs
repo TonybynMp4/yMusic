@@ -65,7 +65,12 @@ impl ScanReport {
 fn track_id_for(path: &Path) -> String {
     let mut hasher = Sha256::new();
     hasher.update(path.to_string_lossy().as_bytes());
-    format!("local:{:x}", hasher.finalize())[..22].to_string()
+    let hex: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("local:{hex}")[..22].to_string()
 }
 
 /// SQLite has no unsigned integer type, so times are carried as i64.
@@ -183,11 +188,11 @@ fn index_file(
         .and_then(|t| t.album().map(|s| s.to_string()))
         .filter(|s| !s.trim().is_empty());
     let album_artist = tag
-        .and_then(|t| t.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string()))
+        .and_then(|t| t.get_string(ItemKey::AlbumArtist).map(|s| s.to_string()))
         .filter(|s| !s.trim().is_empty());
     let track_number = tag.and_then(|t| t.track());
     let disc_number = tag.and_then(|t| t.disk());
-    let year = tag.and_then(|t| t.year());
+    let year = tag.and_then(|t| t.date().map(|date| u32::from(date.year)));
 
     let art = tag.and_then(|t| extract_cover_art(library, id, t).ok().flatten());
 
@@ -309,6 +314,6 @@ fn codec_name(file_type: FileType) -> String {
     .to_string()
 }
 
-fn to_io(err: lofty::error::LoftyError) -> std::io::Error {
+fn to_io(err: lofty::error::FileParseError) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())
 }

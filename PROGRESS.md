@@ -94,7 +94,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Setting to skip disliked songs
 - [ ] Dismiss the queue in one click
 - [ ] Song credits dialog, from a song's menu and from an album's when YouTube has credits for it
-- [ ] Menus on the queue's rows
+- [x] Menus on the queue's rows, with remove from queue
 
 ### Features
 

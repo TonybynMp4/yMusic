@@ -9,6 +9,7 @@ import {
   IconPlayerTrackNext,
   IconPlaylist,
   IconPlaylistAdd,
+  IconPlaylistX,
   IconPlus,
   IconUser,
   IconUserMinus,
@@ -105,7 +106,10 @@ function useInteractions(): Context {
 }
 
 /** What a menu acts on. A collection is anything with a page of its own. */
-export type Subject = { kind: "song"; track: Track } | { kind: "collection"; route: Route };
+export type Subject =
+  /** `onRemove` is set on a queue row, which the song can be removed from. */
+  | { kind: "song"; track: Track; onRemove?: () => void }
+  | { kind: "collection"; route: Route };
 
 type TriggerProps = Omit<React.ComponentProps<typeof ContextMenuTrigger>, "children"> & {
   children?: ReactNode;
@@ -139,7 +143,7 @@ export function InteractionButton({
 }: {
   subject: Subject;
   className?: string;
-  size?: "icon-sm" | "icon";
+  size?: "icon-xs" | "icon-sm" | "icon";
 }) {
   return (
     <DropdownMenu>
@@ -177,13 +181,13 @@ const contained = {
 
 function Items({ subject }: { subject: Subject }) {
   return subject.kind === "song" ? (
-    <SongItems track={subject.track} />
+    <SongItems track={subject.track} onRemove={subject.onRemove} />
   ) : (
     <CollectionItems route={subject.route} />
   );
 }
 
-function SongItems({ track }: { track: Track }) {
+function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) | undefined }) {
   const x = useInteractions();
   const videoId = videoIdFromTrackId(track.id);
   const albumId = track.albumId;
@@ -204,6 +208,12 @@ function SongItems({ track }: { track: Track }) {
         <IconPlaylist />
         Add to queue
       </DropdownMenuItem>
+      {onRemove && (
+        <DropdownMenuItem onClick={onRemove}>
+          <IconPlaylistX />
+          Remove from queue
+        </DropdownMenuItem>
+      )}
       {videoId && x.signedIn && <SaveToPlaylist videoIds={() => Promise.resolve([videoId])} />}
       {(albumId || linked(track.artists).length > 0) && <DropdownMenuSeparator />}
       {albumId && (

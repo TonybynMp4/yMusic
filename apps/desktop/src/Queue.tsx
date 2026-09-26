@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
+import { InteractionArea, InteractionButton } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
 
 const ROW_HEIGHT = 48;
@@ -238,8 +239,10 @@ function Row({
   dragging?: boolean;
   className?: string;
 }) {
+  const remove = onRemove && (() => onRemove(track.id));
   return (
-    <div
+    <InteractionArea
+      subject={{ kind: "song", track, ...(remove && { onRemove: remove }) }}
       style={{ height: ROW_HEIGHT }}
       className={cn(
         "group flex items-center gap-2 rounded-lg px-2 transition-colors",
@@ -275,16 +278,21 @@ function Row({
           </span>
         </span>
       </button>
-      {onRemove && (
+      <InteractionButton
+        subject={{ kind: "song", track, ...(remove && { onRemove: remove }) }}
+        size="icon-xs"
+        className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
+      />
+      {remove && (
         <IconButton
           label="Remove from queue"
-          onClick={() => onRemove(track.id)}
+          onClick={remove}
           size="icon-xs"
           className="opacity-0 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
         >
           <IconX size={14} stroke={2} />
         </IconButton>
       )}
-    </div>
+    </InteractionArea>
   );
 }

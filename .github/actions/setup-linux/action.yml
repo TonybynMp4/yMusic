@@ -26,11 +26,11 @@ runs:
           libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
           libssl-dev librsvg2-dev
 
-    # Installs pnpm (the version in packageManager), Node, and the
-    # dependencies from the lockfile, with the pnpm store cached.
+    # Installs pnpm (the version in packageManager), Node (the version in
+    # devEngines.runtime), and the dependencies from the lockfile, with the
+    # pnpm store cached.
     - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
       with:
-        runtime: node@24
         cache: true
         require-lockfile: true
 

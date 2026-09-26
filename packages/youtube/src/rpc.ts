@@ -41,5 +41,6 @@ export interface EngineWorkerApi {
   setSubscribed: YouTubeEngine["setSubscribed"];
   playlistTargets: YouTubeEngine["playlistTargets"];
   addToPlaylist: YouTubeEngine["addToPlaylist"];
+  createPlaylist: YouTubeEngine["createPlaylist"];
   resolve: YouTubeEngine["resolve"];
 }

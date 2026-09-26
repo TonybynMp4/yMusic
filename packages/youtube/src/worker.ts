@@ -52,6 +52,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     setSubscribed: (channelId, subscribed) => engine.setSubscribed(channelId, subscribed),
     playlistTargets: (videoId) => engine.playlistTargets(videoId),
     addToPlaylist: (playlistId, videoIds) => engine.addToPlaylist(playlistId, videoIds),
+    createPlaylist: (playlist, videoIds) => engine.createPlaylist(playlist, videoIds),
     resolve: (videoId, options) => engine.resolve(videoId, options),
   };
   expose(api, endpoint);

@@ -17,11 +17,13 @@ import {
   type FetchLike,
 } from "./client.ts";
 import {
+  createPlaylist,
   getAlbum,
   getArtist,
   getLibraryPlaylists,
   getPlaylistTargets,
   openPlaylist,
+  type NewPlaylist,
   type PlaylistMore,
   type PlaylistTarget,
 } from "./browse.ts";
@@ -138,6 +140,11 @@ export class YouTubeEngine {
   /** Your playlists that songs can be added to, found through `videoId`. */
   async playlistTargets(videoId: VideoId): Promise<PlaylistTarget[]> {
     return getPlaylistTargets(await this.#signedIn(), videoId);
+  }
+
+  /** Creates a playlist holding `videoIds`, and returns its id. */
+  async createPlaylist(playlist: NewPlaylist, videoIds: VideoId[]): Promise<string> {
+    return createPlaylist(await this.#signedIn(), playlist, videoIds);
   }
 
   async addToPlaylist(playlistId: string, videoIds: VideoId[]): Promise<void> {

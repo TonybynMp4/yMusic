@@ -85,6 +85,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] One menu per song, album, playlist and artist, behind a right click and behind the dots button
 - [x] Songs: start mix, play next, add to queue, save to playlist, go to album, go to artist
+- [x] "New playlist" in the save-to-playlist menu, with a title, description and privacy
 - [x] Albums and playlists: shuffle play, start mix, play next, add to queue, save to library, save to playlist, go to artist
 - [x] Artists: shuffle play, start mix, play next, add to queue, subscribe and unsubscribe
 - [x] Player bar: a click opens the full player, a right click the song's menu

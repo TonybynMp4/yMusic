@@ -9,12 +9,13 @@ import {
   IconPlayerTrackNext,
   IconPlaylist,
   IconPlaylistAdd,
+  IconPlus,
   IconUser,
   IconUserMinus,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { videoIdFromTrackId, type Artist, type Track, type TrackId, type VideoId } from "@ymusic/core";
-import type { PlaylistTarget } from "@ymusic/youtube/host";
+import type { NewPlaylist, PlaylistTarget } from "@ymusic/youtube/host";
 import {
   cloneElement,
   createContext,
@@ -28,6 +29,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -37,6 +46,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { engine } from "./engine.ts";
 import { patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
@@ -59,10 +69,36 @@ export interface Interactions {
   libraryChanged: () => void;
 }
 
-const InteractionsContext = createContext<Interactions | null>(null);
-export const InteractionsProvider = InteractionsContext.Provider;
+/** What the menus get: the app's interactions, and the dialogs this module owns. */
+interface Context extends Interactions {
+  /** Opens the "New playlist" dialog; the playlist starts with these songs. */
+  createPlaylist: (videoIds: () => Promise<VideoId[]>) => void;
+}
 
-function useInteractions(): Interactions {
+const InteractionsContext = createContext<Context | null>(null);
+
+/**
+ * Holds the dialogs a menu item opens. They outlive the menu, which unmounts
+ * as soon as an item is picked.
+ */
+export function InteractionsProvider({
+  value,
+  children,
+}: {
+  value: Interactions;
+  children: ReactNode;
+}) {
+  const [songs, setSongs] = useState<(() => Promise<VideoId[]>) | null>(null);
+  const context: Context = { ...value, createPlaylist: (videoIds) => setSongs(() => videoIds) };
+  return (
+    <InteractionsContext.Provider value={context}>
+      {children}
+      <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
+    </InteractionsContext.Provider>
+  );
+}
+
+function useInteractions(): Context {
   const value = useContext(InteractionsContext);
   if (value === null) throw new Error("interactions used outside InteractionsProvider");
   return value;
@@ -317,6 +353,8 @@ function SaveToPlaylist({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
         Save to playlist
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="max-h-80 w-56" {...contained}>
+        <NewPlaylistItem videoIds={videoIds} />
+        <DropdownMenuSeparator />
         <PlaylistTargets videoIds={videoIds} />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
@@ -373,6 +411,131 @@ function PlaylistTargets({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
       <span className="truncate">{target.title}</span>
     </DropdownMenuItem>
   ));
+}
+
+function NewPlaylistItem({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
+  const x = useInteractions();
+  return (
+    <DropdownMenuItem onClick={() => x.createPlaylist(videoIds)}>
+      <IconPlus />
+      New playlist
+    </DropdownMenuItem>
+  );
+}
+
+const PRIVACY: { value: NewPlaylist["privacy"]; label: string }[] = [
+  { value: "PRIVATE", label: "Private" },
+  { value: "UNLISTED", label: "Unlisted" },
+  { value: "PUBLIC", label: "Public" },
+];
+
+/** YouTube Music's "New playlist" dialog: a title, a description and who can see it. */
+function NewPlaylistDialog({
+  songs,
+  onClose,
+}: {
+  songs: (() => Promise<VideoId[]>) | null;
+  onClose: () => void;
+}) {
+  const x = useInteractions();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [privacy, setPrivacy] = useState<NewPlaylist["privacy"]>("PRIVATE");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setTitle("");
+    setDescription("");
+    setPrivacy("PRIVATE");
+    setError(null);
+  };
+  const create = async () => {
+    if (!songs || title.trim().length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const name = title.trim();
+      await engine.createPlaylist({ title: name, description: description.trim(), privacy }, await songs());
+      x.libraryChanged();
+      x.notify(`Saved to ${name}`);
+      onClose();
+      reset();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={songs !== null}
+      onOpenChange={(open) => {
+        if (!open && !busy) {
+          onClose();
+          reset();
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New playlist</DialogTitle>
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void create();
+          }}
+        >
+          <Input
+            autoFocus
+            aria-label="Title"
+            placeholder="Title"
+            value={title}
+            maxLength={150}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+          <textarea
+            aria-label="Description"
+            placeholder="Description"
+            value={description}
+            maxLength={5000}
+            rows={3}
+            onChange={(event) => setDescription(event.target.value)}
+            className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          />
+          <div role="radiogroup" aria-label="Privacy" className="flex gap-2">
+            {PRIVACY.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={privacy === option.value}
+                variant={privacy === option.value ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-full"
+                onClick={() => setPrivacy(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+              Cancel
+            </DialogClose>
+            <Button type="submit" disabled={busy || title.trim().length === 0}>
+              {busy && <IconLoader2 className="animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 /** One item for a single artist; a submenu naming each when there are several. */

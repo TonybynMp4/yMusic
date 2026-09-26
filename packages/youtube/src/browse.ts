@@ -314,6 +314,30 @@ export async function getPlaylistTargets(
   return targetsFrom(options as unknown as readonly RawTarget[]);
 }
 
+/** What YouTube Music's "New playlist" dialog asks for. */
+export interface NewPlaylist {
+  title: string;
+  description: string;
+  privacy: "PUBLIC" | "UNLISTED" | "PRIVATE";
+}
+
+export async function createPlaylist(
+  youtube: Innertube,
+  playlist: NewPlaylist,
+  videoIds: readonly string[],
+): Promise<string> {
+  const response = await youtube.actions.execute("/playlist/create", {
+    title: playlist.title,
+    description: playlist.description,
+    privacyStatus: playlist.privacy,
+    videoIds: [...videoIds],
+    client: "YTMUSIC",
+  });
+  const id = (response.data as { playlistId?: unknown } | undefined)?.playlistId;
+  if (typeof id !== "string") throw new Error("YouTube did not create the playlist");
+  return id;
+}
+
 interface RawTarget {
   playlist_id?: unknown;
   title?: RawText | null;

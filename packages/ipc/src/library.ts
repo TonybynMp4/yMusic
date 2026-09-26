@@ -152,3 +152,13 @@ export async function pickMusicFolder(): Promise<string | null> {
   const chosen = await open({ directory: true, multiple: false, title: "Add music folder" });
   return typeof chosen === "string" ? chosen : null;
 }
+
+/** Opens a library folder in the system file manager. */
+export async function libraryOpenFolder(path: string): Promise<void> {
+  return invokeVoid("library_open_folder", { path });
+}
+
+/** Shows a local track's file in the system file manager, selected. */
+export async function libraryReveal(id: TrackId): Promise<void> {
+  return invokeVoid("library_reveal", { id });
+}

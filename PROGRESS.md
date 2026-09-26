@@ -95,6 +95,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Dismiss the queue in one click
 - [ ] Song credits dialog, from a song's menu and from an album's when YouTube has credits for it
 - [x] Menus on the queue's rows, with remove from queue
+- [x] Local folders: open in files. Local songs: show in files, with the file selected
 
 ### Features
 

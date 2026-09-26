@@ -109,7 +109,7 @@ function Album({
         subtitle={page.subtitle}
         tracks={page.tracks}
         actions={actions}
-        route={route}
+        subject={{ kind: "collection", route }}
       />
       <TrackList
         tracks={page.tracks}
@@ -143,7 +143,7 @@ function Playlist({
         subtitle={page.subtitle}
         tracks={page.tracks}
         actions={actions}
-        route={route}
+        subject={{ kind: "collection", route }}
       />
       <TrackList
         tracks={page.tracks}
@@ -208,7 +208,11 @@ function Artist({
           <div className="flex min-w-0 flex-col gap-3">
             <h1 className="text-4xl font-bold tracking-tight">{page.name}</h1>
             {page.description && <Description text={page.description} />}
-            <PlayButtons tracks={page.topSongs} actions={actions} route={route} />
+            <PlayButtons
+              tracks={page.topSongs}
+              actions={actions}
+              subject={{ kind: "collection", route }}
+            />
           </div>
         </div>
       </div>
@@ -270,8 +274,8 @@ export function Header(props: {
   subtitle: string | null;
   tracks: Track[];
   actions: BrowseActions;
-  /** The page itself, for its menu. Local files have none. */
-  route?: Route | undefined;
+  /** What the page's menu acts on. The "Local files" page has none. */
+  subject?: Subject | undefined;
 }) {
   return (
     <div className="mb-4 flex items-end gap-6 px-3 pt-2">
@@ -286,7 +290,7 @@ export function Header(props: {
         <h1 className="text-3xl font-bold tracking-tight">{props.title}</h1>
         {props.byline && <p className="text-sm">{props.byline}</p>}
         {props.subtitle && <p className="text-xs text-muted-foreground">{props.subtitle}</p>}
-        <PlayButtons tracks={props.tracks} actions={props.actions} route={props.route} />
+        <PlayButtons tracks={props.tracks} actions={props.actions} subject={props.subject} />
       </div>
     </div>
   );
@@ -295,11 +299,11 @@ export function Header(props: {
 function PlayButtons({
   tracks,
   actions,
-  route,
+  subject,
 }: {
   tracks: Track[];
   actions: BrowseActions;
-  route?: Route | undefined;
+  subject?: Subject | undefined;
 }) {
   const empty = tracks.length === 0;
   return (
@@ -321,7 +325,7 @@ function PlayButtons({
         <IconArrowsShuffle size={16} stroke={1.75} />
         Shuffle
       </Button>
-      {route && <InteractionButton subject={{ kind: "collection", route }} size="icon" />}
+      {subject && <InteractionButton subject={subject} size="icon" />}
     </div>
   );
 }

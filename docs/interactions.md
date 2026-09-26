@@ -8,3 +8,5 @@ YouTube Music's own buttons name what to call:
 - *Save to library* likes the playlist id, the album's `OLAK5uy_…` one included. The header's bookmark toggle says whether it is saved. Your own playlists have no toggle, so they get no item.
 - *Save to playlist* lists the playlists `playlist/get_add_to_playlist` offers, which are the ones you can edit.
 - Signed out, anything that writes to the account is hidden.
+
+Local files have their own items. A folder's menu opens it in the file manager, and a local song's shows its file there, selected (the `FileManager1` D-Bus interface on Linux, Explorer on Windows). The Rust commands take a library folder or a track id, never a raw path, so the webview cannot open arbitrary files.

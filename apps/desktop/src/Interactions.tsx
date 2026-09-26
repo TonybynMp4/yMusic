@@ -3,6 +3,8 @@ import {
   IconBroadcast,
   IconDisc,
   IconDotsVertical,
+  IconFolderOpen,
+  IconFolderSearch,
   IconLibraryMinus,
   IconLibraryPlus,
   IconLoader2,
@@ -15,7 +17,11 @@ import {
   IconUserMinus,
   IconUserPlus,
 } from "@tabler/icons-react";
-import { videoIdFromTrackId, type Artist, type Track, type TrackId, type VideoId } from "@ymusic/core";
+import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
+import {
+  sourceOf,
+  videoIdFromTrackId,
+  type Artist, type Track, type TrackId, type VideoId } from "@ymusic/core";
 import type { NewPlaylist, PlaylistTarget } from "@ymusic/youtube/host";
 import {
   cloneElement,
@@ -105,11 +111,15 @@ function useInteractions(): Context {
   return value;
 }
 
-/** What a menu acts on. A collection is anything with a page of its own. */
+/**
+ * What a menu acts on. A collection is anything with a YouTube Music page of
+ * its own; a folder is one of the local library's.
+ */
 export type Subject =
   /** `onRemove` is set on a queue row, which the song can be removed from. */
   | { kind: "song"; track: Track; onRemove?: () => void }
-  | { kind: "collection"; route: Route };
+  | { kind: "collection"; route: Route }
+  | { kind: "folder"; path: string };
 
 type TriggerProps = Omit<React.ComponentProps<typeof ContextMenuTrigger>, "children"> & {
   children?: ReactNode;
@@ -180,10 +190,32 @@ const contained = {
 };
 
 function Items({ subject }: { subject: Subject }) {
-  return subject.kind === "song" ? (
-    <SongItems track={subject.track} onRemove={subject.onRemove} />
-  ) : (
-    <CollectionItems route={subject.route} />
+  switch (subject.kind) {
+    case "song":
+      return <SongItems track={subject.track} onRemove={subject.onRemove} />;
+    case "collection":
+      return <CollectionItems route={subject.route} />;
+    case "folder":
+      return <FolderItems path={subject.path} />;
+  }
+}
+
+/** Reports a failed action as a notice rather than letting it vanish. */
+function reporting(x: Context, action: () => Promise<void>) {
+  return () => {
+    action().catch((error: unknown) =>
+      x.notify(error instanceof Error ? error.message : String(error)),
+    );
+  };
+}
+
+function FolderItems({ path }: { path: string }) {
+  const x = useInteractions();
+  return (
+    <DropdownMenuItem onClick={reporting(x, () => libraryOpenFolder(path))}>
+      <IconFolderOpen />
+      Open in files
+    </DropdownMenuItem>
   );
 }
 
@@ -191,7 +223,7 @@ function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) 
   const x = useInteractions();
   const videoId = videoIdFromTrackId(track.id);
   const albumId = track.albumId;
-  // A local file has no radio, playlists or pages to go to.
+  // A local file has no radio, playlists or pages to go to, but has a file.
   return (
     <>
       {videoId && (
@@ -223,6 +255,15 @@ function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) 
         </DropdownMenuItem>
       )}
       <GoToArtist artists={track.artists} />
+      {sourceOf(track.id) === "local" && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={reporting(x, () => libraryReveal(track.id))}>
+            <IconFolderSearch />
+            Show in files
+          </DropdownMenuItem>
+        </>
+      )}
     </>
   );
 }

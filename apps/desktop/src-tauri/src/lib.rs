@@ -37,6 +37,8 @@ macro_rules! ymusic_commands {
             $crate::commands::library_tracks,
             $crate::commands::library_search,
             $crate::commands::library_resolve,
+            $crate::commands::library_open_folder,
+            $crate::commands::library_reveal,
             $crate::commands::account_cookie,
             $crate::commands::account_sign_in,
             $crate::commands::account_browsers,

@@ -29,6 +29,7 @@ export function LocalView(props: {
         subtitle={folder ? `${count} • ${folder}` : count}
         tracks={tracks}
         actions={actions}
+        subject={folder ? { kind: "folder", path: folder } : undefined}
       />
       {tracks.length === 0 ? (
         <p className="px-3 py-12 text-center text-sm text-muted-foreground">

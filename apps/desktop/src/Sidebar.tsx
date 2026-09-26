@@ -20,7 +20,7 @@ import { IconButton } from "@/components/IconButton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { InteractionArea } from "./Interactions.tsx";
+import { InteractionArea, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
 
@@ -128,8 +128,7 @@ export function Sidebar(props: Props) {
           {entries.map((entry) => (
             <InteractionArea
               key={viewKey(entry.view)}
-              // Local folders have no menu; a playlist has YouTube Music's.
-              subject={entry.view.kind === "local" ? null : { kind: "collection", route: entry.view }}
+              subject={subjectOf(entry.view)}
               render={<li />}
               className="group relative"
             >
@@ -284,4 +283,10 @@ function ScanSummary({ report }: { report: ScanReport }) {
       )}
     </div>
   );
+}
+
+/** A folder opens in the file manager; "Local files" is every folder, so has no menu. */
+function subjectOf(view: View): Subject | null {
+  if (view.kind !== "local") return { kind: "collection", route: view };
+  return view.id ? { kind: "folder", path: view.id } : null;
 }

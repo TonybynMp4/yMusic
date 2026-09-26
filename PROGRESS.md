@@ -81,6 +81,20 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] CI: install the `.deb` in `debian:13`, check `dpkg -L` and start the app under Xvfb (written, not run yet)
 - [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
 
+### Interactions
+
+- [x] One menu per song, album, playlist and artist, behind a right click and behind the dots button
+- [x] Songs: start mix, play next, add to queue, save to playlist, go to album, go to artist
+- [x] Albums and playlists: shuffle play, start mix, play next, add to queue, save to library, save to playlist, go to artist
+- [x] Artists: shuffle play, start mix, play next, add to queue, subscribe and unsubscribe
+- [x] Player bar: a click opens the full player, a right click the song's menu
+- [ ] Pin and unpin albums, playlists and artists to quick access on the home page
+- [ ] Like and dislike songs
+- [ ] Setting to skip disliked songs
+- [ ] Dismiss the queue in one click
+- [ ] Song credits dialog, from a song's menu and from an album's when YouTube has credits for it
+- [ ] Menus on the queue's rows
+
 ### Features
 
 - [ ] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
@@ -88,13 +102,13 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library
 - [ ] Local playlists
-- [ ] Like and unlike songs, add to a playlist
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots
 - [ ] Plugin backends on Deno over tRPC
 - [ ] Flatpak
 - [ ] Sync service
+- [ ] Remote control between devices, like Spotify Connect (see PLAN.md)
 - [ ] Mobile
 
 ## Known issues

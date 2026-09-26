@@ -46,6 +46,11 @@ export type QueueAction =
   | { type: "extend"; tracks: readonly Track[]; rng?: () => number }
   | { type: "setSuggestions"; tracks: readonly Track[] }
   | { type: "remove"; trackId: TrackId }
+  /**
+   * Drags the track at playing position `from` so it ends up at position `to`.
+   * The playing track keeps playing wherever it lands.
+   */
+  | { type: "move"; from: number; to: number }
   | { type: "clear" }
   | { type: "setRepeat"; repeat: RepeatMode }
   | { type: "setShuffle"; shuffle: boolean; rng?: () => number };
@@ -158,6 +163,30 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
         if (cursor >= order.length) cursor = order.length === 0 ? null : order.length - 1;
       }
       return { ...state, items, order, cursor: items.length === 0 ? null : cursor };
+    }
+
+    case "move": {
+      const { from, to } = action;
+      const length = state.order.length;
+      if (from === to || from < 0 || to < 0 || from >= length || to >= length) return state;
+      const order = [...state.order];
+      const [moved] = order.splice(from, 1);
+      order.splice(to, 0, moved!);
+      let cursor = state.cursor;
+      if (cursor !== null) {
+        if (cursor === from) cursor = to;
+        else if (from < cursor && cursor <= to) cursor -= 1;
+        else if (to <= cursor && cursor < from) cursor += 1;
+      }
+      if (state.shuffle) return { ...state, order, cursor };
+      // Unshuffled, the order the user arranged is the one to keep, including
+      // once shuffle goes on and off again, so `items` takes it on.
+      return {
+        ...state,
+        items: order.map((i) => state.items[i]!),
+        order: order.map((_, i) => i),
+        cursor,
+      };
     }
 
     case "clear":

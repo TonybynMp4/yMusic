@@ -107,7 +107,8 @@ export function App() {
       }
       player.playTrack(tracks, id, from);
     },
-    onEnqueue: (track) => player.dispatch({ type: "enqueueLast", tracks: [track] }),
+    onEnqueue: (track, at) =>
+      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks: [track] }),
     onOpen: go,
   };
 
@@ -202,6 +203,7 @@ export function App() {
               onAutoplay={player.setAutoplay}
               onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
               onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
+              onMove={(from, to) => player.dispatch({ type: "move", from, to })}
               onClear={() => player.dispatch({ type: "clear" })}
               onCollapse={() => setExpanded(false)}
             />

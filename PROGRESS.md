@@ -14,7 +14,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] shadcn on Base UI, YouTube Music's dark palette, Tabler icons
 - [x] Custom titlebar
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
-- [ ] Single instance
+- [x] Single instance: a second launch focuses the running window
 - [ ] Explicit libmpv version floor with a clear startup error
 
 ### Playback
@@ -23,7 +23,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Perceptual volume (mpv's cubic taper, applied once)
 - [x] Gapless audio in mpv
 - [x] Stale stream leases re-resolved before playing
-- [ ] Resolve the next YouTube track ahead of time (`peekNext` exists, nothing calls it), so there is no gap while its stream resolves
+- [x] Resolve the next YouTube track while the current one plays, so there is no gap while its stream resolves
 - [x] Media keys and the desktop media widget over MPRIS
 - [ ] SMTC on Windows (shares the `souvlaki` code path, never run)
 
@@ -51,8 +51,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Shuffle mixes rows that arrive later into the tracks still to come
 - [x] A search result starts that song's radio
 - [x] Autoplay: YouTube Music's suggestions after the queue, with a switch
-- [ ] Reorder the queue by dragging
-- [ ] "Play next" from a track's menu (the reducer has `enqueueNext`; only "add to queue" is in the UI)
+- [x] Reorder the queue by dragging
+- [x] "Play next" and "Add to queue" in a track's menu
 
 ### Local library
 

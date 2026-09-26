@@ -65,6 +65,48 @@ describe("queueReducer", () => {
     expect(currentTrack(apply(repeating, { type: "next", reason: "user" }))?.id).toBe("local:c");
   });
 
+  it("moves a track down, keeping the playing one", () => {
+    const moved = apply(loaded(1), { type: "move", from: 0, to: 2 });
+    expect(titles(moved)).toEqual(["b", "c", "a", "d"]);
+    expect(currentTrack(moved)?.id).toBe("local:b");
+  });
+
+  it("moves a track up past the playing one", () => {
+    const moved = apply(loaded(1), { type: "move", from: 3, to: 0 });
+    expect(titles(moved)).toEqual(["d", "a", "b", "c"]);
+    expect(currentTrack(moved)?.id).toBe("local:b");
+  });
+
+  it("moves the playing track without interrupting it", () => {
+    const moved = apply(loaded(0), { type: "move", from: 0, to: 3 });
+    expect(titles(moved)).toEqual(["b", "c", "d", "a"]);
+    expect(currentTrack(moved)?.id).toBe("local:a");
+    expect(peekNext(moved)).toBeNull();
+  });
+
+  it("keeps a move made unshuffled when shuffle goes on and off", () => {
+    const moved = apply(
+      loaded(0),
+      { type: "move", from: 3, to: 1 },
+      { type: "setShuffle", shuffle: true },
+      { type: "setShuffle", shuffle: false },
+    );
+    expect(titles(moved)).toEqual(["a", "d", "b", "c"]);
+  });
+
+  it("moves within the shuffled order only", () => {
+    const shuffled = apply(loaded(0), { type: "setShuffle", shuffle: true, rng: () => 0 });
+    const before = titles(shuffled);
+    const moved = apply(shuffled, { type: "move", from: 3, to: 1 });
+    expect(titles(moved)).toEqual([before[0], before[3], before[1], before[2]]);
+    expect(moved.items).toBe(shuffled.items);
+  });
+
+  it("ignores a move out of range", () => {
+    const state = loaded(0);
+    expect(apply(state, { type: "move", from: 0, to: 4 })).toBe(state);
+  });
+
   it("inserts enqueueNext directly after the playing track", () => {
     const state = apply(loaded(0), { type: "enqueueNext", tracks: [track("x")] });
     expect(titles(state)).toEqual(["a", "x", "b", "c", "d"]);

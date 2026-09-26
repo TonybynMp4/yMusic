@@ -4,6 +4,7 @@ import {
   emptyQueue,
   sourceOf,
   isLeaseUsable,
+  peekNext,
   type QueueAction,
   queueReducer,
   type RepeatMode,
@@ -75,8 +76,26 @@ export function usePlayer() {
    */
   const loadedId = useRef<TrackId | null>(null);
   const leases = useRef(new Map<TrackId, StreamLease>());
+  /** Resolutions in flight, so the load and the pre-resolve share one request. */
+  const resolving = useRef(new Map<TrackId, Promise<StreamLease>>());
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
+
+  /** A cached lease while it is still usable, otherwise a fresh one. */
+  const leaseFor = useCallback((id: TrackId): Promise<StreamLease> => {
+    const cached = leases.current.get(id);
+    if (cached && isLeaseUsable(cached, Date.now())) return Promise.resolve(cached);
+    const pending = resolving.current.get(id);
+    if (pending) return pending;
+    const request = resolveTrack(id)
+      .then((lease) => {
+        leases.current.set(id, lease);
+        return lease;
+      })
+      .finally(() => resolving.current.delete(id));
+    resolving.current.set(id, request);
+    return request;
+  }, []);
 
   useEffect(() => {
     if (trackId === null) {
@@ -94,13 +113,10 @@ export function usePlayer() {
 
     let cancelled = false;
     void (async () => {
-      const cached = leases.current.get(trackId);
-      const lease =
-        cached && isLeaseUsable(cached, Date.now()) ? cached : await resolveTrack(trackId);
+      const lease = await leaseFor(trackId);
       // The user can skip while a lease is in flight; dropping the result is
       // correct, because a newer effect is already resolving the new track.
       if (cancelled) return;
-      leases.current.set(trackId, lease);
       await load(lease);
       await engine.play();
     })().catch((error: unknown) => {
@@ -113,7 +129,20 @@ export function usePlayer() {
     return () => {
       cancelled = true;
     };
-  }, [trackId, engine, load, reportError]);
+  }, [trackId, engine, load, reportError, leaseFor]);
+
+  // Resolve the next YouTube track while this one plays, so the change of
+  // track doesn't wait on YouTube. Only once playing, so it never competes
+  // with resolving the track the user is waiting for.
+  const upcomingId = peekNext(queue)?.id ?? null;
+  const playing = state.status === "playing";
+  useEffect(() => {
+    if (!playing || upcomingId === null || upcomingId === trackId) return;
+    if (sourceOf(upcomingId) !== "youtube") return;
+    void leaseFor(upcomingId).catch((error: unknown) =>
+      console.error("could not resolve the next track ahead of time", error),
+    );
+  }, [playing, upcomingId, trackId, leaseFor]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
   // it, and a 403 surfaces only here. Retry such a track once on the PO-token

@@ -20,11 +20,13 @@ import {
   getAlbum,
   getArtist,
   getLibraryPlaylists,
+  getPlaylistTargets,
   openPlaylist,
   type PlaylistMore,
+  type PlaylistTarget,
 } from "./browse.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
-import { getRadio } from "./radio.ts";
+import { getMix, getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -110,6 +112,42 @@ export class YouTubeEngine {
   /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */
   async radio(videoId: VideoId): Promise<Track[]> {
     return getRadio(await this.#browseClient(), videoId);
+  }
+
+  /**
+   * "Start mix" on a list: `playlistId` is the radio playlist (`RDAMPL…`,
+   * `RDEM…`) and `videoId`, when the button names one, the song it opens on.
+   */
+  async mix(playlistId: string, videoId: string | null = null): Promise<Track[]> {
+    return getMix(await this.#browseClient(), playlistId, videoId);
+  }
+
+  /** Saves an album or playlist to the library, or removes it. `id` is the bare playlist id. */
+  async setSaved(id: string, saved: boolean): Promise<void> {
+    const youtube = await this.#signedIn();
+    if (saved) await youtube.playlist.addToLibrary(id);
+    else await youtube.playlist.removeFromLibrary(id);
+  }
+
+  async setSubscribed(channelId: string, subscribed: boolean): Promise<void> {
+    const youtube = await this.#signedIn();
+    if (subscribed) await youtube.interact.subscribe(channelId);
+    else await youtube.interact.unsubscribe(channelId);
+  }
+
+  /** Your playlists that songs can be added to, found through `videoId`. */
+  async playlistTargets(videoId: VideoId): Promise<PlaylistTarget[]> {
+    return getPlaylistTargets(await this.#signedIn(), videoId);
+  }
+
+  async addToPlaylist(playlistId: string, videoIds: VideoId[]): Promise<void> {
+    if (videoIds.length === 0) return;
+    await (await this.#signedIn()).playlist.addVideos(playlistId, videoIds);
+  }
+
+  async #signedIn(): Promise<Innertube> {
+    if (this.#cookie === null) throw new Error("sign in to YouTube Music first");
+    return this.#browseClient();
   }
 
   /** `id` is an album's browse id (`MPREb_…`). */

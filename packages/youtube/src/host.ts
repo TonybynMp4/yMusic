@@ -14,6 +14,7 @@ import { performRequest } from "./remote-fetch.ts";
 import type { EngineHost, EngineWorkerApi } from "./rpc.ts";
 
 export type { BotGuardVm, BotGuardChallenge } from "./po-token.ts";
+export type { PlaylistTarget } from "./browse.ts";
 
 export type EngineClient = Remote<Omit<EngineWorkerApi, "connect">>;
 

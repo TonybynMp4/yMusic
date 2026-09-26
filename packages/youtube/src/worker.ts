@@ -47,6 +47,11 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     playlist: (id) => engine.playlist(id),
     playlistMore: (handle) => engine.playlistMore(handle),
     libraryPlaylists: () => engine.libraryPlaylists(),
+    mix: (playlistId, videoId) => engine.mix(playlistId, videoId),
+    setSaved: (id, saved) => engine.setSaved(id, saved),
+    setSubscribed: (channelId, subscribed) => engine.setSubscribed(channelId, subscribed),
+    playlistTargets: (videoId) => engine.playlistTargets(videoId),
+    addToPlaylist: (playlistId, videoIds) => engine.addToPlaylist(playlistId, videoIds),
     resolve: (videoId, options) => engine.resolve(videoId, options),
   };
   expose(api, endpoint);

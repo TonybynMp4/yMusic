@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AccountMenu } from "./AccountMenu.tsx";
 import { BrowseView, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
+import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LocalView } from "./Local.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { ScrollParent } from "./scroll.ts";
@@ -49,6 +50,7 @@ export function App() {
   const account = useAccount();
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
+  const notice = useNotice();
 
   const toggleSidebar = () =>
     setCollapsed((c) => {
@@ -94,142 +96,175 @@ export function App() {
       window.removeEventListener("keydown", onKey);
     };
   }, [back]);
+  const play = (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
+    if (tracks.length === 0) return;
+    if (id === null) {
+      // Shuffle first, so the queue is laid down shuffled from a random start.
+      player.setShuffle(true);
+      id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
+    }
+    player.playTrack(tracks, id, from);
+  };
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,
     playing: player.playback.status === "playing",
     onToggle: player.toggle,
-    onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
-      if (tracks.length === 0) return;
-      if (id === null) {
-        // Shuffle first, so the queue is laid down shuffled from a random start.
-        player.setShuffle(true);
-        id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
-      }
-      player.playTrack(tracks, id, from);
-    },
-    onEnqueue: (track, at) =>
-      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks: [track] }),
+    onPlay: play,
     onOpen: go,
+  };
+  const interactions: Interactions = {
+    signedIn: account.account !== null,
+    play,
+    enqueue: (tracks, at) =>
+      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
+    open: go,
+    notify: notice.show,
+    libraryChanged: playlists.reload,
   };
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
-      <TitleBar />
+    <InteractionsProvider value={interactions}>
+      <div className="flex h-full flex-col bg-background text-foreground">
+        <TitleBar />
 
-      <div className="flex min-h-0 flex-1">
-        {/* Outside the area the expanded player covers, so the library stays
-            reachable with the player open. */}
-        <Sidebar
-          collapsed={collapsed}
-          onToggleCollapsed={toggleSidebar}
-          current={expanded ? "player" : view ? viewKey(view) : null}
-          onSearch={showSearch}
-          onNavigate={go}
-          playlists={playlists.playlists}
-          folders={library.folders}
-          localCount={library.all.length}
-          report={library.report}
-          loading={library.loading}
-          onAddFolder={() => void library.addFolder()}
-          onRemoveFolder={(path) => void library.removeFolder(path)}
-          onRescan={() => void library.rescan()}
-        />
+        <div className="flex min-h-0 flex-1">
+          {/* Outside the area the expanded player covers, so the library stays
+              reachable with the player open. */}
+          <Sidebar
+            collapsed={collapsed}
+            onToggleCollapsed={toggleSidebar}
+            current={expanded ? "player" : view ? viewKey(view) : null}
+            onSearch={showSearch}
+            onNavigate={go}
+            playlists={playlists.playlists}
+            folders={library.folders}
+            localCount={library.all.length}
+            report={library.report}
+            loading={library.loading}
+            onAddFolder={() => void library.addFolder()}
+            onRemoveFolder={(path) => void library.removeFolder(path)}
+            onRescan={() => void library.rescan()}
+          />
 
-        <div className="relative flex min-w-0 flex-1">
-          <main className="flex min-w-0 flex-1 flex-col">
-            <div className="flex items-center gap-3 px-4 py-3">
-              {depth > 0 && (
-                <IconButton label="Back" size="icon" onClick={back}>
-                  <IconArrowLeft size={18} stroke={1.75} />
-                </IconButton>
-              )}
-              <div className="relative min-w-0 flex-1">
-                <IconSearch
-                  size={15}
-                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  ref={searchInput}
-                  type="search"
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    // Typing is a new search, so it shows the results.
-                    go(null);
-                  }}
-                  placeholder="Search YouTube Music and your files"
-                  // A pill on a dark field, which is the shape YouTube Music uses.
-                  className="h-9 rounded-full bg-secondary pl-9"
-                />
-              </div>
-              <AccountMenu state={account} />
-            </div>
-
-            {/* Keyed by position in history, so each screen mounts fresh. */}
-            <ScrollArea
-              key={`${depth}:${view ? viewKey(view) : "search"}`}
-              viewportRef={setViewport}
-              onScrollCapture={(event) => {
-                if (event.target === viewport) scrolls.current[depth] = viewport.scrollTop;
-              }}
-              className="min-h-0 flex-1"
-            >
-              <ScrollParent value={viewport}>
-                <div className="px-2 pb-2">
-                  {view?.kind === "local" ? (
-                    <LocalView folder={view.id} all={library.all} actions={browse} />
-                  ) : view ? (
-                    <BrowseView route={view} actions={browse} />
-                  ) : (
-                    <SearchResults
-                      query={query}
-                      local={library.matches}
-                      youtube={youtube}
-                      actions={browse}
-                    />
-                  )}
+          <div className="relative flex min-w-0 flex-1">
+            <main className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-center gap-3 px-4 py-3">
+                {depth > 0 && (
+                  <IconButton label="Back" size="icon" onClick={back}>
+                    <IconArrowLeft size={18} stroke={1.75} />
+                  </IconButton>
+                )}
+                <div className="relative min-w-0 flex-1">
+                  <IconSearch
+                    size={15}
+                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <Input
+                    ref={searchInput}
+                    type="search"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      // Typing is a new search, so it shows the results.
+                      go(null);
+                    }}
+                    placeholder="Search YouTube Music and your files"
+                    // A pill on a dark field, which is the shape YouTube Music uses.
+                    className="h-9 rounded-full bg-secondary pl-9"
+                  />
                 </div>
-              </ScrollParent>
-            </ScrollArea>
-          </main>
+                <AccountMenu state={account} />
+              </div>
 
-          {expanded && (
-            <FullPlayer
-              track={player.track}
-              queue={player.queue}
-              filling={player.filling}
-              autoplay={player.autoplay}
-              onAutoplay={player.setAutoplay}
-              onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
-              onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
-              onMove={(from, to) => player.dispatch({ type: "move", from, to })}
-              onClear={() => player.dispatch({ type: "clear" })}
-              onCollapse={() => setExpanded(false)}
-            />
-          )}
+              {/* Keyed by position in history, so each screen mounts fresh. */}
+              <ScrollArea
+                key={`${depth}:${view ? viewKey(view) : "search"}`}
+                viewportRef={setViewport}
+                onScrollCapture={(event) => {
+                  if (event.target === viewport) scrolls.current[depth] = viewport.scrollTop;
+                }}
+                className="min-h-0 flex-1"
+              >
+                <ScrollParent value={viewport}>
+                  <div className="px-2 pb-2">
+                    {view?.kind === "local" ? (
+                      <LocalView folder={view.id} all={library.all} actions={browse} />
+                    ) : view ? (
+                      <BrowseView route={view} actions={browse} />
+                    ) : (
+                      <SearchResults
+                        query={query}
+                        local={library.matches}
+                        youtube={youtube}
+                        actions={browse}
+                      />
+                    )}
+                  </div>
+                </ScrollParent>
+              </ScrollArea>
+            </main>
+
+            {expanded && (
+              <FullPlayer
+                track={player.track}
+                queue={player.queue}
+                filling={player.filling}
+                autoplay={player.autoplay}
+                onAutoplay={player.setAutoplay}
+                onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
+                onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
+                onMove={(from, to) => player.dispatch({ type: "move", from, to })}
+                onClear={() => player.dispatch({ type: "clear" })}
+                onCollapse={() => setExpanded(false)}
+              />
+            )}
+          </div>
         </div>
-      </div>
 
-      <NowPlaying
-        track={player.track}
-        playback={player.playback}
-        position={player.position}
-        repeat={player.queue.repeat}
-        shuffle={player.queue.shuffle}
-        onToggle={player.toggle}
-        onNext={player.next}
-        onPrevious={player.previous}
-        onSeek={player.seek}
-        volume={player.volume}
-        onVolume={player.setVolume}
-        onRepeat={player.setRepeat}
-        onShuffle={player.setShuffle}
-        expanded={expanded}
-        onToggleExpanded={() => setExpanded((open) => !open)}
-      />
-    </div>
+        <NowPlaying
+          track={player.track}
+          playback={player.playback}
+          position={player.position}
+          repeat={player.queue.repeat}
+          shuffle={player.queue.shuffle}
+          onToggle={player.toggle}
+          onNext={player.next}
+          onPrevious={player.previous}
+          onSeek={player.seek}
+          volume={player.volume}
+          onVolume={player.setVolume}
+          onRepeat={player.setRepeat}
+          onShuffle={player.setShuffle}
+          expanded={expanded}
+          onToggleExpanded={() => setExpanded((open) => !open)}
+        />
+        {notice.message && (
+          <p
+            role="status"
+            className="pointer-events-none fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-md bg-foreground px-4 py-2 text-sm text-background shadow-lg"
+          >
+            {notice.message}
+          </p>
+        )}
+      </div>
+    </InteractionsProvider>
   );
+}
+
+/** How long a notice stays up. */
+const NOTICE_MS = 4000;
+
+/** One short message at a time, as YouTube Music's snackbar shows them. */
+function useNotice() {
+  const [message, setMessage] = useState<string | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const show = useCallback((text: string) => {
+    window.clearTimeout(timer.current);
+    setMessage(text);
+    timer.current = window.setTimeout(() => setMessage(null), NOTICE_MS);
+  }, []);
+  return { message, show };
 }
 
 /**
@@ -267,7 +302,6 @@ function SearchResults(props: {
             playing={actions.playing}
             onToggle={actions.onToggle}
             onPlay={(id) => actions.onPlay([...local], id)}
-            onEnqueue={actions.onEnqueue}
           />
         </section>
       )}
@@ -286,7 +320,6 @@ function SearchResults(props: {
               onToggle={actions.onToggle}
               // As in YouTube Music: a song from search starts its radio.
               onPlay={(id) => actions.onPlay(youtube.tracks, id, { kind: "radio" })}
-              onEnqueue={actions.onEnqueue}
               onOpen={actions.onOpen}
             />
           </section>

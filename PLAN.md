@@ -56,6 +56,17 @@ Volume is perceptual. mpv's `volume` property already applies a cubic taper, so 
 - **PO tokens.** Google's BotGuard VM mints them, and it needs a real DOM and `eval`. The worker has no DOM, and the app page has a strict CSP and IPC next to Google's code. So BotGuard runs in a hidden iframe on its own `botguard:` scheme, served by Rust with a CSP that allows eval and nothing else, reached only over a MessagePort. Tauri's init scripts, which carry the IPC key, reach the main frame only, and the frame checks this on every load.
 - BotGuard's challenge is bound to the `Origin` it was requested from. None and `tauri://localhost` pass; YouTube's own origins and the dev server's are refused, so those requests go out with none.
 
+### Interactions
+
+An interaction is what you can do with a song, album, playlist or artist. A right click and the dots button open the same menu, built in `Interactions.tsx` from one list per kind, in YouTube Music's order. A collection's page loads when its menu opens, through the same cache that opening the page uses, so the menu knows the saved or subscribed state and has the tracks to queue. Actions that need every row of a long playlist wait for the rest to arrive.
+
+YouTube Music's own buttons name what to call:
+
+- *Start mix* on an album or playlist plays the radio playlist `RDAMPL` + its playlist id. An album's playlist id (`OLAK5uy_…`) is the one on its header's play button. An artist's mix is the header's own `RDEM…` playlist.
+- *Save to library* likes the playlist id, the album's `OLAK5uy_…` one included. The header's bookmark toggle says whether it is saved. Your own playlists have no toggle, so they get no item.
+- *Save to playlist* lists the playlists `playlist/get_add_to_playlist` offers, which are the ones you can edit.
+- Signed out, anything that writes to the account is hidden.
+
 ### Sign-in
 
 OAuth is not an option. InnerTube only takes OAuth tokens from YouTube's TV client, and YouTube began refusing those in late 2024 (yt-dlp dropped them for that reason). So sign-in is a cookie session, like every working third-party client.
@@ -123,6 +134,12 @@ Sign release assets with the updater's minisign key so the download is verified 
   - *Manual.* A user correction outranks any later rescan.
 
   Identification is its own background pass, separate from the fast filesystem scan, because it is network-bound and rate-limited. A library with no links still works fully.
+- **More interactions.**
+  - Pin albums, playlists and artists to a quick-access row on the home page.
+  - Like and dislike songs (`like/like`, `like/dislike`), with a setting to skip disliked songs when they come up in the queue.
+  - A button to dismiss the whole queue.
+  - A song credits dialog, from a song's menu and from an album's when YouTube has credits for it.
+- **Remote control between devices**, like Spotify Connect. YouTube appears to be building its own; if the app can join that rather than invent a protocol, it should. Not researched yet.
 - **Flatpak**, once the `.deb` is solid. It needs portal file access and a bundled libmpv, and brings its own updates.
 - **Sync service** (`services/sync`, Hono and SQLite), once there is a second device: settings, local-library metadata, downloads and history.
 - **Mobile** through Tauri 2's iOS and Android targets, reusing `packages/core` and `packages/youtube`. libmpv is heavy on iOS, so expect a platform player behind `PlaybackEngine`. That is why the interface exists.

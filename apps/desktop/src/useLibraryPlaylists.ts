@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -7,6 +7,8 @@ export interface LibraryPlaylistsState {
   playlists: BrowseCard[];
   loading: boolean;
   error: string | null;
+  /** Fetches the list again, after saving or removing a playlist. */
+  reload: () => void;
 }
 
 /**
@@ -14,7 +16,8 @@ export interface LibraryPlaylistsState {
  * on who is signed in, so signing in or out swaps the list.
  */
 export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylistsState {
-  const [state, setState] = useState<LibraryPlaylistsState>({
+  const [generation, setGeneration] = useState(0);
+  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload">>({
     playlists: [],
     loading: false,
     error: null,
@@ -39,6 +42,7 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     return () => {
       cancelled = true;
     };
-  }, [accountKey]);
-  return state;
+  }, [accountKey, generation]);
+  const reload = useCallback(() => setGeneration((g) => g + 1), []);
+  return { ...state, reload };
 }

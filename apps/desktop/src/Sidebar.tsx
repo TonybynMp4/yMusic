@@ -20,6 +20,7 @@ import { IconButton } from "@/components/IconButton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { InteractionArea } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
 
@@ -125,7 +126,13 @@ export function Sidebar(props: Props) {
       <ScrollArea className="min-h-0 flex-1">
         <ul className={cn("flex flex-col gap-0.5 px-2 pb-2", collapsed && "items-center")}>
           {entries.map((entry) => (
-            <li key={viewKey(entry.view)} className="group relative">
+            <InteractionArea
+              key={viewKey(entry.view)}
+              // Local folders have no menu; a playlist has YouTube Music's.
+              subject={entry.view.kind === "local" ? null : { kind: "collection", route: entry.view }}
+              render={<li />}
+              className="group relative"
+            >
               <Item
                 collapsed={collapsed}
                 active={props.current === viewKey(entry.view)}
@@ -145,7 +152,7 @@ export function Sidebar(props: Props) {
                   <IconX size={14} stroke={2} />
                 </IconButton>
               )}
-            </li>
+            </InteractionArea>
           ))}
         </ul>
       </ScrollArea>

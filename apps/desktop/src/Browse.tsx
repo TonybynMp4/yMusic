@@ -21,6 +21,7 @@ import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { InteractionArea, InteractionButton, type Subject } from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import type { PlayFrom } from "./usePlayer.ts";
@@ -36,7 +37,6 @@ export interface BrowseActions {
    * `from` lets the queue keep growing, with the rest of a playlist or a radio.
    */
   onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => void;
-  onEnqueue: (track: Track, at: "next" | "last") => void;
   onOpen: (route: Route) => void;
 }
 
@@ -54,7 +54,7 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
   const { page } = state;
   switch (page.kind) {
     case "album":
-      return <Album page={page.page} actions={actions} />;
+      return <Album page={page.page} actions={actions} route={route} />;
     case "playlist": {
       // Queue the whole playlist, including the rows still loading.
       const from: PlayFrom = { kind: "playlist", id: route.id };
@@ -62,14 +62,29 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
         ...actions,
         onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
       };
-      return <Playlist page={page.page} loadingMore={state.loadingMore} actions={following} />;
+      return (
+        <Playlist
+          page={page.page}
+          loadingMore={state.loadingMore}
+          actions={following}
+          route={route}
+        />
+      );
     }
     case "artist":
-      return <Artist page={page.page} actions={actions} />;
+      return <Artist page={page.page} actions={actions} route={route} />;
   }
 }
 
-function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
+function Album({
+  page,
+  actions,
+  route,
+}: {
+  page: AlbumPage;
+  actions: BrowseActions;
+  route: Route;
+}) {
   return (
     <>
       <Header
@@ -94,6 +109,7 @@ function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
         subtitle={page.subtitle}
         tracks={page.tracks}
         actions={actions}
+        route={route}
       />
       <TrackList
         tracks={page.tracks}
@@ -101,7 +117,6 @@ function Album({ page, actions }: { page: AlbumPage; actions: BrowseActions }) {
         playing={actions.playing}
         onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
-        onEnqueue={actions.onEnqueue}
         onOpen={actions.onOpen}
         hideAlbum
       />
@@ -113,10 +128,12 @@ function Playlist({
   page,
   loadingMore,
   actions,
+  route,
 }: {
   page: PlaylistPage;
   loadingMore: boolean;
   actions: BrowseActions;
+  route: Route;
 }) {
   return (
     <>
@@ -126,6 +143,7 @@ function Playlist({
         subtitle={page.subtitle}
         tracks={page.tracks}
         actions={actions}
+        route={route}
       />
       <TrackList
         tracks={page.tracks}
@@ -133,7 +151,6 @@ function Playlist({
         playing={actions.playing}
         onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
-        onEnqueue={actions.onEnqueue}
         onOpen={actions.onOpen}
       />
       {loadingMore && (
@@ -150,7 +167,15 @@ function Playlist({
  * YouTube Music's artist page: the name, description and buttons over the
  * banner's lower edge, the top songs, then a row of cards per shelf.
  */
-function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions }) {
+function Artist({
+  page,
+  actions,
+  route,
+}: {
+  page: ArtistPage;
+  actions: BrowseActions;
+  route: Route;
+}) {
   const playlistId = page.topSongsPlaylistId;
   return (
     <>
@@ -183,7 +208,7 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
           <div className="flex min-w-0 flex-col gap-3">
             <h1 className="text-4xl font-bold tracking-tight">{page.name}</h1>
             {page.description && <Description text={page.description} />}
-            <PlayButtons tracks={page.topSongs} actions={actions} />
+            <PlayButtons tracks={page.topSongs} actions={actions} route={route} />
           </div>
         </div>
       </div>
@@ -209,7 +234,6 @@ function Artist({ page, actions }: { page: ArtistPage; actions: BrowseActions })
             playing={actions.playing}
             onToggle={actions.onToggle}
             onPlay={(id) => actions.onPlay(page.topSongs, id)}
-            onEnqueue={actions.onEnqueue}
             onOpen={actions.onOpen}
           />
         </section>
@@ -246,6 +270,8 @@ export function Header(props: {
   subtitle: string | null;
   tracks: Track[];
   actions: BrowseActions;
+  /** The page itself, for its menu. Local files have none. */
+  route?: Route | undefined;
 }) {
   return (
     <div className="mb-4 flex items-end gap-6 px-3 pt-2">
@@ -260,16 +286,24 @@ export function Header(props: {
         <h1 className="text-3xl font-bold tracking-tight">{props.title}</h1>
         {props.byline && <p className="text-sm">{props.byline}</p>}
         {props.subtitle && <p className="text-xs text-muted-foreground">{props.subtitle}</p>}
-        <PlayButtons tracks={props.tracks} actions={props.actions} />
+        <PlayButtons tracks={props.tracks} actions={props.actions} route={props.route} />
       </div>
     </div>
   );
 }
 
-function PlayButtons({ tracks, actions }: { tracks: Track[]; actions: BrowseActions }) {
+function PlayButtons({
+  tracks,
+  actions,
+  route,
+}: {
+  tracks: Track[];
+  actions: BrowseActions;
+  route?: Route | undefined;
+}) {
   const empty = tracks.length === 0;
   return (
-    <div className="mt-1 flex gap-2">
+    <div className="mt-1 flex items-center gap-2">
       <Button
         className="rounded-full bg-foreground text-background hover:bg-foreground/90"
         disabled={empty}
@@ -287,6 +321,7 @@ function PlayButtons({ tracks, actions }: { tracks: Track[]; actions: BrowseActi
         <IconArrowsShuffle size={16} stroke={1.75} />
         Shuffle
       </Button>
+      {route && <InteractionButton subject={{ kind: "collection", route }} size="icon" />}
     </div>
   );
 }
@@ -316,28 +351,36 @@ function Shelf({
 function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
   // Artists are round, everything else square: YouTube Music's own cue.
   const round = card.kind === "artist";
+  const route: Route = { kind: card.kind, id: card.id };
+  const subject: Subject = { kind: "collection", route };
   return (
-    <button
-      type="button"
-      onClick={() => onOpen({ kind: card.kind, id: card.id })}
-      className="group flex w-40 shrink-0 flex-col gap-2 text-left outline-none"
-    >
-      <Art
-        thumbnails={card.thumbnails}
-        width={160}
-        className={cn(
-          "size-40 transition-opacity group-hover:opacity-80",
-          round ? "rounded-full" : "rounded-md",
-        )}
-        fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
+    <InteractionArea subject={subject} className="group relative w-40 shrink-0">
+      <button
+        type="button"
+        onClick={() => onOpen(route)}
+        className="flex w-full flex-col gap-2 text-left outline-none"
+      >
+        <Art
+          thumbnails={card.thumbnails}
+          width={160}
+          className={cn(
+            "size-40 transition-opacity group-hover:opacity-80",
+            round ? "rounded-full" : "rounded-md",
+          )}
+          fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
+        />
+        <span className={cn("min-w-0", round && "text-center")}>
+          <span className="line-clamp-2 text-sm group-focus-visible:underline">{card.title}</span>
+          {card.subtitle && (
+            <span className="block truncate text-xs text-muted-foreground">{card.subtitle}</span>
+          )}
+        </span>
+      </button>
+      <InteractionButton
+        subject={subject}
+        className="absolute top-1 right-1 bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white focus-visible:opacity-100 data-popup-open:opacity-100"
       />
-      <span className={cn("min-w-0", round && "text-center")}>
-        <span className="line-clamp-2 text-sm group-focus-visible:underline">{card.title}</span>
-        {card.subtitle && (
-          <span className="block truncate text-xs text-muted-foreground">{card.subtitle}</span>
-        )}
-      </span>
-    </button>
+    </InteractionArea>
   );
 }
 

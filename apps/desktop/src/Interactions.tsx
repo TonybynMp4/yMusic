@@ -96,7 +96,7 @@ export function InteractionsProvider({
   children: ReactNode;
 }) {
   const [songs, setSongs] = useState<(() => Promise<VideoId[]>) | null>(null);
-  const context: Context = { ...value, createPlaylist: (videoIds) => setSongs(() => videoIds) };
+  const context: Context = { ...value, createPlaylist: (ids) => setSongs(() => ids) };
   return (
     <InteractionsContext.Provider value={context}>
       {children}
@@ -288,8 +288,8 @@ function CollectionItems({ route }: { route: Route }) {
     })();
   };
   const queue = (at: "next" | "last") =>
-    run(async (page) => {
-      const { tracks } = await tracksOf(page);
+    run(async (loaded) => {
+      const { tracks } = await tracksOf(loaded);
       x.enqueue(tracks, at);
       x.notify(at === "next" ? "Playing next" : "Added to queue");
     });
@@ -297,8 +297,8 @@ function CollectionItems({ route }: { route: Route }) {
   return (
     <>
       <DropdownMenuItem
-        onClick={run(async (page) => {
-          const { tracks, from } = await tracksOf(page);
+        onClick={run(async (loaded) => {
+          const { tracks, from } = await tracksOf(loaded);
           x.play(tracks, null, from);
         })}
       >
@@ -306,8 +306,8 @@ function CollectionItems({ route }: { route: Route }) {
         Shuffle play
       </DropdownMenuItem>
       <DropdownMenuItem
-        onClick={run(async (page) => {
-          const mix = mixOf(page);
+        onClick={run(async (loaded) => {
+          const mix = mixOf(loaded);
           if (!mix) throw new Error("YouTube Music has no mix for this");
           const tracks = await engine.mix(mix.playlistId, mix.videoId);
           if (tracks.length > 0) x.play(tracks, tracks[0]!.id);
@@ -327,7 +327,7 @@ function CollectionItems({ route }: { route: Route }) {
       {x.signedIn && <Membership route={route} page={page} run={run} />}
       {x.signedIn && route.kind !== "artist" && (
         <SaveToPlaylist
-          videoIds={async () => videoIds((await tracksOf(await settledPage(route))).tracks)}
+          videoIds={async () => videoIdsOf((await tracksOf(await settledPage(route))).tracks)}
         />
       )}
       {page?.kind === "album" && linked(page.page.artists).length > 0 && (
@@ -662,7 +662,7 @@ function mixOf(page: Page): { playlistId: string; videoId: string | null } | nul
   }
 }
 
-function videoIds(tracks: readonly Track[]): VideoId[] {
+function videoIdsOf(tracks: readonly Track[]): VideoId[] {
   return tracks.flatMap((t) => {
     const id = videoIdFromTrackId(t.id);
     return id ? [id] : [];

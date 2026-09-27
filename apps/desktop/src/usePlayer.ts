@@ -279,10 +279,10 @@ export function usePlayer() {
    */
   const cue = useCallback(
     (tracks: Track[], index: number, playlistId: string | null) => {
-      const track = tracks[index];
-      if (!track) return;
+      const first = tracks[index];
+      if (!first) return;
       send({ type: "setQueue", tracks, startIndex: index });
-      cued.current = track.id;
+      cued.current = first.id;
       source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
     },
     [send],

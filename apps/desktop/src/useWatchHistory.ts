@@ -1,6 +1,6 @@
 import { Listened, type PlaybackStatus, type TrackId, videoIdFromTrackId } from "@ymusic/core";
 import type { WatchReport } from "@ymusic/youtube/host";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { engine as youtube } from "./engine.ts";
 import type { PositionStore } from "./usePlayback.ts";
@@ -41,31 +41,34 @@ export function useWatchHistory(
   const play = useRef<Play | null>(null);
   const playing = useRef(false);
 
-  const report = (current: Play, final: boolean) => {
-    const handle = current.handle;
-    if (handle === null) return;
-    const segments = current.listened.take();
-    current.reports += 1;
-    current.nextReportAt = Date.now() + reportDelay(current.reports);
-    const watch: WatchReport = {
-      segments,
-      positionMs: position.get(),
-      playing: playing.current,
-      final,
-    };
-    void handle
-      .then((id) => (id === null ? undefined : youtube.watched(id, watch)))
-      .catch(logFailure);
-  };
+  const report = useCallback(
+    (current: Play, final: boolean) => {
+      const handle = current.handle;
+      if (handle === null) return;
+      const segments = current.listened.take();
+      current.reports += 1;
+      current.nextReportAt = Date.now() + reportDelay(current.reports);
+      const watch: WatchReport = {
+        segments,
+        positionMs: position.get(),
+        playing: playing.current,
+        final,
+      };
+      void handle
+        .then((id) => (id === null ? undefined : youtube.watched(id, watch)))
+        .catch(logFailure);
+    },
+    [position],
+  );
 
   /** Sends the final report, after which the next moment playing is a new play. */
-  const finish = () => {
+  const finish = useCallback(() => {
     const current = play.current;
     if (current === null) return;
     current.listened.pause();
     report(current, true);
     play.current = null;
-  };
+  }, [report]);
 
   // A different track ends the old play. The next one starts once it plays,
   // not when it is queued up or still loading.
@@ -97,8 +100,7 @@ export function useWatchHistory(
       current.listened.pause();
       report(current, false);
     }
-    // `finish` and `report` read only refs and the position store.
-  }, [trackId, status]);
+  }, [trackId, status, report, finish]);
 
   useEffect(
     () =>
@@ -108,7 +110,7 @@ export function useWatchHistory(
         current.listened.observe(position.get());
         if (Date.now() >= current.nextReportAt) report(current, false);
       }),
-    [position],
+    [position, report],
   );
 
   // Closing the app ends whatever is playing. The report may not make it out
@@ -120,5 +122,5 @@ export function useWatchHistory(
       window.removeEventListener("beforeunload", onUnload);
       finish();
     };
-  }, []);
+  }, [finish]);
 }

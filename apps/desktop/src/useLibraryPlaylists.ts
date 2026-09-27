@@ -42,6 +42,7 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     return () => {
       cancelled = true;
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- generation reloads the list after a change
   }, [accountKey, generation]);
   const reload = useCallback(() => setGeneration((g) => g + 1), []);
   return { ...state, reload };

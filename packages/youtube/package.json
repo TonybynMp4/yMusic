@@ -25,12 +25,12 @@
     "@ymusic/core": "workspace:*",
     "bgutils-js": "^4.0.3",
     "comlink": "^4.4.2",
-    "youtubei.js": "^18.0.0",
+    "youtubei.js": "^18.1.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
-    "jsdom": "^30.1.0",
+    "jsdom": "^30.1.1",
     "vitest": "^5.0.1"
   }
 }

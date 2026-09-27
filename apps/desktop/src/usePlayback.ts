@@ -81,11 +81,11 @@ export function usePlayback() {
   );
 
   const load = useCallback(
-    async (lease: StreamLease) => {
+    async (lease: StreamLease, paused = false) => {
       position.set(0);
       setState({ status: "loading", durationMs: null, error: null });
       try {
-        await engineRef.current.load(lease);
+        await engineRef.current.load(lease, paused);
       } catch (error) {
         setState((previous) => ({ ...previous, status: "idle", error: String(error) }));
       }

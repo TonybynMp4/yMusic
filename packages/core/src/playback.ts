@@ -6,7 +6,8 @@ import type { StreamLease, TrackId } from "./domain.ts";
  * to be worth it. Nothing above this interface knows which one it is talking to.
  */
 export interface PlaybackEngine {
-  load(lease: StreamLease): Promise<void>;
+  /** Starts playing once loaded, unless `paused`. */
+  load(lease: StreamLease, paused?: boolean): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   seek(positionMs: number): Promise<void>;

@@ -38,14 +38,14 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
 
-  async load(lease: StreamLease): Promise<void> {
+  async load(lease: StreamLease, paused = false): Promise<void> {
     await this.#ensureSubscribed();
     await invokeVoid("player_load", {
       request: {
         trackId: lease.trackId,
         url: lease.url,
         headers: lease.headers,
-        startPaused: false,
+        startPaused: paused,
       },
     });
   }

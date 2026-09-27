@@ -56,6 +56,8 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     resolve: (videoId, options) => engine.resolve(videoId, options),
     played: (videoId) => engine.played(videoId),
     watched: (handle, report) => engine.watched(handle, report),
+    serverQueue: () => engine.serverQueue(),
+    shareQueue: (videoId, playlistId) => engine.shareQueue(videoId, playlistId),
   };
   expose(api, endpoint);
 }

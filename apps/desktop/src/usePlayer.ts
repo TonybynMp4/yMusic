@@ -67,6 +67,13 @@ export function usePlayer() {
   const [filling, setFilling] = useState(false);
   /** Stops following the current source. Replaced on every new queue. */
   const unfollow = useRef<() => void>(() => {});
+  /**
+   * The YouTube playlist the queue was started from and the songs it gave,
+   * so the queue shared with the account names it while one of those plays.
+   */
+  const source = useRef<{ playlistId: string; ids: Set<TrackId> } | null>(null);
+  /** A track to load without playing it, as a resumed queue waits in the player bar. */
+  const cued = useRef<TrackId | null>(null);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -112,6 +119,8 @@ export function usePlayer() {
     if (loadedId.current === trackId) return;
     loadedId.current = trackId;
     retried.current = null;
+    const paused = cued.current === trackId;
+    cued.current = null;
 
     let cancelled = false;
     void (async () => {
@@ -119,8 +128,8 @@ export function usePlayer() {
       // The user can skip while a lease is in flight; dropping the result is
       // correct, because a newer effect is already resolving the new track.
       if (cancelled) return;
-      await load(lease);
-      await engine.play();
+      await load(lease, paused);
+      if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
       // Resolution happens before mpv is involved, so its failures have no
@@ -209,6 +218,7 @@ export function usePlayer() {
         const videoId = seed ? videoIdFromTrackId(seed.id) : null;
         if (!seed || videoId === null) return;
         send({ type: "setQueue", tracks: [seed], startIndex: 0 });
+        source.current = null;
         let stopped = false;
         unfollow.current = () => {
           stopped = true;
@@ -227,7 +237,12 @@ export function usePlayer() {
       }
 
       send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
-      if (from?.kind !== "playlist") return;
+      if (from?.kind !== "playlist") {
+        source.current = null;
+        return;
+      }
+      const ids = new Set(tracks.map((t) => t.id));
+      source.current = { playlistId: from.id, ids };
       // Whatever the page had when it was clicked is queued already; each
       // later page is added as it arrives, shuffled in if shuffle is on.
       let known = tracks.length;
@@ -236,7 +251,9 @@ export function usePlayer() {
       const follow = (all: readonly Track[], loading: boolean) => {
         if (done) return;
         if (all.length > known) {
-          dispatch({ type: "extend", tracks: all.slice(known) });
+          const added = all.slice(known);
+          for (const t of added) ids.add(t.id);
+          dispatch({ type: "extend", tracks: added });
           known = all.length;
         }
         setFilling(loading);
@@ -255,6 +272,37 @@ export function usePlayer() {
     },
     [send],
   );
+
+  /**
+   * Queues `tracks` at `index` without playing, for a queue resumed from
+   * another device. `playlistId` is the playlist it plays, if any.
+   */
+  const cue = useCallback(
+    (tracks: Track[], index: number, playlistId: string | null) => {
+      const track = tracks[index];
+      if (!track) return;
+      send({ type: "setQueue", tracks, startIndex: index });
+      cued.current = track.id;
+      source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
+    },
+    [send],
+  );
+
+  // Once a YouTube song is playing, make it the account's queue, so YouTube
+  // Music on other devices offers to resume it. Only once playing: a queue
+  // resumed from elsewhere and still waiting here must not replace itself.
+  const shared = useRef<TrackId | null>(null);
+  useEffect(() => {
+    if (!playing || trackId === null || shared.current === trackId) return;
+    const videoId = videoIdFromTrackId(trackId);
+    if (videoId === null) return;
+    shared.current = trackId;
+    const from = source.current;
+    const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
+    void youtube
+      .shareQueue(videoId, playlistId)
+      .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
+  }, [playing, trackId]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.
@@ -347,6 +395,7 @@ export function usePlayer() {
     position,
     volume,
     playTrack,
+    cue,
     play,
     pause,
     toggle,

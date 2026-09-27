@@ -45,4 +45,6 @@ export interface EngineWorkerApi {
   resolve: YouTubeEngine["resolve"];
   played: YouTubeEngine["played"];
   watched: YouTubeEngine["watched"];
+  serverQueue: YouTubeEngine["serverQueue"];
+  shareQueue: YouTubeEngine["shareQueue"];
 }

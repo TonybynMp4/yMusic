@@ -44,6 +44,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Artwork through the `img` scheme with retries and a disk cache
 - [x] Plays reported to the account: history when a song starts, watch time as it plays
 - [x] Play reporting checked against a signed-in account's history
+- [x] Resume: the account's last queue waits in the player bar at launch, and what plays here becomes the account's queue
+- [ ] Resume checked both ways against another device
 
 ### Queue
 

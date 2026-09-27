@@ -21,6 +21,7 @@ import { viewKey, type View } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
+import { useResume } from "./useResume.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
@@ -50,6 +51,7 @@ export function App() {
   const account = useAccount();
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
+  useResume(player, account.account?.name ?? null);
   const notice = useNotice();
 
   const toggleSidebar = () =>

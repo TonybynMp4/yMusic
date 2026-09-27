@@ -37,6 +37,7 @@ import {
 } from "./history.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio } from "./radio.ts";
+import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -201,6 +202,18 @@ export class YouTubeEngine {
     if (!play || this.#cookie === null) return;
     if (report.final) this.#plays.delete(handle);
     await this.#stats(watchtimePing(play, report, Date.now()));
+  }
+
+  /** The account's last queue, to resume from another device. Null when signed out or there is none. */
+  async serverQueue(): Promise<ServerQueue | null> {
+    if (this.#cookie === null) return null;
+    return getServerQueue(await this.#browseClient());
+  }
+
+  /** Makes a song the account's current queue, for "Resume" elsewhere. Nothing when signed out. */
+  async shareQueue(videoId: VideoId, playlistId: string | null): Promise<void> {
+    if (this.#cookie === null) return;
+    await setServerQueue(await this.#browseClient(), videoId, playlistId);
   }
 
   /**

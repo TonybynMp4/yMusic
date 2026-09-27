@@ -16,3 +16,11 @@ Signed in, the engine tells YouTube what plays, the way YouTube Music's web play
 - **The cookie.** youtubei.js signs only InnerTube calls, so a stats request sent through it goes out anonymous. The engine sends them itself, with the session cookie, to `music.youtube.com` rather than the `s.youtube.com` host YouTube hands out, as the web player does.
 
 The listening is tracked in `useWatchHistory`, from mpv's position updates: steady updates extend a stretch, and a jump or a pause starts a new one (`Listened` in `packages/core`).
+
+## Resume
+
+YouTube Music keeps each account's queue on its servers, and that server queue is what "Resume" on another device picks up. It is separate from history: plays reported as above land in history without moving the queue.
+
+- **Reading it.** At launch, or on signing in, and only when nothing is queued yet, `useResume` asks for it with a `/next` of type `WATCH_NEXT_TYPE_GET_QUEUE`, as YouTube Music's web player does. The answer is an ordinary up-next panel with the song that was playing marked `selected`. The queue goes into the player bar paused on that song: mpv loads it with `pause` already set, so nothing plays until you press play.
+- **Writing it.** Once a YouTube song is playing, `usePlayer` makes it the account's queue with a `/next` carrying `enablePersistentPlaylistPanel`. If the song came from a playlist (or from a resumed queue that had one), the call names that playlist, so the queue elsewhere is the playlist from this song on. Otherwise it is the song's radio. A queue waiting paused is not shared until it plays, so opening yMusic never replaces what another device left.
+- **Premium.** The web player only restores the server queue for subscribers (`IS_SUBSCRIBER`). yMusic asks regardless; a free account may get nothing back.

@@ -7,7 +7,7 @@ import type {
   Track,
   VideoId,
 } from "@ymusic/core";
-import type { Innertube } from "youtubei.js";
+import { Constants, type Innertube } from "youtubei.js";
 
 import {
   createFallbackPlayer,
@@ -27,6 +27,14 @@ import {
   type PlaylistMore,
   type PlaylistTarget,
 } from "./browse.ts";
+import {
+  getPlaybackTracking,
+  newCpn,
+  playbackPing,
+  watchtimePing,
+  type Play,
+  type WatchReport,
+} from "./history.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
@@ -40,6 +48,9 @@ const FALLBACK_SESSION_MS = 6 * 60 * 60 * 1000;
 
 /** Playlists that can be left half loaded and still resumed. */
 const MAX_CONTINUATIONS = 16;
+
+/** Plays still being reported on. Two is typical: the one ending and the next. */
+const MAX_PLAYS = 4;
 
 export interface ResolveOptions {
   /**
@@ -73,6 +84,7 @@ export class YouTubeEngine {
   readonly #minter: PoTokenMinter | null;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
   readonly #continuations = new Map<string, PlaylistMore>();
+  readonly #plays = new Map<string, Play>();
   #handles = 0;
 
   /** Without `botguard` there is no fallback, and resolving uses `VISIONOS` only. */
@@ -150,6 +162,55 @@ export class YouTubeEngine {
   async addToPlaylist(playlistId: string, videoIds: VideoId[]): Promise<void> {
     if (videoIds.length === 0) return;
     await (await this.#signedIn()).playlist.addVideos(playlistId, videoIds);
+  }
+
+  /**
+   * Tells YouTube a song started playing, which adds it to the account's
+   * history. Returns a handle for the watch-time reports that follow, or null
+   * when signed out or YouTube gave nothing to report to.
+   */
+  async played(videoId: VideoId): Promise<string | null> {
+    if (this.#cookie === null) return null;
+    const player = (await this.#playerClient()).session.player;
+    if (!player) throw new Error("the player script is not loaded");
+    const tracking = await getPlaybackTracking(
+      await this.#browseClient(),
+      videoId,
+      player.signature_timestamp,
+    );
+    if (tracking === null) return null;
+    const play: Play = {
+      tracking,
+      client: { name: Constants.CLIENTS.YTMUSIC.NAME, version: Constants.CLIENTS.YTMUSIC.VERSION },
+      cpn: newCpn(),
+      startedAt: Date.now(),
+    };
+    await this.#stats(playbackPing(play, Date.now()));
+    const handle = String(++this.#handles);
+    this.#plays.set(handle, play);
+    for (const old of this.#plays.keys()) {
+      if (this.#plays.size <= MAX_PLAYS) break;
+      this.#plays.delete(old);
+    }
+    return handle;
+  }
+
+  /** Reports what was listened to of a play `played` started. The final report ends it. */
+  async watched(handle: string, report: WatchReport): Promise<void> {
+    const play = this.#plays.get(handle);
+    if (!play || this.#cookie === null) return;
+    if (report.final) this.#plays.delete(handle);
+    await this.#stats(watchtimePing(play, report, Date.now()));
+  }
+
+  /**
+   * youtubei.js signs only InnerTube calls, so a stats request through it
+   * would go out anonymous. The session cookie is what files it under the
+   * account.
+   */
+  async #stats(url: string): Promise<void> {
+    const response = await this.#fetch(url, { headers: { Cookie: this.#cookie ?? "" } });
+    if (!response.ok) throw new Error(`YouTube refused a playback report: ${response.status}`);
   }
 
   async #signedIn(): Promise<Innertube> {

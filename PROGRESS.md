@@ -42,6 +42,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Library playlists in the sidebar, Liked Music first
 - [x] Long playlists load progressively, with virtualized lists
 - [x] Artwork through the `img` scheme with retries and a disk cache
+- [x] Plays reported to the account: history when a song starts, watch time as it plays
+- [ ] Play reporting checked against a signed-in account's history
 
 ### Queue
 

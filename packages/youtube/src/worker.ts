@@ -54,6 +54,8 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     addToPlaylist: (playlistId, videoIds) => engine.addToPlaylist(playlistId, videoIds),
     createPlaylist: (playlist, videoIds) => engine.createPlaylist(playlist, videoIds),
     resolve: (videoId, options) => engine.resolve(videoId, options),
+    played: (videoId) => engine.played(videoId),
+    watched: (handle, report) => engine.watched(handle, report),
   };
   expose(api, endpoint);
 }

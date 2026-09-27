@@ -4,7 +4,7 @@ How the parts that are built work, and why they are built that way. Plans for wh
 
 - [Architecture](architecture.md): the Tauri shell, platform integration, libraries and the monorepo layout.
 - [Playback](playback.md): libmpv, stream leases and volume.
-- [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution and PO tokens.
+- [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution, PO tokens and reporting plays.
 - [Sign-in](sign-in.md): the cookie session, browser import and why OAuth is out.
 - [Interactions](interactions.md): the menus on songs, albums, playlists and artists.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.

@@ -43,4 +43,6 @@ export interface EngineWorkerApi {
   addToPlaylist: YouTubeEngine["addToPlaylist"];
   createPlaylist: YouTubeEngine["createPlaylist"];
   resolve: YouTubeEngine["resolve"];
+  played: YouTubeEngine["played"];
+  watched: YouTubeEngine["watched"];
 }

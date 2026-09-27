@@ -3,6 +3,7 @@ import type { VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
+import { getPlaybackTracking } from "./history.ts";
 import { getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -177,5 +178,21 @@ live("browse pages against the real InnerTube", () => {
     const youtube = await createYouTube({ fetch: globalThis.fetch });
     const tracks = await searchSongs(youtube, "boards of canada roygbiv");
     expect(tracks.filter((t) => t.albumId?.startsWith("MPREb_")).length).toBeGreaterThan(0);
+  });
+});
+
+live("playback reporting against the real InnerTube", () => {
+  it("gets the tracking URLs history and watch time go to", { timeout: 60_000 }, async () => {
+    const [youtube, player] = await Promise.all([
+      createYouTube({ fetch: globalThis.fetch }),
+      createPlayer({ fetch: globalThis.fetch }),
+    ]);
+    const tracking = await getPlaybackTracking(
+      youtube,
+      "lYBUbBu4W08" as VideoId,
+      player.session.player!.signature_timestamp,
+    );
+    expect(tracking?.playbackUrl).toMatch(/\/api\/stats\/playback\?/);
+    expect(tracking?.watchtimeUrl).toMatch(/\/api\/stats\/watchtime\?/);
   });
 });

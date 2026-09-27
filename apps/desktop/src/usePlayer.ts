@@ -18,6 +18,7 @@ import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
+import { useWatchHistory } from "./useWatchHistory.ts";
 
 /** A transport failure that has no user-visible consequence beyond not happening. */
 function logPlaybackFailure(error: unknown): void {
@@ -69,6 +70,7 @@ export function usePlayer() {
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
+  useWatchHistory(trackId, state.status, position);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that

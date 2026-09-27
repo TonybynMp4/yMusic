@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-// Prints a release's notes: `node scripts/release-notes.mjs v0.2.0`.
+// Prints a release's notes: `node scripts/release-notes.mjs v0.2.0 [commit]`.
 //
 // Every commit since the previous tag, grouped by its Conventional Commits
 // type, as "**subject** by @author in #pull" (or the short hash when the commit
 // has no pull request). Authors and pull requests come from GitHub's API when
 // GITHUB_TOKEN and GITHUB_REPOSITORY are set; otherwise the git author name.
+//
+// The commit defaults to the tag. Pass it when the tag doesn't exist yet, as
+// for a draft. A stable release counts from the previous stable tag, so its
+// notes cover everything its prereleases shipped too. Dependency bumps are
+// folded into one line, and release commits are left out.
 
 import { execFileSync } from "node:child_process";
 
@@ -26,22 +31,27 @@ const SECTIONS = [
 const git = (...args) =>
   execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 
-const tag = process.argv[2];
+const [tag, head = tag] = process.argv.slice(2);
 if (!tag) {
-  console.error("Usage: node scripts/release-notes.mjs <tag>");
+  console.error("Usage: node scripts/release-notes.mjs <tag> [commit]");
   process.exit(1);
 }
+const prerelease = tag.includes("-");
 const previous = (() => {
   try {
-    return git("describe", "--tags", "--abbrev=0", `${tag}^`);
+    const exclude = prerelease ? [] : ["--exclude", "*-*"];
+    return git("describe", "--tags", "--abbrev=0", "--match", "v*", "--exclude", tag, ...exclude, head);
   } catch {
     return null;
   }
 })();
 
-const commits = git("log", "--no-merges", "--reverse", "--format=%H%x1f%s%x1f%an", previous ? `${previous}..${tag}` : tag)
+const DEPENDENCIES = /^build\(deps(-dev)?\)/;
+
+const commits = git("log", "--no-merges", "--reverse", "--format=%H%x1f%s%x1f%an", previous ? `${previous}..${head}` : head)
   .split("\n")
   .filter(Boolean)
+  .filter((line) => !line.split("\x1f")[1].startsWith("chore: release v"))
   .map((line) => {
     const [sha, subject, name] = line.split("\x1f");
     const match = subject.match(/^(\w+)(\([^)]+\))?!?: /);
@@ -97,8 +107,14 @@ for (const [type, heading] of SECTIONS) {
   const group = commits.filter((c) => c.type === type);
   if (!group.length) continue;
   lines.push("", `### ${heading}`, "");
+  const bumps = group.filter((c) => DEPENDENCIES.test(c.title));
   for (const c of group) {
+    if (bumps.includes(c)) continue;
     lines.push(`- **${c.title}** by ${people(c.authors)} in ${link(c)}`);
+  }
+  if (bumps.length) {
+    const title = bumps.length > 1 ? `${bumps.length} dependency updates` : "1 dependency update";
+    lines.push(`- **${title}** by ${people(bumps.flatMap((c) => c.authors))} in ${bumps.map(link).join(", ")}`);
   }
 }
 if (previous && repository) {

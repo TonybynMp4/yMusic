@@ -51,11 +51,11 @@ function openFrame(): Promise<MessagePort> {
       }
       const channel = new MessageChannel();
       channel.port1.onmessage = ({ data }: MessageEvent<Reply>) => {
-        const call = pending.get(data.id);
-        if (!call) return;
+        const waiting = pending.get(data.id);
+        if (!waiting) return;
         pending.delete(data.id);
-        if (data.error !== undefined) call.reject(new Error(data.error));
-        else call.resolve(data.result);
+        if (data.error !== undefined) waiting.reject(new Error(data.error));
+        else waiting.resolve(data.result);
       };
       iframe.contentWindow!.postMessage(null, event.origin, [channel.port2]);
       resolve(channel.port1);

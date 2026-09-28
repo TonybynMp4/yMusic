@@ -51,6 +51,11 @@ export type QueueAction =
    * The playing track keeps playing wherever it lands.
    */
   | { type: "move"; from: number; to: number }
+  /**
+   * Drops everything after the playing track, as YouTube Music's Clear does.
+   * What has played and what is playing stay. Kept in the order they played,
+   * so turning shuffle off later does not bring a played song back as next.
+   */
   | { type: "clear" }
   | { type: "setRepeat"; repeat: RepeatMode }
   | { type: "setShuffle"; shuffle: boolean; rng?: () => number };
@@ -189,8 +194,13 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       };
     }
 
-    case "clear":
-      return { ...state, items: [], order: [], cursor: null, suggestions: [] };
+    case "clear": {
+      if (state.cursor === null) {
+        return { ...state, items: [], order: [], cursor: null, suggestions: [] };
+      }
+      const items = state.order.slice(0, state.cursor + 1).map((i) => state.items[i]!);
+      return { ...state, items, order: items.map((_, i) => i), suggestions: [] };
+    }
 
     case "setRepeat":
       return { ...state, repeat: action.repeat };

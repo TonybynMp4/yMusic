@@ -136,6 +136,31 @@ describe("queueReducer", () => {
     expect(state.items).toEqual([]);
   });
 
+  it("clears only what comes after the current track", () => {
+    const state = apply(loaded(1), { type: "clear" });
+    expect(titles(state)).toEqual(["a", "b"]);
+    expect(currentTrack(state)?.id).toBe("local:b");
+    expect(peekNext(state)).toBeNull();
+  });
+
+  it("keeps a shuffled queue's played tracks in the order they played", () => {
+    const shuffled = apply(
+      loaded(0),
+      { type: "setShuffle", shuffle: true, rng: () => 0.5 },
+      { type: "next", reason: "user" },
+    );
+    const played = titles(shuffled).slice(0, 2);
+    const state = apply(shuffled, { type: "clear" }, { type: "setShuffle", shuffle: false });
+    expect(titles(state)).toEqual(played);
+    expect(currentTrack(state)?.id).toBe(`local:${played[1]}`);
+  });
+
+  it("empties a queue with nothing playing", () => {
+    const state = apply(loaded(0), { type: "remove", trackId: "local:a" as TrackId });
+    const idle = { ...state, cursor: null };
+    expect(apply(idle, { type: "clear" }).items).toEqual([]);
+  });
+
   it("shuffles without interrupting the current track", () => {
     const rng = () => 0.5;
     const state = apply(loaded(2), { type: "setShuffle", shuffle: true, rng });

@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 
 import { JSDOM } from "jsdom";
-import { describe, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
 import { YouTubeEngine } from "./engine.ts";
+import { live, unlessBotChecked } from "./live.ts";
 import type { BotGuardVm } from "./po-token.ts";
 
 /**
@@ -16,7 +17,6 @@ import type { BotGuardVm } from "./po-token.ts";
  *
  * Network-gated like `live.test.ts`; run with `YMUSIC_NETWORK_TESTS=1`.
  */
-const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
 
 function frameVm(): BotGuardVm {
   const dom = new JSDOM("<!doctype html>", { runScripts: "outside-only" });
@@ -45,9 +45,12 @@ function frameVm(): BotGuardVm {
 }
 
 live("the PO-token fallback", () => {
-  it("resolves a stream that answers mpv's range request", { timeout: 90_000 }, async () => {
+  it("resolves a stream that answers mpv's range request", { timeout: 90_000 }, async (context) => {
     const engine = new YouTubeEngine(globalThis.fetch, frameVm());
-    const lease = await engine.resolve("SM4tQcUt_mQ" as VideoId, { fallback: true });
+    const lease = await unlessBotChecked(
+      context,
+      engine.resolve("SM4tQcUt_mQ" as VideoId, { fallback: true }),
+    );
 
     const url = new URL(lease.url);
     expect(url.searchParams.get("c")).toBe("TVHTML5_SIMPLY");

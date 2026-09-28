@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
@@ -6,17 +6,11 @@ import { createPlayer, createYouTube } from "./client.ts";
 import { getPlaybackTracking } from "./history.ts";
 import { getRadio } from "./radio.ts";
 import { searchSongs } from "./search.ts";
+import { live, unlessBotChecked } from "./live.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
-/**
- * The half the offline tests cannot cover: that InnerTube still answers, and
- * that what it sends still fits the shapes `parse.ts` describes. Opt-in,
- * because a test suite that fails when the network is down or when YouTube is
- * rate limiting is a test suite people learn to ignore.
- *
- * Run with `YMUSIC_NETWORK_TESTS=1 pnpm --filter @ymusic/youtube test`.
- */
-const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
+// The half the offline tests cannot cover: that InnerTube still answers, and
+// that what it sends still fits the shapes `parse.ts` describes.
 
 live("search against the real InnerTube", () => {
   it("finds songs and fills in the fields the UI renders", { timeout: 30_000 }, async () => {
@@ -90,9 +84,9 @@ live("stream resolution against the real player endpoint", () => {
   // different today.
   const VIDEO_ID = "SM4tQcUt_mQ" as VideoId;
 
-  it("resolves a video id to a lease that names real audio", async () => {
+  it("resolves a video id to a lease that names real audio", async (context) => {
     const youtube = await createPlayer({ fetch: globalThis.fetch });
-    const lease = await resolveStream(youtube, VIDEO_ID);
+    const lease = await unlessBotChecked(context, resolveStream(youtube, VIDEO_ID));
 
     expect(lease.trackId).toBe(`yt:${VIDEO_ID}`);
     expect(lease.url).toMatch(/^https:\/\/[^/]*googlevideo\.com\//);
@@ -114,9 +108,9 @@ live("stream resolution against the real player endpoint", () => {
    * at zero seconds with no error. This asserts the two requests mpv really
    * makes, against the URL we really hand it.
    */
-  it("hands back a URL that answers the requests mpv makes", async () => {
+  it("hands back a URL that answers the requests mpv makes", async (context) => {
     const youtube = await createPlayer({ fetch: globalThis.fetch });
-    const lease = await resolveStream(youtube, VIDEO_ID);
+    const lease = await unlessBotChecked(context, resolveStream(youtube, VIDEO_ID));
 
     const opening = await globalThis.fetch(lease.url, { headers: { Range: "bytes=0-" } });
     opening.body?.cancel();
@@ -182,7 +176,7 @@ live("browse pages against the real InnerTube", () => {
 });
 
 live("playback reporting against the real InnerTube", () => {
-  it("gets the tracking URLs history and watch time go to", { timeout: 60_000 }, async () => {
+  it("gets the tracking URLs history and watch time go to", { timeout: 60_000 }, async (context) => {
     const [youtube, player] = await Promise.all([
       createYouTube({ fetch: globalThis.fetch }),
       createPlayer({ fetch: globalThis.fetch }),
@@ -192,6 +186,9 @@ live("playback reporting against the real InnerTube", () => {
       "lYBUbBu4W08" as VideoId,
       player.session.player!.signature_timestamp,
     );
+    // No tracking comes back from a bot check either. Resolving the same video
+    // tells that apart from YouTube having moved the URLs.
+    if (!tracking) await unlessBotChecked(context, resolveStream(player, "lYBUbBu4W08" as VideoId));
     expect(tracking?.playbackUrl).toMatch(/\/api\/stats\/playback\?/);
     expect(tracking?.watchtimeUrl).toMatch(/\/api\/stats\/watchtime\?/);
   });

@@ -13,7 +13,6 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use tauri::http::{header, Request, Response, StatusCode};
-use tauri_plugin_http::reqwest;
 
 pub const SCHEME: &str = "img";
 

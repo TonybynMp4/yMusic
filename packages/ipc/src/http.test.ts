@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { youtubeHeaders } from "./http.ts";
+import { decodeFrame, encodeFrame, youtubeHeaders } from "./http.ts";
 
 describe("youtubeHeaders", () => {
   it("sends no origin when the caller asks for none with an empty one", () => {
@@ -28,9 +28,8 @@ describe("youtubeHeaders", () => {
     expect(headers.get("Referer")).toBe("https://www.youtube.com/");
   });
 
-  // youtubei.js identifies its client this way, and passing `init.headers` to
-  // the plugin replaces a Request's headers rather than adding to them. Losing
-  // these would turn YouTube Music search back into plain YouTube search.
+  // youtubei.js identifies its client this way. Losing these would turn
+  // YouTube Music search back into plain YouTube search.
   it("keeps the client headers a Request carries", () => {
     const request = new Request("https://www.youtube.com/youtubei/v1/search", {
       method: "POST",
@@ -55,5 +54,28 @@ describe("youtubeHeaders", () => {
     });
 
     expect(headers.get("X-Goog-Visitor-Id")).toBe("from-init");
+  });
+});
+
+describe("frames", () => {
+  it("carry a head and a binary body across unchanged", () => {
+    const body = new Uint8Array([0, 255, 10, 13]);
+    const frame = encodeFrame({ url: "https://www.youtube.com/", note: "é" }, body);
+
+    const decoded = decodeFrame<{ url: string; note: string }>(frame);
+
+    expect(decoded.head).toEqual({ url: "https://www.youtube.com/", note: "é" });
+    expect([...decoded.body]).toEqual([0, 255, 10, 13]);
+  });
+
+  it("read from a view into a larger buffer", () => {
+    const frame = encodeFrame({ status: 200 }, new Uint8Array([7]));
+    const padded = new Uint8Array(frame.length + 3);
+    padded.set(frame, 3);
+
+    const decoded = decodeFrame<{ status: number }>(padded.subarray(3));
+
+    expect(decoded.head.status).toBe(200);
+    expect([...decoded.body]).toEqual([7]);
   });
 });

@@ -5,6 +5,7 @@
 //! functions are public enough for `ymusic_commands!` to name them.
 
 use crate::account::{import, sign_in, Account};
+use crate::http::Http;
 use crate::platform::InstallFlavor;
 use crate::playback::{LoadRequest, PlaybackEvent, Player};
 use tauri::{ipc::Channel, Runtime, State};
@@ -31,6 +32,18 @@ pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary
         install_flavor: flavor,
         supports_in_app_update: flavor.supports_in_app_update(),
     }
+}
+
+/// Sends one of the engine's requests, framed as `http::Http::fetch` describes.
+#[tauri::command]
+pub async fn http_fetch(
+    http: State<'_, Http>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<tauri::ipc::Response, String> {
+    let tauri::ipc::InvokeBody::Raw(frame) = request.body() else {
+        return Err("http_fetch takes raw bytes".into());
+    };
+    Ok(tauri::ipc::Response::new(http.fetch(frame).await?))
 }
 
 #[tauri::command]

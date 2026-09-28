@@ -279,9 +279,6 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.7.3
         version: 2.7.3
-      '@tauri-apps/plugin-http':
-        specifier: ^2.6.1
-        version: 2.6.1
       '@ymusic/core':
         specifier: workspace:*
         version: link:../core

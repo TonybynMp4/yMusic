@@ -153,6 +153,45 @@ fn every_command_is_reachable_over_ipc() {
     }
 }
 
+/// `http_fetch` takes raw bytes rather than JSON, so this pins that the frame
+/// reaches the command intact. The URL is off YouTube so the answer is the
+/// scope refusal, with no network involved.
+#[test]
+fn http_fetch_reads_a_raw_frame_over_ipc() {
+    let app = mock_builder()
+        .invoke_handler(ymusic_commands!())
+        .build(tauri::generate_context!())
+        .expect("mock app");
+    app.manage(ymusic_lib::http::Http::new());
+    let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("mock webview");
+
+    let head = serde_json::to_vec(&serde_json::json!({
+        "method": "GET",
+        "url": "https://example.com/",
+        "headers": [],
+    }))
+    .expect("head json");
+    let mut frame = (head.len() as u32).to_le_bytes().to_vec();
+    frame.extend_from_slice(&head);
+
+    let mut raw = request("http_fetch", serde_json::Value::Null);
+    raw.body = InvokeBody::Raw(frame);
+    let error = get_ipc_response(&webview, raw).expect_err("an off-YouTube url is refused");
+    assert!(
+        error.to_string().contains("not a YouTube url"),
+        "unexpected error: {error}"
+    );
+
+    let error = get_ipc_response(&webview, request("http_fetch", serde_json::json!({})))
+        .expect_err("a JSON body is refused");
+    assert!(
+        error.to_string().contains("raw bytes"),
+        "unexpected error: {error}"
+    );
+}
+
 /// The library half of the surface, driven the same way. Kept separate from the
 /// player test because it needs no audio device and no waiting.
 #[test]

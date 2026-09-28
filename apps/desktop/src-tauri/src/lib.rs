@@ -1,6 +1,7 @@
 pub mod account;
 pub mod botguard;
 pub mod commands;
+pub mod http;
 pub mod images;
 pub mod library;
 pub mod platform;
@@ -21,6 +22,7 @@ macro_rules! ymusic_commands {
     () => {
         tauri::generate_handler![
             $crate::commands::platform_summary,
+            $crate::commands::http_fetch,
             $crate::commands::player_subscribe,
             $crate::commands::player_load,
             $crate::commands::player_play,
@@ -73,10 +75,11 @@ pub fn run() {
                 // request: noise that reads like errors and is not.
                 .level_for("reqwest", log::LevelFilter::Warn)
                 .level_for("hyper_util", log::LevelFilter::Warn)
+                // A line for every cookie YouTube sets on the engine's client.
+                .level_for("cookie_store", log::LevelFilter::Warn)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
         .register_asynchronous_uri_scheme_protocol(images::SCHEME, |context, request, responder| {
@@ -125,6 +128,7 @@ pub fn run() {
                 }
             }
 
+            app.manage(http::Http::new());
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));

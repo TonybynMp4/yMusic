@@ -119,8 +119,8 @@ export class PoTokenMinter {
  * expect. Measured: no Origin and `tauri://localhost` pass;
  * `https://www.youtube.com`, `https://music.youtube.com` and the dev server's
  * `http://localhost:1420` are refused. The app's fetch would send YouTube's
- * origin, and its HTTP plugin the webview's; an empty value is how both are
- * told to send none. Plain `fetch` sends none to begin with.
+ * origin; an empty value is how it is told to send none. Plain `fetch` sends
+ * none to begin with.
  */
 function withoutOrigin(fetch: FetchLike): FetchLike {
   return (input, init) => {

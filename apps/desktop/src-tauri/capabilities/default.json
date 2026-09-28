@@ -12,30 +12,6 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "opener:default",
-    "dialog:allow-open",
-    {
-      "identifier": "http:default",
-      "allow": [
-        {
-          "url": "https://music.youtube.com/*"
-        },
-        {
-          "url": "https://www.youtube.com/*"
-        },
-        {
-          "url": "https://youtubei.googleapis.com/*"
-        },
-        {
-          "url": "https://*.googlevideo.com/*"
-        },
-        {
-          "url": "https://jnn-pa.googleapis.com/*"
-        },
-        {
-          "url": "https://www.google.com/js/*"
-        }
-      ],
-      "deny": []
-    }
+    "dialog:allow-open"
   ]
 }

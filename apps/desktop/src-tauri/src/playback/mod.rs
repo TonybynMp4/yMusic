@@ -239,15 +239,30 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                 let Some(event) = mpv.wait_event(0.5) else {
                     continue;
                 };
+                let track = || current_track.lock().expect("track mutex").clone();
+
+                // libmpv2 hands an `END_FILE` that carries an error back as
+                // this `Err`, never as `EndFile(Error)`. Nothing here makes
+                // async requests, so the error is a file that failed to load,
+                // and the queue has to hear about it to retry on the fallback
+                // client rather than sit there loading.
                 let event = match event {
                     Ok(event) => event,
                     Err(error) => {
-                        log::warn!("mpv event error: {error}");
+                        log::warn!("mpv could not play the stream: {error}");
+                        emit(
+                            &sink,
+                            PlaybackEvent::Error {
+                                track_id: track(),
+                                message: format!(
+                                    "playback failed: the stream may have expired or been \
+                                     rejected ({error})"
+                                ),
+                            },
+                        );
                         continue;
                     }
                 };
-
-                let track = || current_track.lock().expect("track mutex").clone();
 
                 match event {
                     Event::StartFile => {
@@ -281,9 +296,9 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                             );
                             emit(&sink, PlaybackEvent::Ended { track_id: track() });
                         }
+                        // Unreachable through libmpv2 today (see above), and
+                        // kept in case a release starts sending it.
                         libmpv2::mpv_end_file_reason::Error => {
-                            // mpv does not hand the failure text to this event,
-                            // so the log is where the real cause lives.
                             emit(
                                 &sink,
                                 PlaybackEvent::Error {

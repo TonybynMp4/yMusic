@@ -134,6 +134,28 @@ fn plays_a_local_file_through_to_the_end() {
     );
 }
 
+// libmpv2 reports a file that fails to load as an event error rather than an
+// `EndFile`, and a refused YouTube stream only reaches the queue's fallback
+// retry through this event.
+#[test]
+fn a_file_that_fails_to_load_reports_an_error_for_its_track() {
+    let (player, recorder) = player();
+    player
+        .load(request(fixture_url("does-not-exist.wav")))
+        .expect("load");
+
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| !r.errors().is_empty()),
+        "a missing file never reported an error; events: {:?}",
+        recorder.events()
+    );
+    let track = recorder.events().into_iter().find_map(|event| match event {
+        PlaybackEvent::Error { track_id, .. } => Some(track_id),
+        _ => None,
+    });
+    assert_eq!(track, Some(Some("test-track".into())));
+}
+
 #[test]
 fn pause_and_seek_are_reflected_in_the_event_stream() {
     let (player, recorder) = player();

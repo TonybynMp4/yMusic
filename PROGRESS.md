@@ -15,7 +15,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Custom titlebar
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
 - [x] Single instance: a second launch focuses the running window
-- [ ] Explicit libmpv version floor with a clear startup error
+- [x] Explicit libmpv version floor with a clear startup error
 
 ### Playback
 
@@ -103,7 +103,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 ### Features
 
-- [ ] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
+- [x] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
 - [ ] Metadata cache in SQLite for playlist, album and artist pages
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library

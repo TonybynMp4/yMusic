@@ -28,7 +28,9 @@ function Slider({
       thumbAlignment="edge"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
+      {/* The track is 4px and the thumb 12px, too thin to hit reliably, so the
+          control reaches 8px either side of the line without taking up layout. */}
+      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none before:absolute data-disabled:opacity-50 data-horizontal:before:inset-x-0 data-horizontal:before:-inset-y-2 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-vertical:before:inset-y-0 data-vertical:before:-inset-x-2">
         <SliderPrimitive.Track
           data-slot="slider-track"
           className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"

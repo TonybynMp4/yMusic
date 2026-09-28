@@ -1,6 +1,8 @@
 # Playback
 
-**libmpv in Rust** (`libmpv2`), driven by Tauri commands, with state and position pushed to the frontend over a Tauri `Channel`. Linux links the system `libmpv` and declares it as a package dependency; Windows ships `libmpv-2.dll` beside the binary. The mpv version floor should be explicit, so an old distro libmpv fails at startup with a message rather than a missing symbol.
+**libmpv in Rust** (`libmpv2`), driven by Tauri commands, with state and position pushed to the frontend over a Tauri `Channel`. Linux links the system `libmpv` and declares it as a package dependency; Windows ships `libmpv-2.dll` beside the binary.
+
+The floor is mpv 0.35, the first release with `libmpv.so.2`. The binary imports ten libmpv functions, all present since client API 2.0, so the library name is the whole requirement. The `.deb` depends on `libmpv2 (>= 0.35)`, and a hand-run binary on an older system stops in the dynamic loader before any of our code runs. If mpv itself fails to start, the app hides its window, shows an error dialog naming the package, and quits when it is closed. The startup log records the loaded version (`playing through mpv v0.41.0`).
 
 The engine resolves an audio-only stream URL and mpv streams it over HTTP range requests, with no local proxy. The raw audio stream has no ads: those live in the web player.
 

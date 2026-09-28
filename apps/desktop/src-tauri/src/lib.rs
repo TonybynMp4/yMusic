@@ -11,6 +11,7 @@ use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
 use tauri::Manager;
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 /// The app's command surface, in one place so tests mount exactly what ships.
 /// A command that is implemented but never registered here is invisible to the
@@ -94,15 +95,35 @@ pub fn run() {
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
 
-            // A missing or too-old libmpv is the one startup failure worth
-            // naming precisely: the app is a music player without it.
-            let player = Player::new()?;
-            // Media keys are a nicety; `attach` logs and carries on without
-            // them rather than failing startup.
-            let media = MediaSession::attach(&window);
-            player.observe(media.clone());
-            app.manage(player);
-            app.manage(media);
+            // The loader already refuses to start without `libmpv.so.2` (mpv
+            // 0.35), so what can still fail here is mpv itself. The app is a
+            // music player without it, so say so and quit rather than open a
+            // window where nothing plays.
+            match Player::new() {
+                Ok(player) => {
+                    // Media keys are a nicety; `attach` logs and carries on
+                    // without them rather than failing startup.
+                    let media = MediaSession::attach(&window);
+                    player.observe(media.clone());
+                    app.manage(player);
+                    app.manage(media);
+                }
+                Err(error) => {
+                    log::error!("{error}");
+                    let _ = window.hide();
+                    let handle = app.handle().clone();
+                    app.dialog()
+                        .message(format!(
+                            "yMusic plays audio through libmpv, and it would not start.\n\n\
+                             Check that mpv 0.35 or newer is installed (the libmpv2 \
+                             package on Debian and Ubuntu), then open yMusic again.\n\n\
+                             {error}"
+                        ))
+                        .title("yMusic cannot play audio")
+                        .kind(MessageDialogKind::Error)
+                        .show(move |_| handle.exit(1));
+                }
+            }
 
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));

@@ -122,7 +122,12 @@ impl Player {
             }
             Ok(())
         })
-        .map_err(|error| format!("could not start libmpv (is libmpv2 installed?): {error}"))?;
+        .map_err(|error| format!("could not start libmpv: {error}"))?;
+
+        match mpv.get_property::<String>("mpv-version") {
+            Ok(version) => log::info!("playing through {version}"),
+            Err(error) => log::warn!("could not read the mpv version: {error}"),
+        }
 
         let mpv = Arc::new(mpv);
         let sink = Sink::default();

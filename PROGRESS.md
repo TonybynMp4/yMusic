@@ -15,7 +15,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Custom titlebar
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
 - [x] Single instance: a second launch focuses the running window
-- [ ] Explicit libmpv version floor with a clear startup error
+- [x] Explicit libmpv version floor with a clear startup error
 
 ### Playback
 

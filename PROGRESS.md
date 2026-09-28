@@ -1,6 +1,6 @@
 # Progress
 
-Where yMusic stands. The design and its reasons are in [PLAN.md](PLAN.md). Tick items off here in the same commit that finishes them.
+Where yMusic stands. How the built parts work is in [docs/](docs/README.md), and what is planned is in [PLAN.md](PLAN.md). Tick items off here in the same commit that finishes them.
 
 Everything ticked has been run on Linux. Nothing has been run on Windows yet.
 
@@ -14,7 +14,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] shadcn on Base UI, YouTube Music's dark palette, Tabler icons
 - [x] Custom titlebar
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
-- [ ] Single instance
+- [x] Single instance: a second launch focuses the running window
 - [ ] Explicit libmpv version floor with a clear startup error
 
 ### Playback
@@ -23,7 +23,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Perceptual volume (mpv's cubic taper, applied once)
 - [x] Gapless audio in mpv
 - [x] Stale stream leases re-resolved before playing
-- [ ] Resolve the next YouTube track ahead of time (`peekNext` exists, nothing calls it), so there is no gap while its stream resolves
+- [x] Resolve the next YouTube track while the current one plays, so there is no gap while its stream resolves
 - [x] Media keys and the desktop media widget over MPRIS
 - [ ] SMTC on Windows (shares the `souvlaki` code path, never run)
 
@@ -42,6 +42,10 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Library playlists in the sidebar, Liked Music first
 - [x] Long playlists load progressively, with virtualized lists
 - [x] Artwork through the `img` scheme with retries and a disk cache
+- [x] Plays reported to the account: history when a song starts, watch time as it plays
+- [x] Play reporting checked against a signed-in account's history
+- [x] Resume: the account's last queue waits in the player bar at launch, and what plays here becomes the account's queue
+- [ ] Resume checked both ways against another device
 
 ### Queue
 
@@ -51,8 +55,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Shuffle mixes rows that arrive later into the tracks still to come
 - [x] A search result starts that song's radio
 - [x] Autoplay: YouTube Music's suggestions after the queue, with a switch
-- [ ] Reorder the queue by dragging
-- [ ] "Play next" from a track's menu (the reducer has `enqueueNext`; only "add to queue" is in the UI)
+- [x] Reorder the queue by dragging
+- [x] "Play next" and "Add to queue" in a track's menu
 
 ### Local library
 
@@ -81,6 +85,22 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] CI: install the `.deb` in `debian:13`, check `dpkg -L` and start the app under Xvfb (written, not run yet)
 - [ ] Windows installer (MSI/NSIS with the WebView2 bootstrapper) and updater
 
+### Interactions
+
+- [x] One menu per song, album, playlist and artist, behind a right click and behind the dots button
+- [x] Songs: start mix, play next, add to queue, save to playlist, go to album, go to artist
+- [x] "New playlist" in the save-to-playlist menu, with a title, description and privacy
+- [x] Albums and playlists: shuffle play, start mix, play next, add to queue, save to library, save to playlist, go to artist
+- [x] Artists: shuffle play, start mix, play next, add to queue, subscribe and unsubscribe
+- [x] Player bar: a click opens the full player, a right click the song's menu
+- [ ] Pin and unpin albums, playlists and artists to quick access on the home page
+- [ ] Like and dislike songs
+- [ ] Setting to skip disliked songs
+- [ ] Dismiss the queue in one click
+- [ ] Song credits dialog, from a song's menu and from an album's when YouTube has credits for it
+- [x] Menus on the queue's rows, with remove from queue
+- [x] Local folders: open in files. Local songs: show in files, with the file selected
+
 ### Features
 
 - [ ] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
@@ -88,13 +108,13 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library
 - [ ] Local playlists
-- [ ] Like and unlike songs, add to a playlist
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots
 - [ ] Plugin backends on Deno over tRPC
 - [ ] Flatpak
 - [ ] Sync service
+- [ ] Remote control between devices, like Spotify Connect (see PLAN.md)
 - [ ] Mobile
 
 ## Known issues

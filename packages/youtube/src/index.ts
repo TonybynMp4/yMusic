@@ -7,3 +7,4 @@ export * from "./search.ts";
 export * from "./stream.ts";
 export * from "./thumbnails.ts";
 export * from "./radio.ts";
+export * from "./resume.ts";

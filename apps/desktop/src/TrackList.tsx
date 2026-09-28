@@ -1,17 +1,12 @@
-import {
-  IconDots,
-  IconPlayerPauseFilled,
-  IconPlayerPlayFilled,
-  IconPlaylistAdd,
-} from "@tabler/icons-react";
+import { IconDots, IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react";
 import type { Track, TrackId } from "@ymusic/core";
 import { Fragment, type ReactNode } from "react";
 
-import { IconButton } from "@/components/IconButton";
 import { Art } from "@/components/Art";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format.ts";
+import { InteractionArea, InteractionButton } from "./Interactions.tsx";
 import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
 
@@ -24,7 +19,6 @@ interface Props {
   onPlay: (id: TrackId) => void;
   /** Pauses or resumes the current track, from its row. */
   onToggle: () => void;
-  onEnqueue: (track: Track) => void;
   /** Opens an artist or album page. Without it, bylines are plain text. */
   onOpen?: ((route: Route) => void) | undefined;
   /** Leave the album out of the byline, as on the album's own page. */
@@ -70,7 +64,6 @@ function Row({
   playing,
   onPlay,
   onToggle,
-  onEnqueue,
   onOpen,
   hideAlbum,
 }: Props & { track: Track }) {
@@ -79,8 +72,10 @@ function Row({
   return (
     // The whole row plays on click, for the mouse; the title is the real
     // button, for the keyboard. Byline links sit inside the row but not
-    // inside that button, which cannot nest them.
-    <div
+    // inside that button, which cannot nest them. A right click opens the
+    // same menu as the dots button.
+    <InteractionArea
+      subject={{ kind: "song", track }}
       onClick={() => onPlay(track.id)}
       style={{ height: ROW_HEIGHT }}
       className={cn(
@@ -102,20 +97,14 @@ function Row({
         </button>
         <Byline track={track} onOpen={onOpen} hideAlbum={hideAlbum} />
       </span>
-      <IconButton
-        label="Add to queue"
-        onClick={(event) => {
-          event.stopPropagation();
-          onEnqueue(track);
-        }}
-        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        <IconPlaylistAdd size={17} stroke={1.75} />
-      </IconButton>
+      <InteractionButton
+        subject={{ kind: "song", track }}
+        className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
+      />
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {formatDuration(track.durationMs)}
       </span>
-    </div>
+    </InteractionArea>
   );
 }
 

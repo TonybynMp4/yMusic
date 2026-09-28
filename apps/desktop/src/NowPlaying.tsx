@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -18,6 +18,7 @@ import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { InteractionArea } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
 import { formatDuration } from "./format.ts";
 import { usePosition, type PlaybackState, type PositionStore } from "./usePlayback.ts";
@@ -41,6 +42,11 @@ interface Props {
   onToggleExpanded: () => void;
 }
 
+/** Whether a click landed on one of the bar's controls rather than the bar. */
+function onControl(target: EventTarget): boolean {
+  return target instanceof Element && target.closest("button, input, a, [data-slot=slider]") !== null;
+}
+
 const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
 const REPEAT_LABEL: Record<RepeatMode, string> = {
   off: "Repeat off",
@@ -61,6 +67,7 @@ export function NowPlaying(props: Props) {
    * handle back under the cursor.
    */
   const [scrubbing, setScrubbing] = useState<number | null>(null);
+  const pressedControl = useRef(false);
 
   const duration = playback.durationMs ?? track?.durationMs ?? null;
   const playing = usePosition(props.position);
@@ -69,7 +76,21 @@ export function NowPlaying(props: Props) {
   const decibels = decibelsForVolume(volume / 100);
 
   return (
-    <footer className="border-t bg-card px-4 py-3">
+    // As in YouTube Music: a click on the bar, anywhere but its controls,
+    // opens the player, and a right click the song's menu.
+    <InteractionArea
+      subject={track ? { kind: "song", track } : null}
+      render={<footer />}
+      // Checked on the press too: a seek dragged off the slider ends in a
+      // click on the bar itself.
+      onPointerDown={(event) => {
+        pressedControl.current = onControl(event.target);
+      }}
+      onClick={(event) => {
+        if (track && !pressedControl.current && !onControl(event.target)) props.onToggleExpanded();
+      }}
+      className={cn("border-t bg-card px-4 py-3", track && "cursor-pointer")}
+    >
       {playback.error && (
         <p className="mb-2 truncate text-xs text-destructive" title={playback.error}>
           {playback.error}
@@ -197,7 +218,7 @@ export function NowPlaying(props: Props) {
           </Tooltip>
         </div>
       </div>
-    </footer>
+    </InteractionArea>
   );
 }
 

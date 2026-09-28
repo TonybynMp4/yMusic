@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { albumFrom, artistFrom, libraryFrom, playlistFrom, toCard } from "./browse.ts";
+import { albumFrom, artistFrom, libraryFrom, playlistFrom, targetsFrom, toCard } from "./browse.ts";
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
@@ -47,6 +47,21 @@ describe("albumFrom", () => {
       expect(track.artists).toEqual(album.artists);
       expect(track.thumbnails).toEqual(album.thumbnails);
     }
+  });
+
+  it("reads the album's playlist and whether it is saved from the header buttons", () => {
+    const album = albumFrom("MPREb_x", {
+      header: {
+        ...raw.header,
+        buttons: [
+          { type: "ToggleButton", is_toggled: true },
+          { type: "MusicPlayButton", endpoint: { payload: { playlistId: "OLAK5uy_x" } } },
+        ],
+      },
+    });
+    expect(album.audioPlaylistId).toBe("OLAK5uy_x");
+    expect(album.saved).toBe(true);
+    expect(albumFrom("MPREb_x", raw).saved).toBeNull();
   });
 
   it("keeps an unlinked byline as a name-only artist", () => {
@@ -102,6 +117,21 @@ describe("artistFrom", () => {
     expect(artist.shelves[1]!.cards[0]!.id).toBe("RDCLAK5uy_x");
   });
 
+  it("reads the mix and the subscription from the header", () => {
+    const artist = artistFrom(BOC, {
+      header: {
+        title: text("Boards of Canada"),
+        subscription_button: { subscribed: true },
+        start_radio_button: { endpoint: { payload: { playlistId: "RDEMx", videoId: "aaa" } } },
+      },
+    });
+    expect(artist.mix).toEqual({ playlistId: "RDEMx", videoId: "aaa" });
+    expect(artist.subscribed).toBe(true);
+    const bare = artistFrom(BOC, { header: { title: text("Boards of Canada") } });
+    expect(bare.mix).toBeNull();
+    expect(bare.subscribed).toBeNull();
+  });
+
   it("crops a square avatar out of the banner", () => {
     const banner = "https://yt3.googleusercontent.com/abc=w1440-h600-p-l90-rj";
     const artist = artistFrom(BOC, {
@@ -147,6 +177,12 @@ describe("playlistFrom", () => {
     expect(playlist.tracks).toHaveLength(1);
   });
 
+  it("is saved or not only when the header has a library toggle", () => {
+    const toggle = { buttons: [{ type: "ToggleButton", is_toggled: false }] };
+    expect(playlistFrom("PLx", toggle, []).saved).toBe(false);
+    expect(playlistFrom("PLx", {}, []).saved).toBeNull();
+  });
+
   it("reads 'N/A', youtubei.js's empty text, as missing", () => {
     expect(playlistFrom("PLx", { subtitle: text("N/A") }, []).subtitle).toBeNull();
   });
@@ -166,5 +202,17 @@ describe("toTrack album fallback", () => {
       ],
     });
     expect(track).toMatchObject({ album: "Inferno", albumId: "MPREb_inf" });
+  });
+});
+
+describe("targetsFrom", () => {
+  it("keeps the playlists with an id and a title", () => {
+    expect(
+      targetsFrom([
+        { playlist_id: "PLa", title: text("Road trip") },
+        { playlist_id: "PLb", title: text("N/A") },
+        { title: text("no id") },
+      ]),
+    ).toEqual([{ id: "PLa", title: "Road trip" }]);
   });
 });

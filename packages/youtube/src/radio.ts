@@ -1,4 +1,4 @@
-import type { Innertube } from "youtubei.js";
+import { YTNodes, type Innertube } from "youtubei.js";
 import type { Track, VideoId } from "@ymusic/core";
 
 import { toTrack, type RawSong } from "./parse.ts";
@@ -32,10 +32,32 @@ export async function getRadio(youtube: Innertube, videoId: VideoId): Promise<Tr
   return radioFrom(panel, videoId);
 }
 
-/** Exported for tests, like `songsFrom`. */
-export function radioFrom(panel: UpNextResponse, seed: VideoId): Track[] {
+/**
+ * A mix of a whole list: "Start mix" on an album, playlist or artist. It is
+ * the up-next panel of a radio playlist (`RDAMPL…` for an album or playlist,
+ * the artist's own `RDEM…`), and unlike a song radio it keeps its first song.
+ */
+export async function getMix(
+  youtube: Innertube,
+  playlistId: string,
+  videoId: string | null,
+): Promise<Track[]> {
+  const response = await youtube.actions.execute("/next", {
+    playlistId,
+    ...(videoId ? { videoId } : {}),
+    // What YouTube Music's own "Start mix" buttons send.
+    params: "wAEB",
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const panel = response.contents_memo?.getType(YTNodes.PlaylistPanel)[0];
+  return radioFrom((panel ?? {}) as unknown as UpNextResponse, null);
+}
+
+/** Exported for tests, like `songsFrom`. `seed`, the song the radio grew from, is left out. */
+export function radioFrom(panel: UpNextResponse, seed: VideoId | null): Track[] {
   const tracks: Track[] = [];
-  const seen = new Set<string>([seed]);
+  const seen = new Set<string>(seed ? [seed] : []);
   for (const item of panel.contents ?? []) {
     const row = item as RawPanelVideo | null;
     const video = row?.primary ?? row;

@@ -36,5 +36,15 @@ export interface EngineWorkerApi {
   playlist: YouTubeEngine["playlist"];
   playlistMore: YouTubeEngine["playlistMore"];
   libraryPlaylists: YouTubeEngine["libraryPlaylists"];
+  mix: YouTubeEngine["mix"];
+  setSaved: YouTubeEngine["setSaved"];
+  setSubscribed: YouTubeEngine["setSubscribed"];
+  playlistTargets: YouTubeEngine["playlistTargets"];
+  addToPlaylist: YouTubeEngine["addToPlaylist"];
+  createPlaylist: YouTubeEngine["createPlaylist"];
   resolve: YouTubeEngine["resolve"];
+  played: YouTubeEngine["played"];
+  watched: YouTubeEngine["watched"];
+  serverQueue: YouTubeEngine["serverQueue"];
+  shareQueue: YouTubeEngine["shareQueue"];
 }

@@ -87,6 +87,13 @@ export const AlbumPage = z.object({
   artists: z.array(Artist),
   thumbnails: z.array(Thumbnail),
   tracks: z.array(Track),
+  /**
+   * The playlist behind the album (`OLAK5uy_…`). Saving, mixing and adding
+   * the album to a playlist all go through it.
+   */
+  audioPlaylistId: z.string().nullable().default(null),
+  /** Whether it is in the library. Null when YouTube does not say (signed out). */
+  saved: z.boolean().nullable().default(null),
 });
 export type AlbumPage = z.infer<typeof AlbumPage>;
 
@@ -96,6 +103,8 @@ export const PlaylistPage = z.object({
   subtitle: z.string().nullable(),
   thumbnails: z.array(Thumbnail),
   tracks: z.array(Track),
+  /** Whether it is in the library. Null for your own playlists, which cannot be saved. */
+  saved: z.boolean().nullable().default(null),
 });
 export type PlaylistPage = z.infer<typeof PlaylistPage>;
 
@@ -110,6 +119,10 @@ export const ArtistPage = z.object({
   topSongs: z.array(Track),
   /** The playlist behind "Top songs", when YouTube offers the full list. */
   topSongsPlaylistId: z.string().nullable(),
+  /** What the header's "Mix" button plays: the artist's radio. */
+  mix: z.object({ playlistId: z.string(), videoId: z.string().nullable() }).nullable().default(null),
+  /** Null when YouTube does not offer the button. */
+  subscribed: z.boolean().nullable().default(null),
   /** Albums, singles, "fans might also like", in YouTube's order. */
   shelves: z.array(z.object({ title: z.string(), cards: z.array(BrowseCard) })),
 });

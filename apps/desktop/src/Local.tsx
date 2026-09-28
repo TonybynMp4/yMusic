@@ -29,6 +29,7 @@ export function LocalView(props: {
         subtitle={folder ? `${count} • ${folder}` : count}
         tracks={tracks}
         actions={actions}
+        subject={folder ? { kind: "folder", path: folder } : undefined}
       />
       {tracks.length === 0 ? (
         <p className="px-3 py-12 text-center text-sm text-muted-foreground">
@@ -41,7 +42,6 @@ export function LocalView(props: {
           playing={actions.playing}
           onToggle={actions.onToggle}
           onPlay={(id) => actions.onPlay(tracks, id)}
-          onEnqueue={actions.onEnqueue}
           onOpen={actions.onOpen}
         />
       )}

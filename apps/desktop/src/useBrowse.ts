@@ -153,3 +153,35 @@ export function followPlaylist(
   notify();
   return () => void entry.listeners.delete(notify);
 }
+
+/**
+ * A page once it has fully arrived, every row of a long playlist included:
+ * for acting on one without opening it, as its menu does.
+ */
+export function settledPage(route: Route): Promise<Page> {
+  const entry = entryFor(route);
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      const { state } = entry;
+      if (state.status === "loading" || (state.status === "ready" && state.loadingMore)) return;
+      entry.listeners.delete(check);
+      if (state.status === "ready") return resolve(state.page);
+      // Forgotten, so the next try fetches again.
+      entries.delete(`${route.kind}:${route.id}`);
+      reject(new Error(state.error));
+    };
+    entry.listeners.add(check);
+    check();
+  });
+}
+
+/**
+ * Changes a page already loaded, after an action whose outcome is known
+ * (saving it to the library, say), so it shows without a refetch.
+ */
+export function patchPage(route: Route, patch: (page: Page) => Page): void {
+  const entry = entries.get(`${route.kind}:${route.id}`);
+  if (entry?.state.status !== "ready") return;
+  entry.state = { ...entry.state, page: patch(entry.state.page) };
+  for (const listener of entry.listeners) listener();
+}

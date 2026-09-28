@@ -27,7 +27,14 @@ interface RawText {
 }
 
 interface RawEndpoint {
-  payload?: { browseId?: unknown } | null;
+  payload?: { browseId?: unknown; playlistId?: unknown; videoId?: unknown } | null;
+}
+
+/** A header button: the library toggle, the play button, "Shuffle", "Mix". */
+interface RawButton {
+  type?: unknown;
+  is_toggled?: unknown;
+  endpoint?: RawEndpoint | null;
 }
 
 interface RawHeader {
@@ -40,6 +47,10 @@ interface RawHeader {
   thumbnails?: readonly RawThumbnail[] | null;
   /** The round picture on a `MusicVisualHeader`, when YouTube sends one. */
   foreground_thumbnail?: { contents?: readonly RawThumbnail[] | null } | null;
+  buttons?: readonly RawButton[] | null;
+  /** An artist's. */
+  subscription_button?: { subscribed?: unknown } | null;
+  start_radio_button?: RawButton | null;
 }
 
 interface RawCard {
@@ -105,6 +116,8 @@ export function albumFrom(
     artists,
     thumbnails,
     tracks,
+    audioPlaylistId: playlistOf(button(header, "MusicPlayButton")),
+    saved: savedIn(header),
   });
 }
 
@@ -180,6 +193,7 @@ export function playlistFrom(
     subtitle: joinSubtitles(header),
     thumbnails: headerThumbnails(header),
     tracks: tracksFrom(rows),
+    saved: savedIn(header),
   });
 }
 
@@ -228,6 +242,11 @@ export function artistFrom(
     avatar: foreground.length > 0 ? foreground : squareCrop(thumbnails),
     topSongs,
     topSongsPlaylistId,
+    mix: mixOf(header.start_radio_button),
+    subscribed:
+      typeof header.subscription_button?.subscribed === "boolean"
+        ? header.subscription_button.subscribed
+        : null,
     shelves,
   });
 }
@@ -269,6 +288,69 @@ export function libraryFrom(items: readonly unknown[]): BrowseCard[] {
   return items
     .map((item) => toCard(item as RawCard))
     .filter((card): card is BrowseCard => card?.kind === "playlist");
+}
+
+/** One of your playlists, as "Save to playlist" lists them. */
+export interface PlaylistTarget {
+  id: string;
+  title: string;
+}
+
+/**
+ * The playlists `videoId` can be added to: the ones you own, newest edited
+ * first, as YouTube Music's own "Save to playlist" dialog lists them.
+ */
+export async function getPlaylistTargets(
+  youtube: Innertube,
+  videoId: string,
+): Promise<PlaylistTarget[]> {
+  const response = await youtube.actions.execute("/playlist/get_add_to_playlist", {
+    videoIds: [videoId],
+    excludeWatchLater: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const options = response.contents_memo?.getType(YTNodes.PlaylistAddToOption) ?? [];
+  return targetsFrom(options as unknown as readonly RawTarget[]);
+}
+
+/** What YouTube Music's "New playlist" dialog asks for. */
+export interface NewPlaylist {
+  title: string;
+  description: string;
+  privacy: "PUBLIC" | "UNLISTED" | "PRIVATE";
+}
+
+export async function createPlaylist(
+  youtube: Innertube,
+  playlist: NewPlaylist,
+  videoIds: readonly string[],
+): Promise<string> {
+  const response = await youtube.actions.execute("/playlist/create", {
+    title: playlist.title,
+    description: playlist.description,
+    privacyStatus: playlist.privacy,
+    videoIds: [...videoIds],
+    client: "YTMUSIC",
+  });
+  const id = (response.data as { playlistId?: unknown } | undefined)?.playlistId;
+  if (typeof id !== "string") throw new Error("YouTube did not create the playlist");
+  return id;
+}
+
+interface RawTarget {
+  playlist_id?: unknown;
+  title?: RawText | null;
+}
+
+export function targetsFrom(options: readonly RawTarget[]): PlaylistTarget[] {
+  const targets: PlaylistTarget[] = [];
+  for (const option of options) {
+    const title = text(option.title);
+    if (typeof option.playlist_id !== "string" || !title) continue;
+    targets.push({ id: option.playlist_id, title });
+  }
+  return targets;
 }
 
 const CARD_KINDS: Record<string, BrowseCard["kind"]> = {
@@ -320,6 +402,28 @@ function artistsFromRuns(raw: RawText | null | undefined): Artist[] {
   if (linked.length > 0) return toArtists(linked);
   const name = text(raw);
   return name ? [{ name, channelId: null }] : [];
+}
+
+function button(header: RawHeader, type: string): RawButton | null {
+  return header.buttons?.find((b) => b.type === type) ?? null;
+}
+
+/** The library toggle, a bookmark on albums and playlists. Your own playlists have none. */
+function savedIn(header: RawHeader): boolean | null {
+  const toggle = button(header, "ToggleButton");
+  return typeof toggle?.is_toggled === "boolean" ? toggle.is_toggled : null;
+}
+
+function playlistOf(raw: RawButton | null | undefined): string | null {
+  const id = raw?.endpoint?.payload?.playlistId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function mixOf(raw: RawButton | null | undefined): ArtistPage["mix"] {
+  const playlistId = playlistOf(raw);
+  if (playlistId === null) return null;
+  const videoId = raw?.endpoint?.payload?.videoId;
+  return { playlistId, videoId: typeof videoId === "string" ? videoId : null };
 }
 
 function headerThumbnails(header: RawHeader): Thumbnail[] {

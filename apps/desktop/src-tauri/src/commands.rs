@@ -135,6 +135,29 @@ pub fn library_resolve(library: State<'_, Library>, id: String) -> Result<LocalL
     library.resolve(&id).map_err(|e| e.to_string())
 }
 
+/// Opens a library folder in the file manager. Only folders in the library,
+/// so the webview cannot open arbitrary paths. Async to keep the file
+/// manager's D-Bus call off the main thread.
+#[tauri::command]
+pub async fn library_open_folder(library: State<'_, Library>, path: String) -> Result<(), String> {
+    let known = library.folders().map_err(|e| e.to_string())?;
+    if !known.contains(&path) {
+        return Err(format!("not a library folder: {path}"));
+    }
+    tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Shows a local track's file in the file manager, selected. Takes the track
+/// id rather than a path for the same reason as `library_open_folder`.
+#[tauri::command]
+pub async fn library_reveal(library: State<'_, Library>, id: String) -> Result<(), String> {
+    let track = library.track(&id).map_err(|e| e.to_string())?;
+    if !std::path::Path::new(&track.path).exists() {
+        return Err("The file is no longer there".into());
+    }
+    tauri_plugin_opener::reveal_item_in_dir(&track.path).map_err(|e| e.to_string())
+}
+
 /// The saved session's cookie header, for the engine worker to send. None when
 /// signed out.
 #[tauri::command]

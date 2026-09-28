@@ -37,6 +37,8 @@ macro_rules! ymusic_commands {
             $crate::commands::library_tracks,
             $crate::commands::library_search,
             $crate::commands::library_resolve,
+            $crate::commands::library_open_folder,
+            $crate::commands::library_reveal,
             $crate::commands::account_cookie,
             $crate::commands::account_sign_in,
             $crate::commands::account_browsers,
@@ -49,6 +51,15 @@ macro_rules! ymusic_commands {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second launch hands over to the running window before
+        // anything else starts, a second player above all.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 // The MPRIS backend's async runtime traces every poll, which

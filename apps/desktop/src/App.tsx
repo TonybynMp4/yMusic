@@ -49,8 +49,8 @@ export function App(props: { settings: Settings }) {
   const searchInput = useRef<HTMLInputElement>(null);
 
   const library = useLibrary(query);
-  const youtube = useYouTubeSearch(query, true);
   const settings = useSettings(props.settings);
+  const youtube = useYouTubeSearch(query, true, settings.settings.pauseSearchHistory);
   const player = usePlayer(settings);
   const account = useAccount();
   const playlists = useLibraryPlaylists(account.account?.name ?? null);

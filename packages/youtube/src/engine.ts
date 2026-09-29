@@ -83,6 +83,7 @@ export class YouTubeEngine {
   readonly #fetch: FetchLike;
   #cookie: string | null = null;
   #browse: Promise<Innertube> | null = null;
+  #anonymous: Promise<Innertube> | null = null;
   #player: Promise<Innertube> | null = null;
   readonly #minter: PoTokenMinter | null;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
@@ -122,8 +123,17 @@ export class YouTubeEngine {
     };
   }
 
-  async search(query: string): Promise<Track[]> {
-    return searchSongs(await this.#browseClient(), query);
+  /**
+   * `signedOut` searches without the account, which keeps the query out of its
+   * YouTube search history. It is how "pause search history" works: YouTube's
+   * own pause is an account setting the app cannot reach.
+   */
+  async search(
+    query: string,
+    { signedOut = false }: { signedOut?: boolean } = {},
+  ): Promise<Track[]> {
+    const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
+    return searchSongs(youtube, query);
   }
 
   /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */
@@ -324,6 +334,15 @@ export class YouTubeEngine {
       },
     );
     return this.#browse;
+  }
+
+  /** The browsing client without the cookie. The same one while signed out. */
+  #anonymousClient(): Promise<Innertube> {
+    if (this.#cookie === null) return this.#browseClient();
+    this.#anonymous ??= retryable(createYouTube({ fetch: this.#fetch }), () => {
+      this.#anonymous = null;
+    });
+    return this.#anonymous;
   }
 
   /**

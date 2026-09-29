@@ -14,7 +14,11 @@ export interface YouTubeSearchState {
  * worker keeps one InnerTube session for every search, and drops it after a
  * failure so the next search starts clean.
  */
-export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearchState {
+export function useYouTubeSearch(
+  query: string,
+  enabled: boolean,
+  signedOut: boolean,
+): YouTubeSearchState {
   const [state, setState] = useState<YouTubeSearchState>({
     tracks: [],
     loading: false,
@@ -35,7 +39,7 @@ export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearch
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const tracks = await engine.search(trimmed);
+          const tracks = await engine.search(trimmed, { signedOut });
           if (!cancelled) setState({ tracks, loading: false, error: null });
         } catch (error) {
           if (!cancelled) {
@@ -49,7 +53,7 @@ export function useYouTubeSearch(query: string, enabled: boolean): YouTubeSearch
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, enabled]);
+  }, [query, enabled, signedOut]);
 
   return state;
 }

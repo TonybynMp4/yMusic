@@ -31,12 +31,14 @@ function logFailure(error: unknown): void {
  * Reports YouTube songs to the signed-in account as they play, as YouTube
  * Music's own player does: the song goes into the history when it starts, and
  * the stretches listened to follow as watch time. Signed out, the engine
- * declines and nothing is sent. Local files are never reported.
+ * declines and nothing is sent. Local files are never reported, and while
+ * `paused` no new play starts, so nothing new reaches the history.
  */
 export function useWatchHistory(
   trackId: TrackId | null,
   status: PlaybackStatus,
   position: PositionStore,
+  paused: boolean,
 ): void {
   const play = useRef<Play | null>(null);
   const playing = useRef(false);
@@ -81,7 +83,7 @@ export function useWatchHistory(
     }
     const videoId = trackId === null ? null : videoIdFromTrackId(trackId);
     if (trackId === null || videoId === null) return;
-    if (status === "playing" && play.current === null) {
+    if (status === "playing" && play.current === null && !paused) {
       play.current = {
         trackId,
         handle: youtube.played(videoId).catch((error: unknown) => {
@@ -100,7 +102,7 @@ export function useWatchHistory(
       current.listened.pause();
       report(current, false);
     }
-  }, [trackId, status, report, finish]);
+  }, [trackId, status, paused, report, finish]);
 
   useEffect(
     () =>

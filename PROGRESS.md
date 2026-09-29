@@ -109,8 +109,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Audio quality: high, normal, low
 - [x] Stable volume: YouTube's loudness value per track, ReplayGain for local files
 - [x] Audio output device
-- [ ] Pause watch history
-- [ ] Pause search history
+- [x] Pause watch history
+- [x] Pause search history
 - [ ] Music folders: add, remove, rescan
 - [ ] Keep playing in the tray when the window closes
 - [ ] Update check at startup, with prereleases opt-in and a link to the release

@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
+import { type AudioDevice, playerAudioDevices } from "@ymusic/ipc";
 
 import {
   Select,
@@ -17,6 +18,7 @@ interface Props {
 
 /** Every setting on one page, in sections, as YouTube Music lays its own out. */
 export function SettingsView({ settings: { settings, update } }: Props) {
+  const devices = useAudioDevices();
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -43,6 +45,27 @@ export function SettingsView({ settings: { settings, update } }: Props) {
             />
           }
         />
+        <Row
+          label="Stable volume"
+          description="Turns loud songs down so every song plays at a similar level. Local files use their ReplayGain tags."
+          control={
+            <Switch
+              checked={settings.stableVolume}
+              onCheckedChange={(stableVolume) => update({ stableVolume })}
+            />
+          }
+        />
+        <Row
+          label="Output device"
+          control={
+            <Choice
+              className="w-64"
+              value={settings.audioDevice}
+              options={deviceOptions(devices, settings.audioDevice)}
+              onChange={(audioDevice) => update({ audioDevice })}
+            />
+          }
+        />
       </Section>
     </div>
   );
@@ -54,11 +77,37 @@ const QUALITIES: { value: AudioQuality; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
+function useAudioDevices(): AudioDevice[] {
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  useEffect(() => {
+    playerAudioDevices()
+      .then(setDevices)
+      .catch((error: unknown) => console.warn("could not list audio devices", error));
+  }, []);
+  return devices;
+}
+
+/**
+ * The system default first, then each device. A saved device that is not
+ * plugged in stays listed, so the choice still reads as what was picked.
+ */
+function deviceOptions(devices: AudioDevice[], saved: string) {
+  const options = [
+    { value: "auto", label: "System default" },
+    ...devices.map((device) => ({ value: device.name, label: device.description })),
+  ];
+  if (!options.some((option) => option.value === saved)) {
+    options.push({ value: saved, label: "Disconnected device" });
+  }
+  return options;
+}
+
 /** A setting with a few named values. */
 function Choice<T extends string>(props: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  className?: string;
 }) {
   return (
     <Select
@@ -66,7 +115,7 @@ function Choice<T extends string>(props: {
       value={props.value}
       onValueChange={(value) => value !== null && props.onChange(value)}
     >
-      <SelectTrigger className="w-40">
+      <SelectTrigger className={props.className ?? "w-40"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

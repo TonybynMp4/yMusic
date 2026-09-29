@@ -22,6 +22,7 @@ export interface RawFormat {
   has_audio?: boolean;
   has_video?: boolean;
   is_drc?: boolean;
+  loudness_db?: number;
   decipher: (player: unknown) => Promise<string> | string;
 }
 
@@ -152,6 +153,7 @@ export function leaseFrom(
     codec: codecFromMimeType(format.mime_type),
     bitrate: format.bitrate && format.bitrate > 0 ? format.bitrate : null,
     isPremiumFormat: false,
+    loudnessDb: format.loudness_db ?? null,
     // Empty, and measured to be correct: these URLs serve any client that asks
     // for them, so there is nothing for mpv to replay. See `resolveStream`.
     headers: {},

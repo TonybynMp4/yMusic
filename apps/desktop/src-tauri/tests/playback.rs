@@ -83,6 +83,7 @@ fn request(url: String) -> LoadRequest {
         url,
         headers: Default::default(),
         start_paused: false,
+        loudness_db: None,
     }
 }
 

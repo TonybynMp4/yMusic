@@ -107,9 +107,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Settings page, opened from the account menu
 - [x] Autoplay remembered across restarts
 - [x] Audio quality: high, normal, low
-- [ ] Gapless playback on or off
-- [ ] Stable volume: YouTube's loudness value per track, ReplayGain for local files
-- [ ] Audio output device
+- [x] Stable volume: YouTube's loudness value per track, ReplayGain for local files
+- [x] Audio output device
 - [ ] Pause watch history
 - [ ] Pause search history
 - [ ] Music folders: add, remove, rescan

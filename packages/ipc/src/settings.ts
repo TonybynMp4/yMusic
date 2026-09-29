@@ -10,7 +10,6 @@ import { invokeParsed, isTauri } from "./tauri.ts";
 export const Settings = z.object({
   autoplay: z.boolean().default(true),
   audioQuality: AudioQuality.default("high"),
-  gapless: z.boolean().default(true),
   stableVolume: z.boolean().default(false),
   /** An mpv `audio-device` name; `auto` follows the system's default output. */
   audioDevice: z.string().default("auto"),

@@ -32,6 +32,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_seek,
             $crate::commands::player_set_volume,
             $crate::commands::player_stop,
+            $crate::commands::player_audio_devices,
             $crate::commands::media_subscribe,
             $crate::commands::media_set_track,
             $crate::commands::media_set_volume,
@@ -101,7 +102,9 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
-            app.manage(open_settings(app.handle()));
+            let settings = open_settings(app.handle());
+            let startup_settings = settings.get();
+            app.manage(settings);
 
             // The loader already refuses to start without `libmpv.so.2` (mpv
             // 0.35), so what can still fail here is mpv itself. The app is a
@@ -113,6 +116,7 @@ pub fn run() {
                     // without them rather than failing startup.
                     let media = MediaSession::attach(&window);
                     player.observe(media.clone());
+                    player.apply_settings(&startup_settings);
                     app.manage(player);
                     app.manage(media);
                 }

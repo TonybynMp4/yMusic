@@ -8,6 +8,7 @@
 //! the RMS of what comes out against the cubic curve `@ymusic/core` assumes.
 
 use libmpv2::{events::Event, Mpv};
+use ymusic_lib::playback::stable_volume_filter;
 use std::path::{Path, PathBuf};
 
 /// Must match `VOLUME_CURVE_EXPONENT` in `packages/core/src/volume.ts`.
@@ -44,9 +45,35 @@ fn mpv_applies_the_cubic_taper_the_volume_slider_assumes() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Decodes the tone with mpv writing raw samples to a file, and returns the RMS.
+#[test]
+fn stable_volume_turns_a_loud_track_down_by_its_loudness() {
+    let dir = std::env::temp_dir().join(format!("ymusic-stable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    let tone = dir.join("tone.wav");
+    write_full_scale_tone(&tone);
+    let reference = render(&tone, &dir, 100.0, "");
+    let quieter = render(&tone, &dir, 100.0, &stable_volume_filter(Some(6.0))) / reference;
+    let expected = 10f64.powf(-6.0 / 20.0);
+    assert!(
+        (quieter - expected).abs() / expected < 0.05,
+        "a track 6 dB over the reference rendered at {quieter:.4} of full scale, \
+         expected {expected:.4}"
+    );
+    assert_eq!(stable_volume_filter(Some(-3.0)), "", "quiet tracks are not boosted");
+    assert_eq!(stable_volume_filter(None), "");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn render_at(tone: &Path, dir: &Path, percent: f64) -> f64 {
-    let out = dir.join(format!("out-{percent:.0}.wav"));
+    render(tone, dir, percent, "")
+}
+
+/// Decodes the tone with mpv writing raw samples to a file, and returns the RMS.
+fn render(tone: &Path, dir: &Path, percent: f64, af: &str) -> f64 {
+    let out = dir.join(format!("out-{percent:.0}-{}.wav", af.len()));
     let _ = std::fs::remove_file(&out);
 
     let mpv = Mpv::with_initializer(|init| {
@@ -60,6 +87,7 @@ fn render_at(tone: &Path, dir: &Path, percent: f64) -> f64 {
         init.set_property("audio-format", "s16")?;
         init.set_property("audio-samplerate", 48000)?;
         init.set_property("volume", percent)?;
+        init.set_property("af", af)?;
         Ok(())
     })
     .expect("libmpv");

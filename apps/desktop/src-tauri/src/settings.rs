@@ -25,8 +25,6 @@ pub struct Settings {
     /// When the queue runs out, its suggestions play on.
     pub autoplay: bool,
     pub audio_quality: AudioQuality,
-    /// Lets mpv open the next song before this one ends, with no gap.
-    pub gapless: bool,
     /// Turns loud tracks down to a common level.
     pub stable_volume: bool,
     /// An mpv `audio-device` name. `auto` follows the system's default output.
@@ -45,7 +43,6 @@ impl Default for Settings {
         Self {
             autoplay: true,
             audio_quality: AudioQuality::High,
-            gapless: true,
             stable_volume: false,
             audio_device: "auto".into(),
             skip_disliked: false,
@@ -164,17 +161,17 @@ mod tests {
         let reopened = SettingsStore::open(path).get();
         assert!(!reopened.autoplay);
         assert_eq!(reopened.audio_quality, AudioQuality::Low);
-        assert!(reopened.gapless, "fields the patch left out keep their value");
+        assert!(reopened.check_for_updates, "fields the patch left out keep their value");
     }
 
     #[test]
     fn missing_and_unknown_fields_still_load() {
         let path = temp_path("fields");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, r#"{ "gapless": false, "fromTheFuture": 1 }"#).unwrap();
+        fs::write(&path, r#"{ "stableVolume": true, "fromTheFuture": 1 }"#).unwrap();
 
         let settings = SettingsStore::open(path).get();
-        assert!(!settings.gapless);
+        assert!(settings.stable_volume);
         assert!(settings.autoplay);
     }
 

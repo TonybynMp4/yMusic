@@ -201,7 +201,12 @@ export function App(props: { settings: Settings }) {
                 <ScrollParent value={viewport}>
                   <div className="px-2 pb-2">
                     {view?.kind === "settings" ? (
-                      <SettingsView settings={settings} library={library} updates={updates} />
+                      <SettingsView
+                        settings={settings}
+                        library={library}
+                        updates={updates}
+                        account={account}
+                      />
                     ) : view?.kind === "local" ? (
                       <LocalView folder={view.id} all={library.all} actions={browse} />
                     ) : view ? (

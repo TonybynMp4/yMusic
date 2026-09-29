@@ -1,16 +1,20 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
 import {
+  accountBrowsers,
   type AudioDevice,
+  type Browser,
   isTauri,
   openLogsFolder,
   platformSummary,
   playerAudioDevices,
 } from "@ymusic/ipc";
 import {
+  IconBrandGoogle,
   IconExternalLink,
   IconFolderOpen,
   IconFolderPlus,
+  IconLogout,
   IconRefresh,
   IconX,
 } from "@tabler/icons-react";
@@ -23,9 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
+import type { AccountState } from "./useAccount.ts";
 import type { Library } from "./useLibrary.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
@@ -34,16 +40,24 @@ interface Props {
   settings: SettingsState;
   library: Library;
   updates: UpdatesState;
+  account: AccountState;
 }
 
 /** Every setting on one page, in sections, as YouTube Music lays its own out. */
-export function SettingsView({ settings: { settings, update }, library, updates }: Props) {
+export function SettingsView({
+  settings: { settings, update },
+  library,
+  updates,
+  account,
+}: Props) {
   const devices = useAudioDevices();
   const available = updates.update;
   const version = useVersion();
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+
+      {isTauri && <AccountSection state={account} />}
 
       <Section title="Playback">
         <Row
@@ -239,6 +253,92 @@ const QUALITIES: { value: AudioQuality; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
+function AccountSection({ state }: { state: AccountState }) {
+  const { account } = state;
+  const [browser, setBrowser] = useState<string | null>(null);
+  const browsers = useBrowsers(account === null);
+  if (account !== null) {
+    return (
+      <Section title="Account">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Art
+            thumbnails={account.photoUrl ? [{ url: account.photoUrl, width: 88, height: 88 }] : []}
+            width={40}
+            lazy={false}
+            className="size-10 shrink-0 overflow-hidden rounded-full bg-secondary"
+            fallback={account.name.slice(0, 1).toUpperCase()}
+          />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm">{account.name}</span>
+            {account.handle && (
+              <span className="truncate text-xs text-muted-foreground">{account.handle}</span>
+            )}
+          </span>
+          <Button variant="outline" disabled={state.busy} onClick={state.signOut}>
+            <IconLogout />
+            Sign out
+          </Button>
+        </div>
+      </Section>
+    );
+  }
+  const chosen = browser ?? browsers[0]?.id ?? null;
+  return (
+    <Section title="Account">
+      <Row
+        label="Sign in"
+        action
+        description={
+          state.error ?? "Your library, playlists and history come from your YouTube account."
+        }
+        control={
+          <Button disabled={state.busy} onClick={state.signIn}>
+            <IconBrandGoogle />
+            Sign in with Google
+          </Button>
+        }
+      />
+      <Row
+        label="Import from a browser"
+        action
+        description="Uses the session of a browser that is already signed in to YouTube."
+        control={
+          browsers.length === 0 ? (
+            <span className="text-sm text-muted-foreground">No supported browser found</span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Choice
+                className="w-48"
+                value={chosen ?? ""}
+                options={browsers.map((b) => ({ value: b.id, label: b.name }))}
+                onChange={setBrowser}
+              />
+              <Button
+                variant="outline"
+                disabled={state.busy || chosen === null}
+                onClick={() => chosen !== null && state.importFrom(chosen)}
+              >
+                Import
+              </Button>
+            </span>
+          )
+        }
+      />
+    </Section>
+  );
+}
+
+function useBrowsers(enabled: boolean): Browser[] {
+  const [browsers, setBrowsers] = useState<Browser[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    accountBrowsers()
+      .then(setBrowsers)
+      .catch((error: unknown) => console.warn("could not list browsers", error));
+  }, [enabled]);
+  return browsers;
+}
+
 const REPOSITORY = "https://github.com/TonybynMp4/yMusic";
 
 function useVersion(): string | null {
@@ -313,10 +413,20 @@ export function Section({ title, children }: { title: string; children: ReactNod
   );
 }
 
-/** A setting: what it is on the left, its control on the right. */
-export function Row(props: { label: string; description?: ReactNode; control: ReactNode }) {
+/**
+ * A setting: what it is on the left, its control on the right. A label, so
+ * clicking the text flips a switch, unless `action` says the control is a
+ * button, which a stray click on the text must not press.
+ */
+export function Row(props: {
+  label: string;
+  description?: ReactNode;
+  control: ReactNode;
+  action?: boolean;
+}) {
+  const Element = props.action ? "div" : "label";
   return (
-    <label className="flex items-center gap-6 px-4 py-3">
+    <Element className="flex items-center gap-6 px-4 py-3">
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm">{props.label}</span>
         {props.description && (
@@ -324,6 +434,6 @@ export function Row(props: { label: string; description?: ReactNode; control: Re
         )}
       </span>
       {props.control}
-    </label>
+    </Element>
   );
 }

@@ -83,7 +83,10 @@ impl SettingsStore {
     pub fn open(path: PathBuf) -> Self {
         let current = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-                log::error!("ignoring unreadable settings in {}: {error}", path.display());
+                log::error!(
+                    "ignoring unreadable settings in {}: {error}",
+                    path.display()
+                );
                 Settings::default()
             }),
             Err(error) if error.kind() == ErrorKind::NotFound => Settings::default(),
@@ -141,7 +144,8 @@ mod tests {
     use serde_json::json;
 
     fn temp_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("ymusic-settings-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("ymusic-settings-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir.join("settings.json")
     }
@@ -156,12 +160,17 @@ mod tests {
     fn an_update_survives_a_restart() {
         let path = temp_path("restart");
         let store = SettingsStore::open(path.clone());
-        store.update(json!({ "autoplay": false, "audioQuality": "low" })).unwrap();
+        store
+            .update(json!({ "autoplay": false, "audioQuality": "low" }))
+            .unwrap();
 
         let reopened = SettingsStore::open(path).get();
         assert!(!reopened.autoplay);
         assert_eq!(reopened.audio_quality, AudioQuality::Low);
-        assert!(reopened.check_for_updates, "fields the patch left out keep their value");
+        assert!(
+            reopened.check_for_updates,
+            "fields the patch left out keep their value"
+        );
     }
 
     #[test]

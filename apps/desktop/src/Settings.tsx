@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
 import { type AudioDevice, playerAudioDevices } from "@ymusic/ipc";
+import { IconFolderPlus, IconRefresh, IconX } from "@tabler/icons-react";
 
 import {
   Select,
@@ -9,15 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ScanSummary } from "./Sidebar.tsx";
+import type { Library } from "./useLibrary.ts";
 import type { SettingsState } from "./useSettings.ts";
 
 interface Props {
   settings: SettingsState;
+  library: Library;
 }
 
 /** Every setting on one page, in sections, as YouTube Music lays its own out. */
-export function SettingsView({ settings: { settings, update } }: Props) {
+export function SettingsView({ settings: { settings, update }, library }: Props) {
   const devices = useAudioDevices();
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
@@ -66,6 +71,49 @@ export function SettingsView({ settings: { settings, update } }: Props) {
             />
           }
         />
+      </Section>
+
+      <Section title="Library">
+        {library.folders.map((path) => (
+          <div key={path} className="flex items-center gap-4 py-2 pr-2 pl-4">
+            <span className="min-w-0 flex-1 truncate text-sm" title={path}>
+              {path}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove ${path}`}
+              disabled={library.loading}
+              onClick={() => void library.removeFolder(path)}
+            >
+              <IconX />
+            </Button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 px-4 py-3">
+          <span className="flex-1 text-xs text-muted-foreground">
+            {library.folders.length === 0
+              ? "Add a folder to play the music files in it."
+              : "Removing a folder takes its songs out of yMusic, not off the disk."}
+          </span>
+          <Button
+            variant="outline"
+            disabled={library.loading || library.folders.length === 0}
+            onClick={() => void library.rescan()}
+          >
+            <IconRefresh />
+            Rescan
+          </Button>
+          <Button
+            variant="outline"
+            disabled={library.loading}
+            onClick={() => void library.addFolder()}
+          >
+            <IconFolderPlus />
+            Add folder
+          </Button>
+        </div>
+        {library.report && <ScanSummary report={library.report} />}
       </Section>
 
       <Section title="Privacy">

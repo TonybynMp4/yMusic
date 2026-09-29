@@ -256,7 +256,7 @@ function Item(props: {
   );
 }
 
-function ScanSummary({ report }: { report: ScanReport }) {
+export function ScanSummary({ report }: { report: ScanReport }) {
   const { added, updated, removed, unchanged, failed } = report;
   return (
     <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">

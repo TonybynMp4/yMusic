@@ -23,6 +23,8 @@ export interface LibraryState {
   error: string | null;
 }
 
+export type Library = ReturnType<typeof useLibrary>;
+
 export function useLibrary(query: string) {
   const [state, setState] = useState<LibraryState>({
     all: [],

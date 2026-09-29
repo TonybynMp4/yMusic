@@ -242,3 +242,14 @@ pub fn settings_set<R: Runtime>(
     crate::tray::sync(&app, next.close_to_tray);
     Ok(next)
 }
+
+/// A release newer than this build, if there is one. Prereleases count when
+/// the settings say so.
+#[tauri::command]
+pub async fn update_check<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    settings: State<'_, SettingsStore>,
+) -> Result<Option<crate::updates::Update>, String> {
+    let include_prereleases = settings.get().include_prereleases;
+    crate::updates::check(&app.package_info().version, include_prereleases).await
+}

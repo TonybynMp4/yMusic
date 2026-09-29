@@ -21,3 +21,16 @@ export type PlatformSummary = z.infer<typeof PlatformSummary>;
 export function platformSummary(): Promise<PlatformSummary> {
   return invokeParsed("platform_summary", PlatformSummary);
 }
+
+export const Update = z.object({
+  version: z.string(),
+  /** The release page on GitHub. */
+  url: z.url(),
+  prerelease: z.boolean(),
+});
+export type Update = z.infer<typeof Update>;
+
+/** A release newer than this build, or null. Prereleases count when the settings say so. */
+export function updateCheck(): Promise<Update | null> {
+  return invokeParsed("update_check", Update.nullable());
+}

@@ -18,6 +18,7 @@ import { SettingsView } from "./Settings.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
+import { UpdateNotice } from "./UpdateNotice.tsx";
 import { useAccount } from "./useAccount.ts";
 import { viewKey, type View } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
@@ -25,6 +26,7 @@ import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
 import { useSettings } from "./useSettings.ts";
+import { useUpdates } from "./useUpdates.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
@@ -57,6 +59,7 @@ export function App(props: { settings: Settings }) {
   useMediaSession(player);
   useResume(player, account.account?.name ?? null);
   const notice = useNotice();
+  const updates = useUpdates(props.settings.checkForUpdates);
 
   const toggleSidebar = () =>
     setCollapsed((c) => {
@@ -198,7 +201,7 @@ export function App(props: { settings: Settings }) {
                 <ScrollParent value={viewport}>
                   <div className="px-2 pb-2">
                     {view?.kind === "settings" ? (
-                      <SettingsView settings={settings} library={library} />
+                      <SettingsView settings={settings} library={library} updates={updates} />
                     ) : view?.kind === "local" ? (
                       <LocalView folder={view.id} all={library.all} actions={browse} />
                     ) : view ? (
@@ -250,6 +253,7 @@ export function App(props: { settings: Settings }) {
           expanded={expanded}
           onToggleExpanded={() => setExpanded((open) => !open)}
         />
+        <UpdateNotice updates={updates} />
         {notice.message && (
           <p
             role="status"

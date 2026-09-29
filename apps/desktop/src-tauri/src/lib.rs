@@ -8,6 +8,7 @@ pub mod platform;
 pub mod playback;
 pub mod settings;
 mod tray;
+pub mod updates;
 
 use account::{Account, OsKeyring};
 use library::Library;
@@ -52,7 +53,8 @@ macro_rules! ymusic_commands {
             $crate::commands::account_import,
             $crate::commands::account_sign_out,
             $crate::commands::settings_get,
-            $crate::commands::settings_set
+            $crate::commands::settings_set,
+            $crate::commands::update_check
         ]
     };
 }

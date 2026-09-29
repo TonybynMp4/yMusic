@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { invokeParsed } from "./tauri.ts";
+import { invokeParsed, invokeVoid } from "./tauri.ts";
 
 export const InstallFlavor = z.enum(["deb", "windows-installer", "unknown"]);
 export type InstallFlavor = z.infer<typeof InstallFlavor>;
@@ -33,4 +33,8 @@ export type Update = z.infer<typeof Update>;
 /** A release newer than this build, or null. Prereleases count when the settings say so. */
 export function updateCheck(): Promise<Update | null> {
   return invokeParsed("update_check", Update.nullable());
+}
+
+export function openLogsFolder(): Promise<void> {
+  return invokeVoid("open_logs_folder");
 }

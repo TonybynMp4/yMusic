@@ -1,7 +1,19 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
-import { type AudioDevice, playerAudioDevices } from "@ymusic/ipc";
-import { IconFolderPlus, IconRefresh, IconX } from "@tabler/icons-react";
+import {
+  type AudioDevice,
+  isTauri,
+  openLogsFolder,
+  platformSummary,
+  playerAudioDevices,
+} from "@ymusic/ipc";
+import {
+  IconExternalLink,
+  IconFolderOpen,
+  IconFolderPlus,
+  IconRefresh,
+  IconX,
+} from "@tabler/icons-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
@@ -28,6 +40,7 @@ interface Props {
 export function SettingsView({ settings: { settings, update }, library, updates }: Props) {
   const devices = useAudioDevices();
   const available = updates.update;
+  const version = useVersion();
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -191,6 +204,31 @@ export function SettingsView({ settings: { settings, update }, library, updates 
           )}
         </div>
       </Section>
+
+      <Section title="About">
+        <Row label="Version" control={<span className="text-sm">{version ?? "Unknown"}</span>} />
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <Button
+            variant="outline"
+            onClick={() =>
+              void openLogsFolder().catch((error: unknown) =>
+                console.warn("could not open the logs folder", error),
+              )
+            }
+          >
+            <IconFolderOpen />
+            Open logs folder
+          </Button>
+          <Button variant="outline" onClick={() => void openUrl(REPOSITORY)}>
+            <IconExternalLink />
+            Source code
+          </Button>
+          <Button variant="outline" onClick={() => void openUrl(`${REPOSITORY}/issues/new`)}>
+            <IconExternalLink />
+            Report a problem
+          </Button>
+        </div>
+      </Section>
     </div>
   );
 }
@@ -200,6 +238,19 @@ const QUALITIES: { value: AudioQuality; label: string }[] = [
   { value: "normal", label: "Normal" },
   { value: "low", label: "Low" },
 ];
+
+const REPOSITORY = "https://github.com/TonybynMp4/yMusic";
+
+function useVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTauri) return;
+    platformSummary()
+      .then((summary) => setVersion(summary.appVersion))
+      .catch((error: unknown) => console.warn("could not read the version", error));
+  }, []);
+  return version;
+}
 
 function useAudioDevices(): AudioDevice[] {
   const [devices, setDevices] = useState<AudioDevice[]>([]);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
 import type { Track, TrackId } from "@ymusic/core";
+import type { Settings } from "@ymusic/ipc";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LocalView } from "./Local.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { ScrollParent } from "./scroll.ts";
+import { SettingsView } from "./Settings.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
@@ -22,6 +24,7 @@ import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
+import { useSettings } from "./useSettings.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
 
@@ -31,7 +34,7 @@ const HISTORY_LIMIT = 50;
 /** Local matches shown above YouTube's before "Show all". */
 const LOCAL_PREVIEW = 5;
 
-export function App() {
+export function App(props: { settings: Settings }) {
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
   // Where you have been, newest last; `null` is search. Every move pushes,
@@ -47,7 +50,8 @@ export function App() {
 
   const library = useLibrary(query);
   const youtube = useYouTubeSearch(query, true);
-  const player = usePlayer();
+  const settings = useSettings(props.settings);
+  const player = usePlayer(settings);
   const account = useAccount();
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
@@ -176,7 +180,10 @@ export function App() {
                     className="h-9 rounded-full bg-secondary pl-9"
                   />
                 </div>
-                <AccountMenu state={account} />
+                <AccountMenu
+                  state={account}
+                  onSettings={() => go({ kind: "settings", id: "" })}
+                />
               </div>
 
               {/* Keyed by position in history, so each screen mounts fresh. */}
@@ -190,7 +197,9 @@ export function App() {
               >
                 <ScrollParent value={viewport}>
                   <div className="px-2 pb-2">
-                    {view?.kind === "local" ? (
+                    {view?.kind === "settings" ? (
+                      <SettingsView settings={settings} />
+                    ) : view?.kind === "local" ? (
                       <LocalView folder={view.id} all={library.all} actions={browse} />
                     ) : view ? (
                       <BrowseView route={view} actions={browse} />

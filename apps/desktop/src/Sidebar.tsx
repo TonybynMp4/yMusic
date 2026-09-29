@@ -287,6 +287,7 @@ function ScanSummary({ report }: { report: ScanReport }) {
 
 /** A folder opens in the file manager; "Local files" is every folder, so has no menu. */
 function subjectOf(view: View): Subject | null {
+  if (view.kind === "settings") return null;
   if (view.kind !== "local") return { kind: "collection", route: view };
   return view.id ? { kind: "folder", path: view.id } : null;
 }

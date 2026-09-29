@@ -8,6 +8,7 @@ use crate::account::{import, sign_in, Account};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
 use crate::playback::{LoadRequest, PlaybackEvent, Player};
+use crate::settings::{Settings, SettingsStore};
 use tauri::{ipc::Channel, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
@@ -214,4 +215,18 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
 #[tauri::command]
 pub fn account_sign_out(account: State<'_, Account>) -> Result<(), String> {
     account.clear()
+}
+
+#[tauri::command]
+pub fn settings_get(settings: State<'_, SettingsStore>) -> Settings {
+    settings.get()
+}
+
+/// Changes the settings named in `patch` and returns all of them.
+#[tauri::command]
+pub fn settings_set(
+    settings: State<'_, SettingsStore>,
+    patch: serde_json::Value,
+) -> Result<Settings, String> {
+    settings.update(patch)
 }

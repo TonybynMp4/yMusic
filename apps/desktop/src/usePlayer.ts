@@ -18,6 +18,7 @@ import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
+import type { SettingsState } from "./useSettings.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
 /** A transport failure that has no user-visible consequence beyond not happening. */
@@ -53,7 +54,7 @@ function radioSeed(queue: QueueState): TrackId | null {
  * swapping the resolver, not restructuring playback around a step that suddenly
  * became slow and fallible.
  */
-export function usePlayer() {
+export function usePlayer({ settings, update }: SettingsState) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
@@ -61,8 +62,8 @@ export function usePlayer() {
    * because the OS can set it too, from the MPRIS volume control.
    */
   const [volume, setVolumeState] = useState(1);
-  /** On, as in YouTube Music: when the queue runs out, its suggestions play on. */
-  const [autoplay, setAutoplayState] = useState(true);
+  /** On by default, as in YouTube Music: when the queue runs out, its suggestions play on. */
+  const autoplay = settings.autoplay;
   /** The queue's source is still arriving, so autoplay waits for its real end. */
   const [filling, setFilling] = useState(false);
   /** Stops following the current source. Replaced on every new queue. */
@@ -336,13 +337,13 @@ export function usePlayer() {
     };
   }, [wantsSuggestions, seed]);
 
-  const setAutoplay = useCallback((on: boolean) => {
-    setAutoplayState(on);
-    if (!on) {
-      askedSeed.current = null;
-      dispatch({ type: "setSuggestions", tracks: [] });
-    }
-  }, []);
+  // Turned off from the queue or the settings page alike.
+  useEffect(() => {
+    if (autoplay) return;
+    askedSeed.current = null;
+    dispatch({ type: "setSuggestions", tracks: [] });
+  }, [autoplay]);
+  const setAutoplay = useCallback((on: boolean) => update({ autoplay: on }), [update]);
 
   const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
   const pause = useCallback(() => void engine.pause().catch(logPlaybackFailure), [engine]);

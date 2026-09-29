@@ -138,6 +138,19 @@ export function SettingsView({ settings: { settings, update }, library }: Props)
           }
         />
       </Section>
+
+      <Section title="App">
+        <Row
+          label="Keep playing in the tray"
+          description="Closing the window leaves the music playing. Quit from the tray icon."
+          control={
+            <Switch
+              checked={settings.closeToTray}
+              onCheckedChange={(closeToTray) => update({ closeToTray })}
+            />
+          }
+        />
+      </Section>
     </div>
   );
 }

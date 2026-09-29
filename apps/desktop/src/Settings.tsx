@@ -67,6 +67,29 @@ export function SettingsView({ settings: { settings, update } }: Props) {
           }
         />
       </Section>
+
+      <Section title="Privacy">
+        <Row
+          label="Pause watch history"
+          description="Songs you play stop going into your YouTube history."
+          control={
+            <Switch
+              checked={settings.pauseWatchHistory}
+              onCheckedChange={(pauseWatchHistory) => update({ pauseWatchHistory })}
+            />
+          }
+        />
+        <Row
+          label="Pause search history"
+          description="Searches are sent without your account, so they stay out of your YouTube search history. Results are not personalised while this is on."
+          control={
+            <Switch
+              checked={settings.pauseSearchHistory}
+              onCheckedChange={(pauseSearchHistory) => update({ pauseSearchHistory })}
+            />
+          }
+        />
+      </Section>
     </div>
   );
 }

@@ -78,7 +78,7 @@ export function usePlayer({ settings, update }: SettingsState) {
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
-  useWatchHistory(trackId, state.status, position);
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that

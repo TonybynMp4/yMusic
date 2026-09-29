@@ -266,6 +266,10 @@ impl Player {
         self.set_property("pause", true)
     }
 
+    pub fn toggle_pause(&self) -> Result<(), String> {
+        self.command("cycle", &["pause"])
+    }
+
     pub fn seek(&self, position_ms: u64) -> Result<(), String> {
         let seconds = position_ms as f64 / 1000.0;
         self.command("seek", &[&seconds.to_string(), "absolute"])

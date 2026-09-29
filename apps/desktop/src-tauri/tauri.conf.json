@@ -53,6 +53,7 @@
           "libmpv2 (>= 0.35)",
           "libsecret-1-0"
         ],
+        "recommends": ["libayatana-appindicator3-1"],
         "section": "sound",
         "desktopTemplate": "packaging/ymusic.desktop"
       }

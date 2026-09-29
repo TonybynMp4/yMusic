@@ -7,6 +7,7 @@ pub mod library;
 pub mod platform;
 pub mod playback;
 pub mod settings;
+mod tray;
 
 use account::{Account, OsKeyring};
 use library::Library;
@@ -62,11 +63,7 @@ pub fn run() {
         // First, so a second launch hands over to the running window before
         // anything else starts, a second player above all.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            tray::show_window(app);
         }))
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -141,7 +138,16 @@ pub fn run() {
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
+            tray::sync(app.handle(), startup_settings.close_to_tray);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if tray::keeps_playing(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(ymusic_commands!())
         .run(tauri::generate_context!())

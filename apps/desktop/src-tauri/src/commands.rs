@@ -239,5 +239,6 @@ pub fn settings_set<R: Runtime>(
     if let Some(player) = app.try_state::<Player>() {
         player.apply_settings(&next);
     }
+    crate::tray::sync(&app, next.close_to_tray);
     Ok(next)
 }

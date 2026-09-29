@@ -7,9 +7,9 @@
 use crate::account::{import, sign_in, Account};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
-use crate::playback::{LoadRequest, PlaybackEvent, Player};
+use crate::playback::{AudioDevice, LoadRequest, PlaybackEvent, Player};
 use crate::settings::{Settings, SettingsStore};
-use tauri::{ipc::Channel, Runtime, State};
+use tauri::{ipc::Channel, Manager, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
 /// on the about screen; the updater decides what it may do with the rest.
@@ -75,6 +75,11 @@ pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), St
 #[tauri::command]
 pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), String> {
     player.set_volume(volume)
+}
+
+#[tauri::command]
+pub fn player_audio_devices(player: State<'_, Player>) -> Result<Vec<AudioDevice>, String> {
+    player.audio_devices()
 }
 
 #[tauri::command]
@@ -222,11 +227,17 @@ pub fn settings_get(settings: State<'_, SettingsStore>) -> Settings {
     settings.get()
 }
 
-/// Changes the settings named in `patch` and returns all of them.
+/// Changes the settings named in `patch`, applies the ones mpv owns, and
+/// returns all of them.
 #[tauri::command]
-pub fn settings_set(
+pub fn settings_set<R: Runtime>(
+    app: tauri::AppHandle<R>,
     settings: State<'_, SettingsStore>,
     patch: serde_json::Value,
 ) -> Result<Settings, String> {
-    settings.update(patch)
+    let next = settings.update(patch)?;
+    if let Some(player) = app.try_state::<Player>() {
+        player.apply_settings(&next);
+    }
+    Ok(next)
 }

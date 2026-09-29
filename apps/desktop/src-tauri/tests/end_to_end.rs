@@ -68,6 +68,7 @@ fn a_scanned_track_plays_through_its_lease() {
             url: lease.url.clone(),
             headers: lease.headers.clone(),
             start_paused: false,
+            loudness_db: None,
         })
         .unwrap_or_else(|error| panic!("mpv rejected the lease URL `{}`: {error}", lease.url));
 

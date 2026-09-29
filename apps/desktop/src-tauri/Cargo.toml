@@ -34,6 +34,7 @@ keyring = "4"
 chacha20poly1305 = "0.11"
 tokio = { version = "1", features = ["fs", "time"] }
 tauri-plugin-single-instance = "2"
+semver = "1"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test", "protocol-asset", "tray-icon"] }

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
 import { type AudioDevice, playerAudioDevices } from "@ymusic/ipc";
 import { IconFolderPlus, IconRefresh, IconX } from "@tabler/icons-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
   Select,
@@ -14,16 +15,19 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { Library } from "./useLibrary.ts";
+import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
 
 interface Props {
   settings: SettingsState;
   library: Library;
+  updates: UpdatesState;
 }
 
 /** Every setting on one page, in sections, as YouTube Music lays its own out. */
-export function SettingsView({ settings: { settings, update }, library }: Props) {
+export function SettingsView({ settings: { settings, update }, library, updates }: Props) {
   const devices = useAudioDevices();
+  const available = updates.update;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -150,6 +154,42 @@ export function SettingsView({ settings: { settings, update }, library }: Props)
             />
           }
         />
+        <Row
+          label="Check for updates"
+          description="Looks for a new release each time yMusic starts."
+          control={
+            <Switch
+              checked={settings.checkForUpdates}
+              onCheckedChange={(checkForUpdates) => update({ checkForUpdates })}
+            />
+          }
+        />
+        <Row
+          label="Include prereleases"
+          description="Test versions that come out before a release. They can have bugs."
+          control={
+            <Switch
+              checked={settings.includePrereleases}
+              onCheckedChange={(includePrereleases) => update({ includePrereleases })}
+            />
+          }
+        />
+        <div className="flex items-center gap-6 px-4 py-3">
+          <span className="flex-1 text-sm text-muted-foreground">
+            {updates.status ?? "Find out whether a newer version is out."}
+          </span>
+          {available ? (
+            <Button onClick={() => void openUrl(available.url)}>Get {available.version}</Button>
+          ) : (
+            <Button
+              variant="outline"
+              disabled={updates.checking}
+              onClick={() => void updates.check()}
+            >
+              Check now
+            </Button>
+          )}
+        </div>
       </Section>
     </div>
   );

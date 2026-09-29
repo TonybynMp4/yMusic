@@ -253,3 +253,12 @@ pub async fn update_check<R: Runtime>(
     let include_prereleases = settings.get().include_prereleases;
     crate::updates::check(&app.package_info().version, include_prereleases).await
 }
+
+/// Opens the folder `tauri-plugin-log` writes to, for attaching a log to a bug
+/// report.
+#[tauri::command]
+pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
+}

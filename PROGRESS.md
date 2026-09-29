@@ -114,7 +114,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Music folders: add, remove, rescan
 - [x] Keep playing in the tray when the window closes
 - [x] Update check at startup, with prereleases opt-in and a link to the release
-- [ ] About: version, logs folder, source code and licence
+- [x] About: version, logs folder, source code, issue link
 - [ ] Account: sign in, import from a browser, sign out
 
 ### Features

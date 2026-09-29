@@ -46,9 +46,12 @@ Sign release assets with the updater's minisign key so the download is verified 
   Identification is its own background pass, separate from the fast filesystem scan, because it is network-bound and rate-limited. A library with no links still works fully.
 - **More interactions.**
   - Pin albums, playlists and artists to a quick-access row on the home page.
-  - Like and dislike songs (`like/like`, `like/dislike`), with a setting to skip disliked songs when they come up in the queue.
+  - Like and dislike songs (`like/like`, `like/dislike`), with a setting to skip disliked songs when they come up in the queue. The `skipDisliked` field is already in the settings file; its switch goes on the settings page with this work.
   - A button to dismiss the whole queue.
   - A song credits dialog, from a song's menu and from an album's when YouTube has credits for it.
+- **Gapless playback.** The player replaces the file for each song, so mpv's `gapless-audio` has nothing to join. Appending the next track to mpv's playlist once its lease is resolved (the queue already resolves it early) would let mpv join them; `end-file` and `playlist-pos` would then drive the queue instead of `loadfile`.
+- **Theme.** Light, dark, or follow the system, on the settings page. The app is dark only today.
+- **Language.** Translated UI copy, and the same language passed to youtubei.js (`lang`, sent as InnerTube's `hl`) so the text YouTube supplies, such as shelf titles, matches. Both are English today.
 - **Remote control between devices**, like Spotify Connect. YouTube appears to be building its own; if the app can join that rather than invent a protocol, it should. Not researched yet.
 - **Flatpak**, once the `.deb` is solid. It needs portal file access and a bundled libmpv, and brings its own updates.
 - **Sync service** (`services/sync`, Hono and SQLite), once there is a second device: settings, local-library metadata, downloads and history.

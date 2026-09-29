@@ -106,7 +106,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Settings saved to a file in Rust, read before the first render
 - [x] Settings page, opened from the account menu
 - [x] Autoplay remembered across restarts
-- [ ] Audio quality: high, normal, low
+- [x] Audio quality: high, normal, low
 - [ ] Gapless playback on or off
 - [ ] Stable volume: YouTube's loudness value per track, ReplayGain for local files
 - [ ] Audio output device

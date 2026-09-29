@@ -1,5 +1,6 @@
 import {
   type AudioCodec,
+  type AudioQuality,
   type StreamLease,
   type TrackId,
   trackIdForVideo,
@@ -82,18 +83,33 @@ async function basicInfo(
  * The audio-only format to play.
  *
  * Audio-only deliberately: the video-bearing formats carry a picture nobody is
- * going to look at, at several times the bitrate. Highest bitrate among those,
- * because they are all lossy and there is no reason to pick a worse one.
+ * going to look at, at several times the bitrate. Highest bitrate among those
+ * unless the listener asked for less, because they are all lossy and there is
+ * no other reason to pick a worse one.
  *
  * DRC formats are skipped. They are the same audio with dynamic range
  * compression already applied, which is a mastering decision the listener did
  * not ask us to make.
  */
-export function bestAudioFormat(formats: readonly RawFormat[]): RawFormat | null {
+export function bestAudioFormat(
+  formats: readonly RawFormat[],
+  quality: AudioQuality = "high",
+): RawFormat | null {
   const audio = formats.filter((f) => f.has_audio === true && f.has_video !== true && !f.is_drc);
   if (audio.length === 0) return null;
-  return audio.reduce((best, f) => ((f.bitrate ?? 0) > (best.bitrate ?? 0) ? f : best));
+  const score = QUALITY_SCORE[quality];
+  return audio.reduce((best, f) => (score(f.bitrate ?? 0) > score(best.bitrate ?? 0) ? f : best));
 }
+
+/** The bitrate "normal" aims for: what YouTube Music's own Normal plays. */
+const NORMAL_BITRATE = 128_000;
+
+/** Higher is better, for each quality. */
+const QUALITY_SCORE: Record<AudioQuality, (bitrate: number) => number> = {
+  high: (bitrate) => bitrate,
+  normal: (bitrate) => -Math.abs(bitrate - NORMAL_BITRATE),
+  low: (bitrate) => -bitrate,
+};
 
 const CODECS: ReadonlyArray<readonly [string, AudioCodec]> = [
   ["opus", "opus"],
@@ -154,7 +170,7 @@ export function leaseFrom(
 export async function resolveStream(
   youtube: Innertube,
   videoId: VideoId,
-  poToken?: string,
+  { quality = "high", poToken }: { quality?: AudioQuality; poToken?: string } = {},
 ): Promise<StreamLease> {
   const info = await basicInfo(youtube, videoId, poToken);
 
@@ -163,7 +179,7 @@ export async function resolveStream(
     throw new NotPlayableError(status, info.playability_status?.reason ?? null);
   }
 
-  const format = bestAudioFormat(info.streaming_data?.adaptive_formats ?? []);
+  const format = bestAudioFormat(info.streaming_data?.adaptive_formats ?? [], quality);
   if (format === null) throw new NotPlayableError("NO_AUDIO_FORMAT", null);
 
   const url = await format.decipher(youtube.session.player);

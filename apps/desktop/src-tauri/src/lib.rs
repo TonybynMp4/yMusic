@@ -6,11 +6,13 @@ pub mod images;
 pub mod library;
 pub mod platform;
 pub mod playback;
+pub mod settings;
 
 use account::{Account, OsKeyring};
 use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
+use settings::SettingsStore;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
@@ -46,7 +48,9 @@ macro_rules! ymusic_commands {
             $crate::commands::account_sign_in,
             $crate::commands::account_browsers,
             $crate::commands::account_import,
-            $crate::commands::account_sign_out
+            $crate::commands::account_sign_out,
+            $crate::commands::settings_get,
+            $crate::commands::settings_set
         ]
     };
 }
@@ -97,6 +101,7 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            app.manage(open_settings(app.handle()));
 
             // The loader already refuses to start without `libmpv.so.2` (mpv
             // 0.35), so what can still fail here is mpv itself. The app is a
@@ -165,6 +170,16 @@ fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf
     app.path()
         .app_cache_dir()
         .unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
+}
+
+fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => SettingsStore::open(dir.join("settings.json")),
+        Err(err) => {
+            log::error!("no app data directory, settings will not persist: {err}");
+            SettingsStore::in_memory()
+        }
+    }
 }
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {

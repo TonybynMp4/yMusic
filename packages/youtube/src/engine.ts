@@ -1,5 +1,6 @@
 import type {
   AlbumPage,
+  AudioQuality,
   ArtistPage,
   BrowseCard,
   PlaylistPage,
@@ -60,6 +61,7 @@ export interface ResolveOptions {
    * up only in mpv, never here.
    */
   fallback?: boolean;
+  quality?: AudioQuality;
 }
 
 /** Who is signed in, as far as the UI needs to show it. */
@@ -286,13 +288,14 @@ export class YouTubeEngine {
    * saying the video is gone, is retried on the PO-token client.
    */
   async resolve(videoId: VideoId, options: ResolveOptions = {}): Promise<StreamLease> {
-    if (options.fallback) return this.#resolveWithToken(videoId);
+    const quality = options.quality ?? "high";
+    if (options.fallback) return this.#resolveWithToken(videoId, quality);
     try {
-      return await resolveStream(await this.#playerClient(), videoId);
+      return await resolveStream(await this.#playerClient(), videoId, { quality });
     } catch (error) {
       if (this.#minter === null || isGone(error)) throw error;
       try {
-        return await this.#resolveWithToken(videoId);
+        return await this.#resolveWithToken(videoId, quality);
       } catch (fallbackError) {
         throw new AggregateError(
           [error, fallbackError],
@@ -302,11 +305,11 @@ export class YouTubeEngine {
     }
   }
 
-  async #resolveWithToken(videoId: VideoId): Promise<StreamLease> {
+  async #resolveWithToken(videoId: VideoId, quality: AudioQuality): Promise<StreamLease> {
     const minter = this.#minter;
     if (minter === null) throw new Error("no BotGuard to mint a PO token with");
     const youtube = await this.#fallbackClient(minter);
-    return resolveStream(youtube, videoId, await minter.mint(videoId));
+    return resolveStream(youtube, videoId, { quality, poToken: await minter.mint(videoId) });
   }
 
   /**

@@ -91,13 +91,23 @@ export function usePlayer({ settings, update }: SettingsState) {
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
 
+  /** Read at resolve time, so a change reaches the next song without a reload. */
+  const quality = useRef(settings.audioQuality);
+  useEffect(() => {
+    if (quality.current === settings.audioQuality) return;
+    quality.current = settings.audioQuality;
+    // Leases already resolved are for the old quality. The song playing keeps
+    // its stream; the ones after it resolve again.
+    leases.current.clear();
+  }, [settings.audioQuality]);
+
   /** A cached lease while it is still usable, otherwise a fresh one. */
   const leaseFor = useCallback((id: TrackId): Promise<StreamLease> => {
     const cached = leases.current.get(id);
     if (cached && isLeaseUsable(cached, Date.now())) return Promise.resolve(cached);
     const pending = resolving.current.get(id);
     if (pending) return pending;
-    const request = resolveTrack(id)
+    const request = resolveTrack(id, { quality: quality.current })
       .then((lease) => {
         leases.current.set(id, lease);
         return lease;
@@ -169,7 +179,7 @@ export function usePlayer({ settings, update }: SettingsState) {
         retried.current = failed;
         leases.current.delete(failed);
         void (async () => {
-          const lease = await resolveTrack(failed, { fallback: true });
+          const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
           leases.current.set(failed, lease);
           await load(lease);

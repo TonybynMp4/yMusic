@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
+import type { AudioQuality } from "@ymusic/core";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { SettingsState } from "./useSettings.ts";
 
@@ -24,8 +32,51 @@ export function SettingsView({ settings: { settings, update } }: Props) {
             />
           }
         />
+        <Row
+          label="Audio quality"
+          description="Applies from the next song."
+          control={
+            <Choice
+              value={settings.audioQuality}
+              options={QUALITIES}
+              onChange={(audioQuality) => update({ audioQuality })}
+            />
+          }
+        />
       </Section>
     </div>
+  );
+}
+
+const QUALITIES: { value: AudioQuality; label: string }[] = [
+  { value: "high", label: "High" },
+  { value: "normal", label: "Normal" },
+  { value: "low", label: "Low" },
+];
+
+/** A setting with a few named values. */
+function Choice<T extends string>(props: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <Select
+      items={props.options}
+      value={props.value}
+      onValueChange={(value) => value !== null && props.onChange(value)}
+    >
+      <SelectTrigger className="w-40">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {props.options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

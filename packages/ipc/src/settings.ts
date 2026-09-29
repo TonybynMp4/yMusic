@@ -1,9 +1,7 @@
+import { AudioQuality } from "@ymusic/core";
 import { z } from "zod";
 
 import { invokeParsed, isTauri } from "./tauri.ts";
-
-export const AudioQuality = z.enum(["high", "normal", "low"]);
-export type AudioQuality = z.infer<typeof AudioQuality>;
 
 /**
  * Mirrors `settings::Settings` in Rust. The defaults match Rust's too, and are

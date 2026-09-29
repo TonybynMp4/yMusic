@@ -106,7 +106,10 @@ mod tests {
     fn prereleases_only_when_asked() {
         let current = Version::new(0, 3, 0);
         assert_eq!(newest(releases(), &current, false), None);
-        assert_eq!(newest(releases(), &current, true).unwrap().version, "0.4.0-beta.1");
+        assert_eq!(
+            newest(releases(), &current, true).unwrap().version,
+            "0.4.0-beta.1"
+        );
     }
 
     #[test]

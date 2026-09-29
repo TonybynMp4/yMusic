@@ -321,7 +321,11 @@ pub fn stable_volume_filter(loudness_db: Option<f64>) -> String {
 }
 
 fn preferred_devices(devices: Vec<AudioDevice>) -> Vec<AudioDevice> {
-    let Some(backend) = devices.iter().map(|d| d.name.as_str()).find(|n| *n != "auto") else {
+    let Some(backend) = devices
+        .iter()
+        .map(|d| d.name.as_str())
+        .find(|n| *n != "auto")
+    else {
         return devices;
     };
     let prefix = format!("{}/", backend.split('/').next().unwrap_or(backend));

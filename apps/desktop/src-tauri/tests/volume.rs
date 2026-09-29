@@ -8,8 +8,8 @@
 //! the RMS of what comes out against the cubic curve `@ymusic/core` assumes.
 
 use libmpv2::{events::Event, Mpv};
-use ymusic_lib::playback::stable_volume_filter;
 use std::path::{Path, PathBuf};
+use ymusic_lib::playback::stable_volume_filter;
 
 /// Must match `VOLUME_CURVE_EXPONENT` in `packages/core/src/volume.ts`.
 const VOLUME_CURVE_EXPONENT: f64 = 3.0;
@@ -61,7 +61,11 @@ fn stable_volume_turns_a_loud_track_down_by_its_loudness() {
         "a track 6 dB over the reference rendered at {quieter:.4} of full scale, \
          expected {expected:.4}"
     );
-    assert_eq!(stable_volume_filter(Some(-3.0)), "", "quiet tracks are not boosted");
+    assert_eq!(
+        stable_volume_filter(Some(-3.0)),
+        "",
+        "quiet tracks are not boosted"
+    );
     assert_eq!(stable_volume_filter(None), "");
 
     let _ = std::fs::remove_dir_all(&dir);

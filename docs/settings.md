@@ -41,4 +41,4 @@ Rust applies the mpv settings itself at startup, right after `Player::new()`, so
 
 ## What is not a setting
 
-Gapless playback. The player loads each song with `loadfile <url> replace`, so mpv's `gapless-audio` never has a next file to join, and a switch would do nothing. Real gapless needs the next track appended to mpv's playlist; see PLAN.md.
+Gapless playback. The player loads each song with `loadfile <url> replace`, so mpv's `gapless-audio` never has a next file to join, and a switch would do nothing. The next track has to be appended to mpv's playlist instead; PLAN.md has the design.

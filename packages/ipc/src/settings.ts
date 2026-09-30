@@ -7,10 +7,14 @@ import { invokeParsed, isTauri } from "./tauri.ts";
  * Mirrors `settings::Settings` in Rust. The defaults match Rust's too, and are
  * what a plain browser gets, where there is no file to read.
  */
+/** `loudOnly` turns loud songs down and leaves quiet ones alone. */
+export const StableVolume = z.enum(["off", "on", "loudOnly"]);
+export type StableVolume = z.infer<typeof StableVolume>;
+
 export const Settings = z.object({
   autoplay: z.boolean().default(true),
   audioQuality: AudioQuality.default("high"),
-  stableVolume: z.boolean().default(false),
+  stableVolume: StableVolume.default("off"),
   /** An mpv `audio-device` name; `auto` follows the system's default output. */
   audioDevice: z.string().default("auto"),
   skipDisliked: z.boolean().default(false),

@@ -8,6 +8,7 @@ import {
   openLogsFolder,
   platformSummary,
   playerAudioDevices,
+  type StableVolume,
 } from "@ymusic/ipc";
 import {
   IconBrandGoogle,
@@ -83,11 +84,12 @@ export function SettingsView({
         />
         <Row
           label="Stable volume"
-          description="Turns loud songs down so every song plays at a similar level. Local files use their ReplayGain tags."
+          description="Evens out songs mastered louder or quieter than others. Local files use their ReplayGain tags."
           control={
-            <Switch
-              checked={settings.stableVolume}
-              onCheckedChange={(stableVolume) => update({ stableVolume })}
+            <Choice
+              value={settings.stableVolume}
+              options={STABLE_VOLUME}
+              onChange={(stableVolume) => update({ stableVolume })}
             />
           }
         />
@@ -251,6 +253,12 @@ const QUALITIES: { value: AudioQuality; label: string }[] = [
   { value: "high", label: "High" },
   { value: "normal", label: "Normal" },
   { value: "low", label: "Low" },
+];
+
+const STABLE_VOLUME: { value: StableVolume; label: string }[] = [
+  { value: "off", label: "Off" },
+  { value: "on", label: "On" },
+  { value: "loudOnly", label: "Only loud songs" },
 ];
 
 function AccountSection({ state }: { state: AccountState }) {

@@ -13,6 +13,8 @@ pub use event::{PlaybackEvent, PlaybackStatus};
 use event::seconds_to_ms;
 use libmpv2::{events::Event, Format, Mpv};
 use serde::{Deserialize, Serialize};
+
+use crate::settings::StableVolume;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -77,7 +79,7 @@ pub struct AudioDevice {
 /// playing, kept so switching it mid-song applies to that song.
 #[derive(Default)]
 struct Loudness {
-    stable: bool,
+    stable: StableVolume,
     track_db: Option<f64>,
 }
 
@@ -217,22 +219,23 @@ impl Player {
         }
     }
 
-    /// Stable volume turns YouTube tracks down by the loudness YouTube measured
-    /// for them, and has mpv apply ReplayGain tags to local files. It never
-    /// turns a YouTube track up: quiet tracks stay quiet rather than clip.
-    pub fn set_stable_volume(&self, on: bool) -> Result<(), String> {
+    /// Stable volume moves YouTube tracks toward YouTube's reference level by
+    /// the loudness YouTube measured for them, and has mpv apply ReplayGain
+    /// tags to local files.
+    pub fn set_stable_volume(&self, mode: StableVolume) -> Result<(), String> {
         let mut loudness = self.loudness.lock().expect("loudness mutex");
-        loudness.stable = on;
-        self.set_property("replaygain", if on { "track" } else { "no" })?;
+        loudness.stable = mode;
+        let replaygain = if mode == StableVolume::Off {
+            "no"
+        } else {
+            "track"
+        };
+        self.set_property("replaygain", replaygain)?;
         self.apply_loudness(&loudness)
     }
 
     fn apply_loudness(&self, loudness: &Loudness) -> Result<(), String> {
-        let filter = if loudness.stable {
-            stable_volume_filter(loudness.track_db)
-        } else {
-            String::new()
-        };
+        let filter = stable_volume_filter(loudness.stable, loudness.track_db);
         self.set_property("af", filter.as_str())
     }
 
@@ -311,11 +314,25 @@ impl Player {
     }
 }
 
+/// The most a quiet track is turned up. Past this the limiter would be
+/// flattening a dynamic track's loudest moments by more than it is worth.
+pub const MAX_BOOST_DB: f64 = 6.0;
+
 /// The `af` value that plays a track `loudness_db` above YouTube's reference
-/// at the reference instead. Empty, so no filter, for tracks at or below it.
-pub fn stable_volume_filter(loudness_db: Option<f64>) -> String {
-    match loudness_db {
-        Some(db) if db > 0.0 => format!("lavfi=[volume={:.2}dB]", -db),
+/// (below it, when negative) at the reference instead. Empty, so no filter,
+/// when there is nothing to change.
+///
+/// A boost goes through a limiter holding peaks at -1 dBFS: a quiet track can
+/// still have peaks at full scale, which a plain gain would clip. It leaves
+/// everything under that ceiling untouched.
+pub fn stable_volume_filter(mode: StableVolume, loudness_db: Option<f64>) -> String {
+    match (mode, loudness_db) {
+        (StableVolume::Off, _) | (_, None) => String::new(),
+        (_, Some(db)) if db > 0.0 => format!("lavfi=[volume={:.2}dB]", -db),
+        (StableVolume::On, Some(db)) if db < 0.0 => format!(
+            "lavfi=[volume={:.2}dB,alimiter=limit=0.891:level=disabled]",
+            (-db).min(MAX_BOOST_DB)
+        ),
         _ => String::new(),
     }
 }

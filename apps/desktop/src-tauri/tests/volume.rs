@@ -9,7 +9,8 @@
 
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
-use ymusic_lib::playback::stable_volume_filter;
+use ymusic_lib::playback::{stable_volume_filter, MAX_BOOST_DB};
+use ymusic_lib::settings::StableVolume;
 
 /// Must match `VOLUME_CURVE_EXPONENT` in `packages/core/src/volume.ts`.
 const VOLUME_CURVE_EXPONENT: f64 = 3.0;
@@ -54,19 +55,56 @@ fn stable_volume_turns_a_loud_track_down_by_its_loudness() {
     let tone = dir.join("tone.wav");
     write_full_scale_tone(&tone);
     let reference = render(&tone, &dir, 100.0, "");
-    let quieter = render(&tone, &dir, 100.0, &stable_volume_filter(Some(6.0))) / reference;
-    let expected = 10f64.powf(-6.0 / 20.0);
-    assert!(
-        (quieter - expected).abs() / expected < 0.05,
-        "a track 6 dB over the reference rendered at {quieter:.4} of full scale, \
-         expected {expected:.4}"
-    );
+    for mode in [StableVolume::On, StableVolume::LoudOnly] {
+        let quieter =
+            render(&tone, &dir, 100.0, &stable_volume_filter(mode, Some(6.0))) / reference;
+        let expected = 10f64.powf(-6.0 / 20.0);
+        assert!(
+            (quieter - expected).abs() / expected < 0.05,
+            "{mode:?}: a track 6 dB over the reference rendered at {quieter:.4} of \
+             full scale, expected {expected:.4}"
+        );
+    }
     assert_eq!(
-        stable_volume_filter(Some(-3.0)),
+        stable_volume_filter(StableVolume::LoudOnly, Some(-3.0)),
         "",
-        "quiet tracks are not boosted"
+        "only loud songs: quiet tracks are left alone"
     );
-    assert_eq!(stable_volume_filter(None), "");
+    assert_eq!(stable_volume_filter(StableVolume::Off, Some(6.0)), "");
+    assert_eq!(stable_volume_filter(StableVolume::On, None), "");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stable_volume_turns_a_quiet_track_up_without_clipping() {
+    let dir = std::env::temp_dir().join(format!("ymusic-boost-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    // A full-scale tone standing in for a track YouTube measured 4 dB quiet:
+    // quiet on average, peaks at the top. The boost must land in the limiter.
+    let tone = dir.join("tone.wav");
+    write_full_scale_tone(&tone);
+    let reference = render(&tone, &dir, 100.0, "");
+    let boosted = render(
+        &tone,
+        &dir,
+        100.0,
+        &stable_volume_filter(StableVolume::On, Some(-4.0)),
+    );
+    let ceiling = 10f64.powf(-1.0 / 20.0);
+    assert!(
+        boosted / reference <= ceiling * 1.02,
+        "a boosted full-scale tone should be held at -1 dBFS, got {:.4} of full scale",
+        boosted / reference
+    );
+
+    // And a boost never goes past the cap, however quiet YouTube says it is.
+    assert_eq!(
+        stable_volume_filter(StableVolume::On, Some(-20.0)),
+        format!("lavfi=[volume={MAX_BOOST_DB:.2}dB,alimiter=limit=0.891:level=disabled]")
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

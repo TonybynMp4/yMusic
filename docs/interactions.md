@@ -17,6 +17,8 @@ The thumbs down and up sit beside the song in the player bar and under the artwo
 
 A song's menu has the same two, as "Add to liked songs" and "Dislike", for any YouTube song. They show the rating as last seen: a song liked elsewhere and never played here reads as unrated until it plays. Liking it again does no harm. Disliking the song playing from its menu skips it, as the player bar does.
 
+A disliked song's row is dimmed in lists and in the queue, as YouTube Music does, except while it is the song playing. On a list row only the cover fades, so the play button over it stays clear.
+
 A song's rating costs no request of its own. Every signed-in play already sends a YouTube Music `/next` to share the queue for Resume, and its answer carries the like button, which `setServerQueue` reads. Signed in, it is a view model under `playerOverlays.playerOverlayRenderer.videoActionBar` (`...likeButtonViewModel.likeStatusEntity.likeStatus`). Signed out, it is the older `actions[].likeButtonRenderer.likeStatus`, always `INDIFFERENT`, so the live test only pins the signed-out shape. `useRatings` keeps the likes and dislikes seen in `localStorage`, for the signed-in account only and up to 5,000 songs, so they survive a restart. Setting a rating posts to `like/like`, `like/dislike` or `like/removelike` through the YouTube Music client. youtubei.js's `interact.like` sends the TV client, and a web session's cookie on another client is the mismatch YouTube flags. The buttons change at once and go back if YouTube refuses.
 
 The Liked Music playlist would say which songs are liked, but not which are disliked (YouTube has no list of those), and reading all of it is a request per hundred songs. The rating read with each play covers both for nothing.

@@ -6,7 +6,7 @@ import { Art } from "@/components/Art";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format.ts";
-import { InteractionArea, InteractionButton } from "./Interactions.tsx";
+import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
 
@@ -68,6 +68,7 @@ function Row({
   hideAlbum,
 }: Props & { track: Track }) {
   const isCurrent = track.id === currentId;
+  const dimmed = useDisliked(track) && !isCurrent;
   const play = () => (isCurrent ? onToggle() : onPlay(track.id));
   return (
     // The whole row plays on click, for the mouse; the title is the real
@@ -83,8 +84,14 @@ function Row({
         isCurrent ? "bg-accent" : "hover:bg-accent/60",
       )}
     >
-      <RowArt track={track} isCurrent={isCurrent} playing={playing} onClick={play} />
-      <span className="min-w-0 flex-1">
+      <RowArt
+        track={track}
+        isCurrent={isCurrent}
+        playing={playing}
+        onClick={play}
+        dimmed={dimmed}
+      />
+      <span className={cn("min-w-0 flex-1", dimmed && "opacity-40")}>
         <button
           type="button"
           onClick={(event) => {
@@ -117,12 +124,16 @@ function RowArt(props: {
   isCurrent: boolean;
   playing: boolean;
   onClick: () => void;
+  /** Fades the cover only, so the play button over it stays clear. */
+  dimmed: boolean;
 }) {
   const { isCurrent, playing } = props;
   const pauses = isCurrent && playing;
   return (
     <span className="relative shrink-0">
-      <Artwork track={props.track} size={36} />
+      <span className={cn("block", props.dimmed && "opacity-40")}>
+        <Artwork track={props.track} size={36} />
+      </span>
       {isCurrent && (
         <span className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-white group-hover:opacity-0">
           {playing ? <Equalizer /> : <IconDots size={18} stroke={2} />}

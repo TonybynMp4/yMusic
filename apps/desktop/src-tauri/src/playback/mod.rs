@@ -81,6 +81,8 @@ pub struct AudioDevice {
 struct Loudness {
     stable: StableVolume,
     track_db: Option<f64>,
+    /// Stats for nerds: measure the audio either side of the gain.
+    measure: bool,
 }
 
 pub struct Player {
@@ -219,6 +221,9 @@ impl Player {
         if let Err(error) = self.set_audio_device(&settings.audio_device) {
             log::warn!("{error}");
         }
+        if let Err(error) = self.set_stats(settings.stats_for_nerds) {
+            log::warn!("{error}");
+        }
     }
 
     /// Stable volume moves YouTube tracks toward YouTube's reference level by
@@ -237,8 +242,61 @@ impl Player {
     }
 
     fn apply_loudness(&self, loudness: &Loudness) -> Result<(), String> {
-        let filter = stable_volume_filter(loudness.stable, loudness.track_db);
+        let gain = stable_volume_filter(loudness.stable, loudness.track_db);
+        let filter = if loudness.measure {
+            measured_filter(&gain)
+        } else {
+            gain
+        };
         self.set_property("af", filter.as_str())
+    }
+
+    /// Turns the stats for nerds meters on or off. They restart from nothing,
+    /// as they do at the start of every song.
+    pub fn set_stats(&self, on: bool) -> Result<(), String> {
+        let mut loudness = self.loudness.lock().expect("loudness mutex");
+        if loudness.measure == on {
+            return Ok(());
+        }
+        loudness.measure = on;
+        self.apply_loudness(&loudness)
+    }
+
+    /// What stats for nerds shows. The meters read nothing while it is off.
+    pub fn stats(&self) -> AudioStats {
+        let loudness = self.loudness.lock().expect("loudness mutex");
+        let gain_db = stable_volume_gain(loudness.stable, loudness.track_db);
+        let limited = matches!(gain_db, Some(gain) if gain > 0.0);
+        drop(loudness);
+
+        let string = |name: &str| self.mpv.get_property::<String>(name).ok();
+        let params: Option<serde_json::Value> =
+            string("audio-params").and_then(|json| serde_json::from_str(&json).ok());
+        let input = string("af-metadata/in").and_then(|json| Meter::parse(&json));
+        let output = string("af-metadata/out").and_then(|json| Meter::parse(&json));
+        let peak_db = input.as_ref().and_then(|m| m.peak_db);
+        let output_peak_db = output.as_ref().and_then(|m| m.peak_db);
+
+        AudioStats {
+            codec: string("audio-codec-name"),
+            sample_rate: params.as_ref().and_then(|p| p.get("samplerate")?.as_u64()),
+            channels: params
+                .as_ref()
+                .and_then(|p| Some(p.get("hr-channels")?.as_str()?.to_string())),
+            bitrate: self.mpv.get_property::<i64>("audio-bitrate").ok(),
+            youtube_loudness_db: self.loudness.lock().expect("loudness mutex").track_db,
+            gain_db,
+            integrated_lufs: input.as_ref().and_then(|m| m.integrated),
+            momentary_lufs: input.as_ref().and_then(|m| m.momentary),
+            peak_db,
+            output_peak_db: output_peak_db.or(peak_db.zip(gain_db).map(|(p, g)| p + g)),
+            limiter_db: match (limited, peak_db, gain_db, output_peak_db) {
+                (true, Some(peak), Some(gain), Some(out)) => {
+                    Some(limiter_reduction(peak, gain, out))
+                }
+                _ => None,
+            },
+        }
     }
 
     /// The outputs to offer, on the audio backend mpv would pick by itself.
@@ -328,14 +386,97 @@ pub const MAX_BOOST_DB: f64 = 6.0;
 /// still have peaks at full scale, which a plain gain would clip. It leaves
 /// everything under that ceiling untouched.
 pub fn stable_volume_filter(mode: StableVolume, loudness_db: Option<f64>) -> String {
+    match stable_volume_gain(mode, loudness_db) {
+        None => String::new(),
+        Some(gain) if gain < 0.0 => format!("lavfi=[volume={gain:.2}dB]"),
+        Some(gain) => format!("lavfi=[volume={gain:.2}dB,alimiter=limit=0.891:level=disabled]"),
+    }
+}
+
+/// The gain stable volume applies, in dB: negative turns a loud track down,
+/// positive turns a quiet one up. None when it leaves the track alone.
+pub fn stable_volume_gain(mode: StableVolume, loudness_db: Option<f64>) -> Option<f64> {
     match (mode, loudness_db) {
-        (StableVolume::Off, _) | (_, None) => String::new(),
-        (_, Some(db)) if db > 0.0 => format!("lavfi=[volume={:.2}dB]", -db),
-        (StableVolume::On, Some(db)) if db < 0.0 => format!(
-            "lavfi=[volume={:.2}dB,alimiter=limit=0.891:level=disabled]",
-            (-db).min(MAX_BOOST_DB)
-        ),
-        _ => String::new(),
+        (StableVolume::Off, _) | (_, None) => None,
+        (_, Some(db)) if db > 0.0 => Some(-db),
+        (StableVolume::On, Some(db)) if db < 0.0 => Some((-db).min(MAX_BOOST_DB)),
+        _ => None,
+    }
+}
+
+/// The meter ffmpeg's `ebur128` filter runs, publishing through mpv's
+/// `af-metadata/<label>`: loudness per EBU R128, and the true peak so far.
+const METER: &str = "lavfi=[ebur128=metadata=1:peak=true]";
+
+/// `gain` between two meters, `in` before it and `out` after it. With no gain
+/// there is nothing to compare, and one meter is enough.
+pub fn measured_filter(gain: &str) -> String {
+    if gain.is_empty() {
+        format!("@in:{METER}")
+    } else {
+        format!("@in:{METER},{gain},@out:{METER}")
+    }
+}
+
+/// How far the limiter pulled the loudest peak down, in dB. The gain is
+/// linear, so without the limiter the output peak would be the input's plus
+/// the gain exactly; measurement noise under 0.05 dB reads as none.
+pub fn limiter_reduction(peak_db: f64, gain_db: f64, output_peak_db: f64) -> f64 {
+    let reduction = peak_db + gain_db - output_peak_db;
+    if reduction < 0.05 {
+        0.0
+    } else {
+        reduction
+    }
+}
+
+/// Stats for nerds, for the song playing. Each is None when mpv or the meters
+/// have nothing to say yet.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioStats {
+    pub codec: Option<String>,
+    pub sample_rate: Option<u64>,
+    pub channels: Option<String>,
+    /// Bits per second, as mpv estimates it from the stream.
+    pub bitrate: Option<i64>,
+    /// How far YouTube measured the track above its reference level.
+    pub youtube_loudness_db: Option<f64>,
+    /// Stable volume's gain; None when it leaves the track alone.
+    pub gain_db: Option<f64>,
+    /// Loudness over the song so far, in LUFS: its average level.
+    pub integrated_lufs: Option<f64>,
+    /// Loudness over the last 400 ms.
+    pub momentary_lufs: Option<f64>,
+    /// The track's loudest true peak so far, before the gain, in dBTP.
+    pub peak_db: Option<f64>,
+    /// The loudest true peak after the gain and limiter.
+    pub output_peak_db: Option<f64>,
+    /// How far the limiter pulled peaks down; None when there is no limiter.
+    pub limiter_db: Option<f64>,
+}
+
+/// One `ebur128` meter's readings.
+struct Meter {
+    integrated: Option<f64>,
+    momentary: Option<f64>,
+    peak_db: Option<f64>,
+}
+
+impl Meter {
+    /// mpv gives filter metadata as a JSON object of strings.
+    fn parse(json: &str) -> Option<Self> {
+        let values: HashMap<String, String> = serde_json::from_str(json).ok()?;
+        let number = |key: &str| values.get(key)?.parse::<f64>().ok();
+        // ebur128 reports silence as -70 LUFS or below; that is no reading.
+        let loudness = |key: &str| number(key).filter(|lufs| *lufs > -70.0);
+        Some(Self {
+            integrated: loudness("lavfi.r128.I"),
+            momentary: loudness("lavfi.r128.M"),
+            peak_db: number("lavfi.r128.true_peak")
+                .filter(|linear| *linear > 0.0)
+                .map(|linear| 20.0 * linear.log10()),
+        })
     }
 }
 

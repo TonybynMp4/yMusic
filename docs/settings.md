@@ -29,6 +29,14 @@ Rust applies the mpv settings itself at startup, right after `Player::new()`, so
 
 Switching it mid-song applies to that song. `tests/volume.rs` renders a tone through the filters: a loud track comes out 6 dB down, and a boosted full-scale one no louder than -1 dBFS.
 
+**Stats for nerds** shows a panel over the artwork in the expanded player, as YouTube does over a video, refreshed every second. It reads the stream (codec, sample rate, channels, bitrate), YouTube's loudness value, stable volume's gain, and two meters. With the setting on, the `af` chain gets ffmpeg's `ebur128` meter either side of the gain: `@in:lavfi=[ebur128=metadata=1:peak=true]`, the gain, then the same meter labelled `@out`. With no gain there is one meter. mpv publishes each meter's readings as JSON through `af-metadata/<label>`.
+
+- Average loudness is the integrated loudness of the song so far, and Loudness now the last 400 ms, both in LUFS.
+- Peak is the loudest true peak so far before the gain, and Peak after stable volume the same after it, in dBTP.
+- Limiter is how far the limiter pulled peaks down: the input peak plus the gain, minus the output peak. The gain is linear, so any difference is the limiter's work. It reads "Not in use" when stable volume has no limiter in the chain, which is every time it turns a song down.
+
+The meters start again with each song and whenever the setting or stable volume changes, because each rebuilds the `af` chain. They cost a little CPU, so they only run while the setting is on. `tests/volume.rs` plays a full-scale tone boosted 4 dB through both meters and checks the limiter reads about 5 dB.
+
 **Output device** lists mpv's `audio-device-list`, which mpv returns as JSON through the string getter (libmpv2 has no node getter). mpv lists every device of every backend it was built with, so the same speakers appear under PipeWire, PulseAudio and several ALSA names. Only the backend mpv would pick by itself is shown: the first entry after `auto`. A saved device that is unplugged stays in the list as "Disconnected device", and mpv falls back to the default output on its own.
 
 **Pause watch history** stops `useWatchHistory` starting new plays, so nothing new is reported. A play already underway still sends its final report.

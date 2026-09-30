@@ -35,6 +35,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_set_volume,
             $crate::commands::player_stop,
             $crate::commands::player_audio_devices,
+            $crate::commands::player_stats,
             $crate::commands::media_subscribe,
             $crate::commands::media_set_track,
             $crate::commands::media_set_volume,

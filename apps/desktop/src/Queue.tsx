@@ -1,6 +1,19 @@
-import { IconGripVertical, IconLoader2, IconX } from "@tabler/icons-react";
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconGripVertical,
+  IconLoader2,
+  IconX,
+} from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
-import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -44,6 +57,74 @@ function sourceOf(position: number, drag: Drag | null): number {
   return position;
 }
 
+/** Where the playing row is, relative to what the list shows. */
+type Away = "above" | "below" | null;
+
+/**
+ * Keeps the playing row in view, as YouTube Music's queue does. Opening the
+ * queue centres it, and when the song changes the list follows, unless you
+ * have scrolled away from the old one to look at something else. While it is
+ * out of view, `away` says which way it lies, for the button that goes back.
+ */
+function useFollowPlaying(
+  viewport: HTMLDivElement | null,
+  position: number | null,
+  dragging: boolean,
+): { away: Away; reveal: () => void } {
+  const [away, setAway] = useState<Away>(null);
+  const following = useRef(true);
+  /** The list last centred on opening; a new viewport is a queue just opened. */
+  const opened = useRef<HTMLDivElement | null>(null);
+
+  const reveal = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      if (!viewport || position === null) return;
+      const top = position * ROW_HEIGHT - (viewport.clientHeight - ROW_HEIGHT) / 2;
+      viewport.scrollTo({ top: Math.max(0, top), behavior });
+    },
+    [viewport, position],
+  );
+
+  // A layout effect, so an opening queue is centred before it is painted
+  // rather than scrolling in from the top.
+  useLayoutEffect(() => {
+    if (!viewport || position === null) return;
+    const measure = () => {
+      const top = position * ROW_HEIGHT;
+      const next: Away =
+        top + ROW_HEIGHT <= viewport.scrollTop
+          ? "above"
+          : top >= viewport.scrollTop + viewport.clientHeight
+            ? "below"
+            : null;
+      setAway(next);
+      following.current = next === null;
+    };
+    if (opened.current !== viewport) {
+      opened.current = viewport;
+      reveal("instant");
+    }
+    // A new song that has slipped out of view is brought back, unless the
+    // old one was out of view too: then you were reading the list.
+    else if (following.current && !dragging) {
+      const top = position * ROW_HEIGHT;
+      const hidden =
+        top < viewport.scrollTop || top + ROW_HEIGHT > viewport.scrollTop + viewport.clientHeight;
+      if (hidden) reveal();
+    }
+    measure();
+    viewport.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => {
+      viewport.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [viewport, position, dragging, reveal]);
+
+  return { away: position === null ? null : away, reveal: () => reveal() };
+}
+
 /**
  * The "Up next" tab of the expanded player.
  *
@@ -70,6 +151,7 @@ export function Queue({
   /** Ends the drag in progress without moving anything. */
   const cancelDrag = useRef<() => void>(() => {});
   useEffect(() => () => cancelDrag.current(), []);
+  const playing = useFollowPlaying(viewport, queue.cursor, drag !== null);
 
   if (queue.items.length === 0) {
     return (
@@ -164,57 +246,73 @@ export function Queue({
         </div>
       </div>
 
-      <ScrollArea viewportRef={setViewport} className="min-h-0 flex-1">
-        {/* Queue order, not library order: `order` is the permutation that
-            shuffle rewrites, so rendering it directly keeps the list honest. */}
-        {viewport && (
-          <VirtualList
-            count={count}
-            scroller={viewport}
-            rowHeight={ROW_HEIGHT}
-            getKey={(position) =>
-              position < queued
-                ? `${position}:${queue.order[sourceOf(position, drag)]}`
-                : position === queued
-                  ? "autoplay"
-                  : `suggestion:${queue.suggestions[position - queued - 1]?.id}`
-            }
-            className="px-2 pb-2"
-            renderRow={(position) => {
-              if (position === queued) {
-                return (
-                  <div
-                    style={{ height: ROW_HEIGHT }}
-                    className="flex items-end px-2 pb-2 text-xs font-medium text-muted-foreground"
-                  >
-                    Autoplay
-                  </div>
-                );
+      <div className="relative min-h-0 flex-1">
+        <ScrollArea viewportRef={setViewport} className="h-full">
+          {/* Queue order, not library order: `order` is the permutation that
+              shuffle rewrites, so rendering it directly keeps the list honest. */}
+          {viewport && (
+            <VirtualList
+              count={count}
+              scroller={viewport}
+              rowHeight={ROW_HEIGHT}
+              getKey={(position) =>
+                position < queued
+                  ? `${position}:${queue.order[sourceOf(position, drag)]}`
+                  : position === queued
+                    ? "autoplay"
+                    : `suggestion:${queue.suggestions[position - queued - 1]?.id}`
               }
-              if (position > queued) {
-                const track = queue.suggestions[position - queued - 1];
+              className="px-2 pb-2"
+              renderRow={(position) => {
+                if (position === queued) {
+                  return (
+                    <div
+                      style={{ height: ROW_HEIGHT }}
+                      className="flex items-end px-2 pb-2 text-xs font-medium text-muted-foreground"
+                    >
+                      Autoplay
+                    </div>
+                  );
+                }
+                if (position > queued) {
+                  const track = queue.suggestions[position - queued - 1];
+                  if (!track) return null;
+                  return <Row track={track} onJump={onJump} suggestion />;
+                }
+                const source = sourceOf(position, drag);
+                const itemIndex = queue.order[source]!;
+                const track = queue.items[itemIndex];
                 if (!track) return null;
-                return <Row track={track} onJump={onJump} suggestion />;
-              }
-              const source = sourceOf(position, drag);
-              const itemIndex = queue.order[source]!;
-              const track = queue.items[itemIndex];
-              if (!track) return null;
-              return (
-                <Row
-                  track={track}
-                  current={itemIndex === current}
-                  onJump={onJump}
-                  onRemove={onRemove}
-                  onDragStart={(event) => startDrag(source, event)}
-                  dragging={drag?.from === source}
-                  className={cn(drag && "pointer-events-none")}
-                />
-              );
-            }}
-          />
+                return (
+                  <Row
+                    track={track}
+                    current={itemIndex === current}
+                    onJump={onJump}
+                    onRemove={onRemove}
+                    onDragStart={(event) => startDrag(source, event)}
+                    dragging={drag?.from === source}
+                    className={cn(drag && "pointer-events-none")}
+                  />
+                );
+              }}
+            />
+          )}
+        </ScrollArea>
+        {playing.away && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={playing.reveal}
+            className={cn(
+              "absolute left-1/2 -translate-x-1/2 rounded-full shadow-lg",
+              playing.away === "above" ? "top-2" : "bottom-2",
+            )}
+          >
+            {playing.away === "above" ? <IconArrowUp /> : <IconArrowDown />}
+            Now playing
+          </Button>
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 }

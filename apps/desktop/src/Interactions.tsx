@@ -119,6 +119,16 @@ function useInteractions(): Context {
 }
 
 /**
+ * Whether the account dislikes a song, as last seen. Its row is dimmed for
+ * it, as YouTube Music dims disliked songs in a list.
+ */
+export function useDisliked(track: Track): boolean {
+  const x = useInteractions();
+  const videoId = videoIdFromTrackId(track.id);
+  return videoId !== null && x.ratingOf(videoId) === "dislike";
+}
+
+/**
  * What a menu acts on. A collection is anything with a YouTube Music page of
  * its own; a folder is one of the local library's.
  */

@@ -8,21 +8,49 @@ export type Rating = "like" | "dislike" | "none";
 export interface RawNext {
   playerOverlays?: {
     playerOverlayRenderer?: {
+      /** Signed in: the like and dislike pair, as a view model. */
+      videoActionBar?: {
+        videoActionBarViewModel?: {
+          buttons?: readonly {
+            buttonViewModel?: {
+              segmentedLikeDislikeButtonViewModel?: {
+                likeButtonViewModel?: {
+                  likeButtonViewModel?: { likeStatusEntity?: { likeStatus?: unknown } };
+                };
+              };
+            };
+          }[];
+        };
+      };
+      /** Signed out: the older like button renderer. */
       actions?: readonly { likeButtonRenderer?: { likeStatus?: unknown } }[];
     };
   };
 }
 
+function toRating(status: unknown): Rating | null {
+  if (status === "LIKE") return "like";
+  if (status === "DISLIKE") return "dislike";
+  if (status === "INDIFFERENT") return "none";
+  return null;
+}
+
 /**
  * The account's rating of a song, from the like button YouTube Music's
- * `/next` puts in the player overlay. Signed out, it is always `none`.
+ * `/next` puts in the player overlay. Signed in, that button is a view model
+ * in `videoActionBar`; signed out, it is a `likeButtonRenderer` in `actions`
+ * and always `none`.
  */
 export function ratingFrom(data: RawNext): Rating {
-  for (const action of data.playerOverlays?.playerOverlayRenderer?.actions ?? []) {
-    const status = action.likeButtonRenderer?.likeStatus;
-    if (status === "LIKE") return "like";
-    if (status === "DISLIKE") return "dislike";
-    if (status !== undefined) return "none";
+  const overlay = data.playerOverlays?.playerOverlayRenderer;
+  for (const button of overlay?.videoActionBar?.videoActionBarViewModel?.buttons ?? []) {
+    const like = button.buttonViewModel?.segmentedLikeDislikeButtonViewModel?.likeButtonViewModel;
+    const rating = toRating(like?.likeButtonViewModel?.likeStatusEntity?.likeStatus);
+    if (rating !== null) return rating;
+  }
+  for (const action of overlay?.actions ?? []) {
+    const rating = toRating(action.likeButtonRenderer?.likeStatus);
+    if (rating !== null) return rating;
   }
   return "none";
 }

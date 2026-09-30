@@ -20,9 +20,11 @@ import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { InteractionArea } from "./Interactions.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
-import { Artwork } from "./TrackList.tsx";
+import { Artwork, Byline, TitleLink } from "./TrackList.tsx";
 import { formatDuration } from "./format.ts";
+import type { Route } from "./useBrowse.ts";
 import { usePosition, type PlaybackState, type PositionStore } from "./usePlayback.ts";
+import { useSongYear } from "./useSongYear.ts";
 
 interface Props {
   track: Track | null;
@@ -43,6 +45,8 @@ interface Props {
   onToggleExpanded: () => void;
   /** Null when the song can't be rated: a local file, or signed out. */
   rating: RatingProps | null;
+  /** Opens the album or an artist from the song's title and byline. */
+  onOpen: (route: Route) => void;
 }
 
 /** Whether a click landed on one of the bar's controls rather than the bar. */
@@ -71,6 +75,7 @@ export function NowPlaying(props: Props) {
    */
   const [scrubbing, setScrubbing] = useState<number | null>(null);
   const pressedControl = useRef(false);
+  const year = useSongYear(track);
 
   const duration = playback.durationMs ?? track?.durationMs ?? null;
   const playing = usePosition(props.position);
@@ -116,10 +121,8 @@ export function NowPlaying(props: Props) {
             <>
               <Artwork track={track} size={48} />
               <span className="min-w-0">
-                <span className="block truncate text-sm">{track.title}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {track.artists[0]?.name}
-                </span>
+                <TitleLink track={track} onOpen={props.onOpen} className="text-sm" />
+                <Byline track={track} onOpen={props.onOpen} year={year} />
               </span>
               {props.rating && (
                 <span className="flex shrink-0 items-center">

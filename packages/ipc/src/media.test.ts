@@ -20,6 +20,7 @@ const base: Track = {
     { url: "https://i.ytimg.com/large.jpg", width: 544, height: 544 },
   ],
   isExplicit: false,
+  year: null,
 };
 
 describe("toMediaTrack", () => {

@@ -260,6 +260,7 @@ export function App(props: { settings: Settings }) {
                 onClear={() => player.dispatch({ type: "clear" })}
                 onCollapse={() => setExpanded(false)}
                 rating={rating}
+                onOpen={go}
               />
             )}
           </div>
@@ -282,6 +283,7 @@ export function App(props: { settings: Settings }) {
           expanded={expanded}
           onToggleExpanded={() => setExpanded((open) => !open)}
           rating={rating}
+          onOpen={go}
         />
         <UpdateNotice updates={updates} />
         {notice.message && (

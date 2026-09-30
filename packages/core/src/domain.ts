@@ -65,6 +65,8 @@ export const Track = z.object({
   durationMs: z.number().int().nonnegative().nullable(),
   thumbnails: z.array(Thumbnail),
   isExplicit: z.boolean().default(false),
+  /** The album's release year, when the source says. */
+  year: z.number().int().nullable().default(null),
 });
 export type Track = z.infer<typeof Track>;
 

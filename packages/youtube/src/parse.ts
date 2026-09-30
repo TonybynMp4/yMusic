@@ -20,6 +20,8 @@ export interface RawSong {
   artists?: readonly { name?: unknown; channel_id?: unknown }[] | null;
   thumbnails?: readonly RawThumbnail[] | null;
   badges?: readonly { icon_type?: unknown }[] | null;
+  /** The release year, as text, when the row carries one. */
+  year?: unknown;
   /** The row's columns as YouTube sent them, for what youtubei.js misses. */
   flex_columns?: readonly { title?: { runs?: readonly RawRun[] } | null }[] | null;
 }
@@ -57,6 +59,7 @@ export function toTrack(raw: RawSong): Track | null {
     durationMs,
     thumbnails: toThumbnails(raw.thumbnails ?? undefined),
     isExplicit: (raw.badges ?? []).some((badge) => badge?.icon_type === EXPLICIT_BADGE),
+    year: yearFrom(raw.year),
   };
 
   const result = Track.safeParse(candidate);
@@ -86,6 +89,17 @@ function toAlbum(raw: RawSong): { name: string | null; id: string | null } {
 }
 
 const ALBUM_BROWSE_PREFIX = "MPREb_";
+
+/**
+ * A release year out of text YouTube sends, such as a byline's last run
+ * ("2019") or an album header's subtitle ("Album • 2019"). The last four-digit
+ * year wins, so an album titled with a year does not shadow its release.
+ */
+export function yearFrom(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const years = value.match(/\b(1[89]|20)\d\d\b/g);
+  return years ? Number(years.at(-1)) : null;
+}
 
 export function toArtists(raw: RawSong["artists"]): Artist[] {
   const artists: Artist[] = [];

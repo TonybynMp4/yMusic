@@ -4,7 +4,7 @@ import type { VideoId } from "@ymusic/core";
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
 import { getPlaybackTracking } from "./history.ts";
-import { getRadio } from "./radio.ts";
+import { getRadio, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
 import { searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
@@ -95,6 +95,14 @@ live("song rating against the real InnerTube", () => {
     });
     expect(JSON.stringify(response.data)).toContain('"likeStatus":"INDIFFERENT"');
     expect(ratingFrom(response.data as RawNext)).toBe("none");
+  }, 30_000);
+});
+
+live("a song's release year against the real InnerTube", () => {
+  it("reads the year off the song's own up-next row", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    // Roygbiv, from Music Has The Right To Children (1998).
+    expect(await getSongYear(youtube, "SM4tQcUt_mQ" as VideoId)).toBe(1998);
   }, 30_000);
 });
 

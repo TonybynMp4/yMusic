@@ -37,7 +37,7 @@ import {
   type WatchReport,
 } from "./history.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
-import { getMix, getRadio } from "./radio.ts";
+import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
@@ -140,6 +140,11 @@ export class YouTubeEngine {
   /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */
   async radio(videoId: VideoId): Promise<Track[]> {
     return getRadio(await this.#browseClient(), videoId);
+  }
+
+  /** The year a song's album came out, for the player's byline. */
+  async songYear(videoId: VideoId): Promise<number | null> {
+    return getSongYear(await this.#browseClient(), videoId);
   }
 
   /**

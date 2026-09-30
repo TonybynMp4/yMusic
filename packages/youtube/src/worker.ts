@@ -42,6 +42,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     account: () => engine.account(),
     search: (query, options) => engine.search(query, options),
     radio: (videoId) => engine.radio(videoId),
+    songYear: (videoId) => engine.songYear(videoId),
     album: (id) => engine.album(id),
     artist: (id) => engine.artist(id),
     playlist: (id) => engine.playlist(id),

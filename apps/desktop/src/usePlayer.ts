@@ -129,6 +129,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const resolving = useRef(new Map<TrackId, Promise<StreamLease>>());
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
+  /** Whether the loaded track was cued, so its retry stays paused too. */
+  const loadedPaused = useRef(false);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -183,6 +185,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     retried.current = null;
     const paused = cued.current === trackId;
     cued.current = null;
+    loadedPaused.current = paused;
 
     let cancelled = false;
     void (async () => {
@@ -235,8 +238,11 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
           const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
           leases.current.set(failed, lease);
-          await load(lease);
-          await engine.play();
+          // A resumed queue opens its song paused; being refused once must
+          // not start it playing.
+          const paused = loadedPaused.current;
+          await load(lease, paused);
+          if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
           if (loadedId.current === failed) {
@@ -422,10 +428,14 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   }, [autoplay]);
   const setAutoplay = useCallback((on: boolean) => update({ autoplay: on }), [update]);
 
-  const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
+  const play = useCallback(() => {
+    loadedPaused.current = false;
+    void engine.play().catch(logPlaybackFailure);
+  }, [engine]);
   const pause = useCallback(() => void engine.pause().catch(logPlaybackFailure), [engine]);
 
   const toggle = useCallback(() => {
+    if (state.status !== "playing") loadedPaused.current = false;
     void (state.status === "playing" ? engine.pause() : engine.play());
   }, [engine, state.status]);
 

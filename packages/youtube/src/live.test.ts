@@ -5,6 +5,7 @@ import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
 import { getPlaybackTracking } from "./history.ts";
 import { getRadio } from "./radio.ts";
+import { getRating } from "./rating.ts";
 import { searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -75,6 +76,20 @@ live("song radio against the real InnerTube", () => {
     expect(tracks.length).toBeGreaterThan(10);
     expect(tracks.some((t) => t.id === "yt:SM4tQcUt_mQ")).toBe(false);
     expect(tracks.filter((t) => t.artists.length > 0).length).toBeGreaterThan(0);
+  }, 30_000);
+});
+
+live("song rating against the real InnerTube", () => {
+  // Signed out every song is unrated, so this pins where the like button
+  // sits, not what it says: a moved button would read as "none" forever.
+  it("finds the like button in the player overlay", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const response = await youtube.actions.execute("/next", {
+      videoId: "SM4tQcUt_mQ",
+      client: "YTMUSIC",
+    });
+    expect(JSON.stringify(response.data)).toContain('"likeStatus":"INDIFFERENT"');
+    expect(await getRating(youtube, "SM4tQcUt_mQ" as VideoId)).toBe("none");
   }, 30_000);
 });
 

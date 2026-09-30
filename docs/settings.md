@@ -43,7 +43,7 @@ Switching it mid-song applies to that song. `tests/volume.rs` renders a tone thr
 
 **About** shows the version, opens the log folder (`open_logs_folder`, from Rust so the webview needs no path permission), and links to the repository and its issues.
 
-**Skip disliked songs** is stored but has no switch yet: there is no dislike to act on until liking and disliking lands.
+**Skip disliked songs** skips a disliked song when the queue moves on to it, but not one you pick. See [Interactions](interactions.md#liking-and-disliking).
 
 ## What is not a setting
 

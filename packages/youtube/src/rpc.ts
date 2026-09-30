@@ -47,4 +47,6 @@ export interface EngineWorkerApi {
   watched: YouTubeEngine["watched"];
   serverQueue: YouTubeEngine["serverQueue"];
   shareQueue: YouTubeEngine["shareQueue"];
+  rating: YouTubeEngine["rating"];
+  rate: YouTubeEngine["rate"];
 }

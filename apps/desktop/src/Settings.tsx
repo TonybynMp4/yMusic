@@ -72,6 +72,16 @@ export function SettingsView({
           }
         />
         <Row
+          label="Skip disliked songs"
+          description="Songs you disliked are skipped when they come up in the queue. Ones you pick still play."
+          control={
+            <Switch
+              checked={settings.skipDisliked}
+              onCheckedChange={(skipDisliked) => update({ skipDisliked })}
+            />
+          }
+        />
+        <Row
           label="Audio quality"
           description="Applies from the next song."
           control={

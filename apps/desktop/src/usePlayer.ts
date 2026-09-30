@@ -14,10 +14,13 @@ import {
   type TrackId,
   videoIdFromTrackId,
 } from "@ymusic/core";
+import type { Rating } from "@ymusic/youtube/host";
+
 import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
+import { useRating } from "./useRating.ts";
 import type { SettingsState } from "./useSettings.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
@@ -54,7 +57,7 @@ function radioSeed(queue: QueueState): TrackId | null {
  * swapping the resolver, not restructuring playback around a step that suddenly
  * became slow and fallible.
  */
-export function usePlayer({ settings, update }: SettingsState) {
+export function usePlayer({ settings, update }: SettingsState, signedIn: boolean) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
@@ -78,6 +81,12 @@ export function usePlayer({ settings, update }: SettingsState) {
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
+  /**
+   * Whether the current track came up by moving on through the queue, at its
+   * end or on Next, rather than being picked. Only those are skipped for
+   * being disliked: a song you chose yourself plays.
+   */
+  const cameUp = useRef(false);
   useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
 
   /**
@@ -202,6 +211,7 @@ export function usePlayer({ settings, update }: SettingsState) {
         if (event.type !== "ended") return;
         // Repeat-one returns the same id, so the load effect would skip it.
         loadedId.current = null;
+        cameUp.current = true;
         dispatch({ type: "next", reason: "trackEnded" });
       }),
     [engine],
@@ -217,6 +227,7 @@ export function usePlayer({ settings, update }: SettingsState) {
   const send = useCallback(
     (action: QueueAction) => {
       if (action.type === "setQueue" || action.type === "clear") stopFollowing();
+      if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
       dispatch(action);
     },
     [stopFollowing],
@@ -362,7 +373,10 @@ export function usePlayer({ settings, update }: SettingsState) {
     void (state.status === "playing" ? engine.pause() : engine.play());
   }, [engine, state.status]);
 
-  const next = useCallback(() => dispatch({ type: "next", reason: "user" }), []);
+  const next = useCallback(() => {
+    cameUp.current = true;
+    dispatch({ type: "next", reason: "user" });
+  }, []);
 
   /**
    * Restarting rather than going back is what every other player does once you
@@ -374,8 +388,30 @@ export function usePlayer({ settings, update }: SettingsState) {
       void engine.seek(0);
       return;
     }
+    cameUp.current = false;
     dispatch({ type: "previous" });
   }, [engine, position]);
+
+  const { videoId, rating, rate: sendRating } = useRating(trackId, signedIn);
+  /** The track whose rating was last checked for a skip, so each is checked once. */
+  const checked = useRef<TrackId | null>(null);
+  const skipDisliked = settings.skipDisliked;
+  useEffect(() => {
+    if (rating === null || checked.current === trackId) return;
+    checked.current = trackId;
+    if (rating === "dislike" && skipDisliked && cameUp.current) next();
+  }, [rating, trackId, skipDisliked, next]);
+
+  /** Rates the song playing. Disliking it also skips it, as YouTube Music does. */
+  const rate = useCallback(
+    (value: Rating) => {
+      if (videoId === null) return Promise.resolve();
+      checked.current = trackId;
+      if (value === "dislike") next();
+      return sendRating(videoId, value);
+    },
+    [videoId, trackId, next, sendRating],
+  );
 
   const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
   const setVolume = useCallback(
@@ -416,5 +452,7 @@ export function usePlayer({ settings, update }: SettingsState) {
     setVolume,
     setRepeat,
     setShuffle,
+    rating,
+    rate,
   };
 }

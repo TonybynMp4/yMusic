@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
-import type { Track, TrackId } from "@ymusic/core";
+import { sourceOf, type Track, type TrackId } from "@ymusic/core";
 import type { Settings } from "@ymusic/ipc";
+import type { Rating } from "@ymusic/youtube/host";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -53,8 +54,8 @@ export function App(props: { settings: Settings }) {
   const library = useLibrary(query);
   const settings = useSettings(props.settings);
   const youtube = useYouTubeSearch(query, true, settings.settings.pauseSearchHistory);
-  const player = usePlayer(settings);
   const account = useAccount();
+  const player = usePlayer(settings, account.account !== null);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
   useResume(player, account.account?.name ?? null);
@@ -114,6 +115,25 @@ export function App(props: { settings: Settings }) {
     }
     player.playTrack(tracks, id, from);
   };
+  // Only a YouTube song, and only signed in: the rating is the account's.
+  const ratable =
+    account.account !== null && player.track !== null && sourceOf(player.track.id) === "youtube";
+  const rating = ratable
+    ? {
+        rating: player.rating,
+        onRate: (value: Rating) => {
+          void player
+            .rate(value)
+            .then(() => {
+              if (value === "like") notice.show("Saved to Liked Music");
+              else if (player.rating === "like") notice.show("Removed from Liked Music");
+            })
+            .catch((error: unknown) =>
+              notice.show(error instanceof Error ? error.message : String(error)),
+            );
+        },
+      }
+    : null;
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,
     playing: player.playback.status === "playing",
@@ -236,6 +256,7 @@ export function App(props: { settings: Settings }) {
                 onMove={(from, to) => player.dispatch({ type: "move", from, to })}
                 onClear={() => player.dispatch({ type: "clear" })}
                 onCollapse={() => setExpanded(false)}
+                rating={rating}
               />
             )}
           </div>
@@ -257,6 +278,7 @@ export function App(props: { settings: Settings }) {
           onShuffle={player.setShuffle}
           expanded={expanded}
           onToggleExpanded={() => setExpanded((open) => !open)}
+          rating={rating}
         />
         <UpdateNotice updates={updates} />
         {notice.message && (

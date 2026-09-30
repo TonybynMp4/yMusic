@@ -155,19 +155,26 @@ function Equalizer() {
   );
 }
 
-/** "Artist, Artist • Album", each part a link when it has a page to open. */
-function Byline({
+/**
+ * "Artist, Artist • Album", each part a link when it has a page to open. With
+ * `year`, the release year follows, as in the player bar.
+ */
+export function Byline({
   track,
   onOpen,
   hideAlbum,
+  year,
+  className,
 }: {
   track: Track;
   onOpen: ((route: Route) => void) | undefined;
-  hideAlbum: boolean | undefined;
+  hideAlbum?: boolean | undefined;
+  year?: number | null;
+  className?: string;
 }) {
   const albumId = track.albumId;
   return (
-    <span className="block truncate text-xs text-muted-foreground">
+    <span className={cn("block truncate text-xs text-muted-foreground", className)}>
       {track.artists.map((artist, i) => (
         <Fragment key={`${artist.name}:${i}`}>
           {i > 0 && ", "}
@@ -192,11 +199,45 @@ function Byline({
           )}
         </>
       )}
+      {year != null && ` • ${year}`}
     </span>
   );
 }
 
-function BylineLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+/**
+ * The song's title, opening its album when it has one: the nearest thing the
+ * app has to a page for the song.
+ */
+export function TitleLink({
+  track,
+  onOpen,
+  className,
+}: {
+  track: Track;
+  onOpen: (route: Route) => void;
+  className?: string;
+}) {
+  const albumId = track.albumId;
+  if (!albumId) return <span className={cn("block truncate", className)}>{track.title}</span>;
+  return (
+    <span className={cn("block truncate", className)}>
+      <BylineLink onClick={() => onOpen({ kind: "album", id: albumId })} underlineOnly>
+        {track.title}
+      </BylineLink>
+    </span>
+  );
+}
+
+function BylineLink({
+  onClick,
+  underlineOnly,
+  children,
+}: {
+  onClick: () => void;
+  /** Keep the text's own colour on hover, for a title that is already bright. */
+  underlineOnly?: boolean;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -204,7 +245,10 @@ function BylineLink({ onClick, children }: { onClick: () => void; children: Reac
         event.stopPropagation();
         onClick();
       }}
-      className="outline-none hover:text-foreground hover:underline focus-visible:underline"
+      className={cn(
+        "outline-none hover:underline focus-visible:underline",
+        !underlineOnly && "hover:text-foreground",
+      )}
     >
       {children}
     </button>

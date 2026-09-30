@@ -6,6 +6,9 @@ import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Queue } from "./Queue.tsx";
+import { Byline, TitleLink } from "./TrackList.tsx";
+import type { Route } from "./useBrowse.ts";
+import { useSongYear } from "./useSongYear.ts";
 
 /**
  * A tab in the expanded player's strip.
@@ -31,6 +34,8 @@ interface Props {
   onMove: (from: number, to: number) => void;
   onClear: () => void;
   onCollapse: () => void;
+  /** Opens the album or an artist from the song's title and byline. */
+  onOpen: (route: Route) => void;
   /** Contributed tabs. Empty until plugins exist; the strip is built for them. */
   tabs?: readonly PlayerPanelTab[];
 }
@@ -42,8 +47,9 @@ interface Props {
  * YouTube Music keeps the queue inside the expanded player, which is also
  * what gives plugin panels somewhere to live.
  */
-export function FullPlayer({ track, onCollapse, tabs = [], ...queueProps }: Props) {
+export function FullPlayer({ track, onCollapse, onOpen, tabs = [], ...queueProps }: Props) {
   const [active, setActive] = useState("queue");
+  const year = useSongYear(track);
 
   // Escape collapses, because a view that covers everything needs a way out
   // that is not hunting for the one small chevron.
@@ -70,10 +76,10 @@ export function FullPlayer({ track, onCollapse, tabs = [], ...queueProps }: Prop
           <CoverArt track={track} />
           {track && (
             <div className="min-w-0 max-w-full text-center">
-              <h1 className="truncate text-xl font-medium">{track.title}</h1>
-              <p className="truncate text-sm text-muted-foreground">
-                {track.artists.map((artist) => artist.name).join(", ")}
-              </p>
+              <h1>
+                <TitleLink track={track} onOpen={onOpen} className="text-xl font-medium" />
+              </h1>
+              <Byline track={track} onOpen={onOpen} year={year} className="text-sm" />
             </div>
           )}
         </div>

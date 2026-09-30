@@ -46,6 +46,7 @@ describe("albumFrom", () => {
       expect(track.albumId).toBe("MPREb_x");
       expect(track.artists).toEqual(album.artists);
       expect(track.thumbnails).toEqual(album.thumbnails);
+      expect(track.year).toBe(1998);
     }
   });
 

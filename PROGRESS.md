@@ -96,6 +96,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Pin and unpin albums, playlists and artists to quick access on the home page
 - [x] Like and dislike songs
 - [x] Setting to skip disliked songs
+- [x] Like and dislike from a song's menu
 - [ ] Dismiss the queue in one click
 - [ ] Song credits dialog, from a song's menu and from an album's when YouTube has credits for it
 - [x] Menus on the queue's rows, with remove from queue

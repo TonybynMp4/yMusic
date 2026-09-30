@@ -12,6 +12,7 @@ import {
   type Track,
   type QueueState,
   type TrackId,
+  type VideoId,
   videoIdFromTrackId,
 } from "@ymusic/core";
 import type { Rating } from "@ymusic/youtube/host";
@@ -451,12 +452,14 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   /** The song playing's rating; null for a local file or while signed out. */
   const rating = videoId === null ? null : ratings.ratingOf(videoId);
   const sendRating = ratings.rate;
-  /** Rates the song playing. Disliking it also skips it, as YouTube Music does. */
+  /**
+   * Rates a song. Disliking the one playing also skips it, as YouTube Music
+   * does; any other song is only rated.
+   */
   const rate = useCallback(
-    (value: Rating) => {
-      if (videoId === null) return Promise.resolve();
-      if (value === "dislike") next();
-      return sendRating(videoId, value);
+    (song: VideoId, value: Rating) => {
+      if (song === videoId && value === "dislike") next();
+      return sendRating(song, value);
     },
     [videoId, next, sendRating],
   );
@@ -501,6 +504,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     setRepeat,
     setShuffle,
     rating,
+    ratingOf: ratings.ratingOf,
     rate,
   };
 }

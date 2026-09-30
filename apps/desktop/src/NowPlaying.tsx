@@ -82,6 +82,9 @@ export function NowPlaying(props: Props) {
   const position = scrubbing ?? playing;
   const isPlaying = playback.status === "playing";
   const decibels = decibelsForVolume(volume / 100);
+  /** The level to go back to on unmute: the last one above zero. */
+  const unmuted = useRef(props.volume > 0 ? props.volume : 1);
+  if (props.volume > 0) unmuted.current = props.volume;
 
   return (
     // As in YouTube Music: a click on the bar, anywhere but its controls,
@@ -206,7 +209,12 @@ export function NowPlaying(props: Props) {
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-2">
-          <VolumeIcon volume={volume} />
+          <IconButton
+            label={volume === 0 ? "Unmute" : "Mute"}
+            onClick={() => props.onVolume(volume === 0 ? unmuted.current : 0)}
+          >
+            <VolumeIcon volume={volume} />
+          </IconButton>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -236,8 +244,7 @@ export function NowPlaying(props: Props) {
 /** Reflects the slider position, so the icon tracks the handle rather than the
  *  amplitude, which at a quarter travel would already look muted. */
 function VolumeIcon({ volume }: { volume: number }) {
-  const className = "shrink-0 text-muted-foreground";
-  if (volume === 0) return <IconVolume3 size={16} className={className} />;
-  if (volume < 50) return <IconVolume2 size={16} className={className} />;
-  return <IconVolume size={16} className={className} />;
+  if (volume === 0) return <IconVolume3 size={16} />;
+  if (volume < 50) return <IconVolume2 size={16} />;
+  return <IconVolume size={16} />;
 }

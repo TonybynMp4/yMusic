@@ -47,6 +47,8 @@ pub struct Settings {
     pub close_to_tray: bool,
     pub check_for_updates: bool,
     pub include_prereleases: bool,
+    /// Loudness, peaks and the stable volume gain, measured as a song plays.
+    pub stats_for_nerds: bool,
 }
 
 impl Default for Settings {
@@ -62,6 +64,7 @@ impl Default for Settings {
             close_to_tray: false,
             check_for_updates: true,
             include_prereleases: false,
+            stats_for_nerds: false,
         }
     }
 }

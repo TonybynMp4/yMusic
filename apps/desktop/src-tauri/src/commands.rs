@@ -7,7 +7,7 @@
 use crate::account::{import, sign_in, Account};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
-use crate::playback::{AudioDevice, LoadRequest, PlaybackEvent, Player};
+use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
 use crate::settings::{Settings, SettingsStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 
@@ -83,6 +83,11 @@ pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), S
 #[tauri::command]
 pub fn player_audio_devices(player: State<'_, Player>) -> Result<Vec<AudioDevice>, String> {
     player.audio_devices()
+}
+
+#[tauri::command]
+pub fn player_stats(player: State<'_, Player>) -> AudioStats {
+    player.stats()
 }
 
 #[tauri::command]

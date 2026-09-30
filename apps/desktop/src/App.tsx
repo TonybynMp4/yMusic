@@ -261,6 +261,8 @@ export function App(props: { settings: Settings }) {
                 onCollapse={() => setExpanded(false)}
                 rating={rating}
                 onOpen={go}
+                stats={settings.settings.statsForNerds}
+                onCloseStats={() => settings.update({ statsForNerds: false })}
               />
             )}
           </div>

@@ -46,7 +46,6 @@ Sign release assets with the updater's minisign key so the download is verified 
   Identification is its own background pass, separate from the fast filesystem scan, because it is network-bound and rate-limited. A library with no links still works fully.
 - **More interactions.**
   - Pin albums, playlists and artists to a quick-access row on the home page.
-  - Like and dislike songs (`like/like`, `like/dislike`), with a setting to skip disliked songs when they come up in the queue. The `skipDisliked` field is already in the settings file; its switch goes on the settings page with this work.
   - A button to dismiss the whole queue.
   - A song credits dialog, from a song's menu and from an album's when YouTube has credits for it.
 - **Gapless playback.** Today each song is a `loadfile <url> replace` sent after the previous one ends: mpv reports end of file, the webview dispatches Next, and Rust loads the next URL, which then connects and probes before a sample plays. `gapless-audio` has nothing to join. The plan:

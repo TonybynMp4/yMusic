@@ -38,6 +38,7 @@ import {
 } from "./history.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio } from "./radio.ts";
+import { getRating, setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -226,6 +227,17 @@ export class YouTubeEngine {
   async shareQueue(videoId: VideoId, playlistId: string | null): Promise<void> {
     if (this.#cookie === null) return;
     await setServerQueue(await this.#browseClient(), videoId, playlistId);
+  }
+
+  /** The account's thumbs up or down on a song. `none` when signed out. */
+  async rating(videoId: VideoId): Promise<Rating> {
+    if (this.#cookie === null) return "none";
+    return getRating(await this.#browseClient(), videoId);
+  }
+
+  /** Likes or dislikes a song, or clears either. Liking adds it to Liked Music. */
+  async rate(videoId: VideoId, rating: Rating): Promise<void> {
+    await setRating(await this.#signedIn(), videoId, rating);
   }
 
   /**

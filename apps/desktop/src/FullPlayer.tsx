@@ -6,6 +6,7 @@ import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Queue } from "./Queue.tsx";
+import { RatingButtons, type RatingProps } from "./Rating.tsx";
 
 /**
  * A tab in the expanded player's strip.
@@ -33,6 +34,8 @@ interface Props {
   onCollapse: () => void;
   /** Contributed tabs. Empty until plugins exist; the strip is built for them. */
   tabs?: readonly PlayerPanelTab[];
+  /** Null when the song can't be rated: a local file, or signed out. */
+  rating: RatingProps | null;
 }
 
 /**
@@ -42,7 +45,7 @@ interface Props {
  * YouTube Music keeps the queue inside the expanded player, which is also
  * what gives plugin panels somewhere to live.
  */
-export function FullPlayer({ track, onCollapse, tabs = [], ...queueProps }: Props) {
+export function FullPlayer({ track, onCollapse, tabs = [], rating, ...queueProps }: Props) {
   const [active, setActive] = useState("queue");
 
   // Escape collapses, because a view that covers everything needs a way out
@@ -74,6 +77,11 @@ export function FullPlayer({ track, onCollapse, tabs = [], ...queueProps }: Prop
               <p className="truncate text-sm text-muted-foreground">
                 {track.artists.map((artist) => artist.name).join(", ")}
               </p>
+            </div>
+          )}
+          {track && rating && (
+            <div className="flex items-center gap-2">
+              <RatingButtons {...rating} size={20} />
             </div>
           )}
         </div>

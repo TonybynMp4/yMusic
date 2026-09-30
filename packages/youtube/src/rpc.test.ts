@@ -1,8 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
+import { YouTubeEngine } from "./engine.ts";
 import { connectEngine } from "./host.ts";
 import { exposeEngine } from "./worker.ts";
+
+describe("the worker's forwarding", () => {
+  // Each forwarder names its arguments, so one that drops an optional argument
+  // still typechecks. Pausing search history once went missing that way.
+  it("passes search options through to the engine", async () => {
+    const search = vi.spyOn(YouTubeEngine.prototype, "search").mockResolvedValue([]);
+    const { port1, port2 } = new MessageChannel();
+    exposeEngine(port1);
+    const engine = connectEngine(port2, globalThis.fetch);
+
+    await engine.search("anything", { signedOut: true });
+    expect(search).toHaveBeenCalledWith("anything", { signedOut: true });
+
+    search.mockRestore();
+    port1.close();
+    port2.close();
+  });
+});
 
 /**
  * The engine exactly as the app runs it (Comlink on one side, the fetch bridge

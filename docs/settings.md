@@ -21,7 +21,13 @@ Rust applies the mpv settings itself at startup, right after `Player::new()`, so
 
 **Audio quality** picks among YouTube's audio-only formats: High takes the highest bitrate, Low the lowest, Normal the one nearest 128 kbps. Leases already resolved are dropped when it changes, so it applies from the next song. Premium's 256 kbps format isn't wired up yet, so it isn't offered.
 
-**Stable volume** uses the `loudness_db` YouTube reports for each format, carried on the lease as `loudnessDb`. Before `loadfile`, mpv's `af` is set to `lavfi=[volume=-XdB]` for a track X dB above YouTube's reference. Tracks at or below the reference get no filter: it only ever turns down, so nothing clips. Local files use mpv's `replaygain=track`, which reads their ReplayGain tags. Switching it mid-song applies to that song. `tests/volume.rs` renders a tone through the filter and checks it comes out 6 dB down.
+**Stable volume** is Off, On, or Only loud songs. It uses the `loudness_db` YouTube reports for each format, carried on the lease as `loudnessDb`: how far the track sits above YouTube's reference level, or below it when negative. Before `loadfile`, mpv's `af` is set to move the track to the reference.
+
+- A loud track, X dB over, gets `lavfi=[volume=-XdB]` in both modes.
+- A quiet track, with On, is turned up by at most 6 dB, through `alimiter` holding peaks at -1 dBFS. A quiet track can still peak at full scale, and a plain boost would clip it. The cap is there because the limiter flattens the loudest moments of a dynamic track by up to the boost. Only loud songs leaves quiet tracks alone.
+- Local files use mpv's `replaygain=track` in both modes, which reads their ReplayGain tags and uses their peak tags to avoid clipping.
+
+Switching it mid-song applies to that song. `tests/volume.rs` renders a tone through the filters: a loud track comes out 6 dB down, and a boosted full-scale one no louder than -1 dBFS.
 
 **Output device** lists mpv's `audio-device-list`, which mpv returns as JSON through the string getter (libmpv2 has no node getter). mpv lists every device of every backend it was built with, so the same speakers appear under PipeWire, PulseAudio and several ALSA names. Only the backend mpv would pick by itself is shown: the first entry after `auto`. A saved device that is unplugged stays in the list as "Disconnected device", and mpv falls back to the default output on its own.
 

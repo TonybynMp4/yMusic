@@ -19,14 +19,25 @@ pub enum AudioQuality {
     Low,
 }
 
+/// How stable volume evens songs out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StableVolume {
+    #[default]
+    Off,
+    /// Loud songs turned down and quiet ones turned up.
+    On,
+    /// Loud songs turned down, quiet ones left alone.
+    LoudOnly,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     /// When the queue runs out, its suggestions play on.
     pub autoplay: bool,
     pub audio_quality: AudioQuality,
-    /// Turns loud tracks down to a common level.
-    pub stable_volume: bool,
+    pub stable_volume: StableVolume,
     /// An mpv `audio-device` name. `auto` follows the system's default output.
     pub audio_device: String,
     pub skip_disliked: bool,
@@ -43,7 +54,7 @@ impl Default for Settings {
         Self {
             autoplay: true,
             audio_quality: AudioQuality::High,
-            stable_volume: false,
+            stable_volume: StableVolume::Off,
             audio_device: "auto".into(),
             skip_disliked: false,
             pause_watch_history: false,
@@ -177,10 +188,10 @@ mod tests {
     fn missing_and_unknown_fields_still_load() {
         let path = temp_path("fields");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, r#"{ "stableVolume": true, "fromTheFuture": 1 }"#).unwrap();
+        fs::write(&path, r#"{ "stableVolume": "on", "fromTheFuture": 1 }"#).unwrap();
 
         let settings = SettingsStore::open(path).get();
-        assert!(settings.stable_volume);
+        assert_eq!(settings.stable_volume, StableVolume::On);
         assert!(settings.autoplay);
     }
 

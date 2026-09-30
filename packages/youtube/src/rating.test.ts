@@ -10,8 +10,37 @@ const next = (likeStatus: string) => ({
   },
 });
 
+/** Signed in, as a signed-in `/next` sends it. */
+const signedIn = (likeStatus: string) => ({
+  playerOverlays: {
+    playerOverlayRenderer: {
+      videoActionBar: {
+        videoActionBarViewModel: {
+          buttons: [
+            {
+              buttonViewModel: {
+                segmentedLikeDislikeButtonViewModel: {
+                  likeButtonViewModel: {
+                    likeButtonViewModel: { likeStatusEntity: { likeStatus } },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+});
+
 describe("ratingFrom", () => {
-  it("reads the like button's status", () => {
+  it("reads a signed-in account's like and dislike buttons", () => {
+    expect(ratingFrom(signedIn("LIKE"))).toBe("like");
+    expect(ratingFrom(signedIn("DISLIKE"))).toBe("dislike");
+    expect(ratingFrom(signedIn("INDIFFERENT"))).toBe("none");
+  });
+
+  it("reads the signed-out like button's status", () => {
     expect(ratingFrom(next("LIKE"))).toBe("like");
     expect(ratingFrom(next("DISLIKE"))).toBe("dislike");
     expect(ratingFrom(next("INDIFFERENT"))).toBe("none");

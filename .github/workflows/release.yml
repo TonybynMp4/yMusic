@@ -3,7 +3,7 @@ name: Release
 # Run by hand from the Actions tab. Builds the Linux .deb at the new version,
 # then publishes it as a GitHub release. The notes group the commits since the
 # previous tag by Conventional Commits type (scripts/release-notes.mjs).
-# Windows joins once the build bundles libmpv-2.dll.
+# Windows joins once it plays through Media Foundation.
 #
 # A stable release commits the bump to main and tags that commit. A prerelease
 # (0.2.0-beta.1) tags the built commit as it is and leaves main alone, so

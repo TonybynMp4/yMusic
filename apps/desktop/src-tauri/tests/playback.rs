@@ -29,6 +29,17 @@ impl Recorder {
             .any(|event| matches!(event, PlaybackEvent::Status { status } if *status == wanted))
     }
 
+    /// mpv reports its initial `pause` of false as soon as it is observed,
+    /// before any file is open, so "playing" alone doesn't mean a seek can land
+    /// yet. A position only arrives once the file is loaded.
+    fn saw_playback(&self) -> bool {
+        self.saw_status(PlaybackStatus::Playing)
+            && self
+                .events()
+                .iter()
+                .any(|event| matches!(event, PlaybackEvent::Position { .. }))
+    }
+
     fn max_position_ms(&self) -> u64 {
         self.events()
             .iter()
@@ -162,8 +173,7 @@ fn pause_and_seek_are_reflected_in_the_event_stream() {
     let (player, recorder) = player();
     player.load(request(fixture_url("tone.wav"))).expect("load");
     assert!(
-        recorder.wait_for(Duration::from_secs(10), |r| r
-            .saw_status(PlaybackStatus::Playing)),
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_playback()),
         "never started playing"
     );
 
@@ -191,8 +201,7 @@ fn seeking_while_paused_stays_paused() {
     let (player, recorder) = player();
     player.load(request(fixture_url("tone.wav"))).expect("load");
     assert!(
-        recorder.wait_for(Duration::from_secs(10), |r| r
-            .saw_status(PlaybackStatus::Playing)),
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_playback()),
         "never started playing"
     );
     player.pause().expect("pause");

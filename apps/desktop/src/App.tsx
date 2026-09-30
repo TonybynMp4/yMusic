@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
-import { sourceOf, type Track, type TrackId } from "@ymusic/core";
+import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
 import type { Settings } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -115,25 +115,25 @@ export function App(props: { settings: Settings }) {
     }
     player.playTrack(tracks, id, from);
   };
+  /** Rates a song, from the player bar or a song's menu, and says what happened. */
+  const rate = (videoId: VideoId, value: Rating) => {
+    const before = player.ratingOf(videoId);
+    void player
+      .rate(videoId, value)
+      .then(() => {
+        if (value === "like") notice.show("Saved to Liked Music");
+        else if (before === "like") notice.show("Removed from Liked Music");
+      })
+      .catch((error: unknown) =>
+        notice.show(error instanceof Error ? error.message : String(error)),
+      );
+  };
   // Only a YouTube song, and only signed in: the rating is the account's.
-  const ratable =
-    account.account !== null && player.track !== null && sourceOf(player.track.id) === "youtube";
-  const rating = ratable
-    ? {
-        rating: player.rating,
-        onRate: (value: Rating) => {
-          void player
-            .rate(value)
-            .then(() => {
-              if (value === "like") notice.show("Saved to Liked Music");
-              else if (player.rating === "like") notice.show("Removed from Liked Music");
-            })
-            .catch((error: unknown) =>
-              notice.show(error instanceof Error ? error.message : String(error)),
-            );
-        },
-      }
-    : null;
+  const playingId = player.track === null ? null : videoIdFromTrackId(player.track.id);
+  const rating =
+    account.account !== null && playingId !== null
+      ? { rating: player.rating, onRate: (value: Rating) => rate(playingId, value) }
+      : null;
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,
     playing: player.playback.status === "playing",
@@ -149,6 +149,8 @@ export function App(props: { settings: Settings }) {
     open: go,
     notify: notice.show,
     libraryChanged: playlists.reload,
+    ratingOf: player.ratingOf,
+    rate,
   };
 
   return (

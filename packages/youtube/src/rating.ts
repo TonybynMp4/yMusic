@@ -4,7 +4,8 @@ import type { VideoId } from "@ymusic/core";
 /** A song's thumbs up or down on the account. `none` is YouTube's `INDIFFERENT`. */
 export type Rating = "like" | "dislike" | "none";
 
-interface RawNext {
+/** The part of a `/next` answer the rating is read from. */
+export interface RawNext {
   playerOverlays?: {
     playerOverlayRenderer?: {
       actions?: readonly { likeButtonRenderer?: { likeStatus?: unknown } }[];
@@ -13,15 +14,9 @@ interface RawNext {
 }
 
 /**
- * The account's rating of `videoId`, from the like button YouTube Music's
+ * The account's rating of a song, from the like button YouTube Music's
  * `/next` puts in the player overlay. Signed out, it is always `none`.
  */
-export async function getRating(youtube: Innertube, videoId: VideoId): Promise<Rating> {
-  const response = await youtube.actions.execute("/next", { videoId, client: "YTMUSIC" });
-  return ratingFrom(response.data as RawNext);
-}
-
-/** Exported for tests. */
 export function ratingFrom(data: RawNext): Rating {
   for (const action of data.playerOverlays?.playerOverlayRenderer?.actions ?? []) {
     const status = action.likeButtonRenderer?.likeStatus;

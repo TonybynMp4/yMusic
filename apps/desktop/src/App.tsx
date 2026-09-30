@@ -55,7 +55,7 @@ export function App(props: { settings: Settings }) {
   const settings = useSettings(props.settings);
   const youtube = useYouTubeSearch(query, true, settings.settings.pauseSearchHistory);
   const account = useAccount();
-  const player = usePlayer(settings, account.account !== null);
+  const player = usePlayer(settings, account.account?.name ?? null);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
   useResume(player, account.account?.name ?? null);

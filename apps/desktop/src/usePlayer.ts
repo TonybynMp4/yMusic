@@ -20,7 +20,7 @@ import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
-import { useRating } from "./useRating.ts";
+import { useRatings } from "./useRatings.ts";
 import type { SettingsState } from "./useSettings.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
@@ -57,7 +57,8 @@ function radioSeed(queue: QueueState): TrackId | null {
  * swapping the resolver, not restructuring playback around a step that suddenly
  * became slow and fallible.
  */
-export function usePlayer({ settings, update }: SettingsState, signedIn: boolean) {
+/** `account` is the signed-in account's name, which the saved ratings belong to. */
+export function usePlayer({ settings, update }: SettingsState, account: string | null) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
@@ -87,6 +88,23 @@ export function usePlayer({ settings, update }: SettingsState, signedIn: boolean
    * being disliked: a song you chose yourself plays.
    */
   const cameUp = useRef(false);
+  const ratings = useRatings(account);
+  /**
+   * Whether to pass over a track rather than play it. Read through a ref so
+   * the load effect does not rerun, and cancel its load, when a rating or the
+   * setting changes. A last track is played anyway: there is nothing to skip to.
+   */
+  const skips = useRef<(id: TrackId) => boolean>(() => false);
+  skips.current = (id) => {
+    const videoId = videoIdFromTrackId(id);
+    return (
+      settings.skipDisliked &&
+      cameUp.current &&
+      videoId !== null &&
+      ratings.ratingOf(videoId) === "dislike" &&
+      peekNext(queue) !== null
+    );
+  };
   useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
 
   /**
@@ -137,6 +155,10 @@ export function usePlayer({ settings, update }: SettingsState, signedIn: boolean
       return;
     }
     if (loadedId.current === trackId) return;
+    if (skips.current(trackId)) {
+      dispatch({ type: "next", reason: "user" });
+      return;
+    }
     loadedId.current = trackId;
     retried.current = null;
     const paused = cued.current === trackId;
@@ -314,6 +336,7 @@ export function usePlayer({ settings, update }: SettingsState, signedIn: boolean
   // Music on other devices offers to resume it. Only once playing: a queue
   // resumed from elsewhere and still waiting here must not replace itself.
   const shared = useRef<TrackId | null>(null);
+  const { learn } = ratings;
   useEffect(() => {
     if (!playing || trackId === null || shared.current === trackId) return;
     const videoId = videoIdFromTrackId(trackId);
@@ -323,8 +346,16 @@ export function usePlayer({ settings, update }: SettingsState, signedIn: boolean
     const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
     void youtube
       .shareQueue(videoId, playlistId)
+      .then((rating) => {
+        if (rating === null) return;
+        learn(videoId, rating);
+        // Disliked elsewhere since it was last seen here: it started, so skip it now.
+        if (shared.current === trackId && skips.current(trackId)) {
+          dispatch({ type: "next", reason: "user" });
+        }
+      })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId]);
+  }, [playing, trackId, learn]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.
@@ -392,25 +423,18 @@ export function usePlayer({ settings, update }: SettingsState, signedIn: boolean
     dispatch({ type: "previous" });
   }, [engine, position]);
 
-  const { videoId, rating, rate: sendRating } = useRating(trackId, signedIn);
-  /** The track whose rating was last checked for a skip, so each is checked once. */
-  const checked = useRef<TrackId | null>(null);
-  const skipDisliked = settings.skipDisliked;
-  useEffect(() => {
-    if (rating === null || checked.current === trackId) return;
-    checked.current = trackId;
-    if (rating === "dislike" && skipDisliked && cameUp.current) next();
-  }, [rating, trackId, skipDisliked, next]);
-
+  const videoId = trackId === null ? null : videoIdFromTrackId(trackId);
+  /** The song playing's rating; null for a local file or while signed out. */
+  const rating = videoId === null ? null : ratings.ratingOf(videoId);
+  const sendRating = ratings.rate;
   /** Rates the song playing. Disliking it also skips it, as YouTube Music does. */
   const rate = useCallback(
     (value: Rating) => {
       if (videoId === null) return Promise.resolve();
-      checked.current = trackId;
       if (value === "dislike") next();
       return sendRating(videoId, value);
     },
-    [videoId, trackId, next, sendRating],
+    [videoId, next, sendRating],
   );
 
   const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);

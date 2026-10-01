@@ -81,7 +81,7 @@ export function FullPlayer({
       </div>
 
       <div className="flex min-h-0 flex-1 gap-8 px-8 pb-8">
-        <div className="relative flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
+        <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
           <div className="relative w-full max-w-md">
             {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}
             <CoverArt track={track} />

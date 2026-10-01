@@ -3,14 +3,14 @@ import { z } from "zod";
 
 import { invokeParsed, isTauri } from "./tauri.ts";
 
-/**
- * Mirrors `settings::Settings` in Rust. The defaults match Rust's too, and are
- * what a plain browser gets, where there is no file to read.
- */
 /** `loudOnly` turns loud songs down and leaves quiet ones alone. */
 export const StableVolume = z.enum(["off", "on", "loudOnly"]);
 export type StableVolume = z.infer<typeof StableVolume>;
 
+/**
+ * Mirrors `settings::Settings` in Rust. The defaults match Rust's too, and are
+ * what a plain browser gets, where there is no file to read.
+ */
 export const Settings = z.object({
   autoplay: z.boolean().default(true),
   audioQuality: AudioQuality.default("high"),

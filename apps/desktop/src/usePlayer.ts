@@ -89,21 +89,31 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
    */
   const cameUp = useRef(false);
   const ratings = useRatings(account);
+  /** The current track, for answers that arrive after it may have changed. */
+  const currentId = useRef(trackId);
+  currentId.current = trackId;
+  /** Tracks skipped in a row, so a queue of only disliked songs stops after one pass. */
+  const skipped = useRef(0);
   /**
    * Whether to pass over a track rather than play it. Read through a ref so
    * the load effect does not rerun, and cancel its load, when a rating or the
-   * setting changes. A last track is played anyway: there is nothing to skip to.
+   * setting changes. A track is played anyway when skipping would not move to
+   * a different one, as on the last track or under repeat-one.
    */
   const skips = useRef<(id: TrackId) => boolean>(() => false);
   skips.current = (id) => {
     const videoId = videoIdFromTrackId(id);
-    return (
-      settings.skipDisliked &&
-      cameUp.current &&
-      videoId !== null &&
-      ratings.ratingOf(videoId) === "dislike" &&
-      peekNext(queue) !== null
-    );
+    if (
+      !settings.skipDisliked ||
+      !cameUp.current ||
+      videoId === null ||
+      ratings.ratingOf(videoId) !== "dislike" ||
+      skipped.current >= queue.order.length
+    ) {
+      return false;
+    }
+    const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
+    return landing !== null && landing.id !== id;
   };
   useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
 
@@ -162,9 +172,11 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     }
     if (loadedId.current === trackId) return;
     if (skips.current(trackId)) {
+      skipped.current++;
       dispatch({ type: "next", reason: "user" });
       return;
     }
+    skipped.current = 0;
     loadedId.current = trackId;
     retried.current = null;
     const paused = cued.current === trackId;
@@ -357,8 +369,10 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       .then((rating) => {
         if (rating === null) return;
         learn(videoId, rating);
-        // Disliked elsewhere since it was last seen here: it started, so skip it now.
-        if (shared.current === trackId && skips.current(trackId)) {
+        // Disliked elsewhere since it was last seen here: it started, so skip
+        // it now, unless the user has already moved on to another track.
+        if (currentId.current === trackId && skips.current(trackId)) {
+          skipped.current++;
           dispatch({ type: "next", reason: "user" });
         }
       })

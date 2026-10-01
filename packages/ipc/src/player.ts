@@ -36,6 +36,29 @@ export async function playerAudioDevices(): Promise<AudioDevice[]> {
   return invokeParsed("player_audio_devices", z.array(AudioDevice));
 }
 
+/** Mirrors `playback::AudioStats`: what stats for nerds shows. */
+export const AudioStats = z.object({
+  codec: z.string().nullable(),
+  sampleRate: z.number().nullable(),
+  channels: z.string().nullable(),
+  bitrate: z.number().nullable(),
+  youtubeLoudnessDb: z.number().nullable(),
+  gainDb: z.number().nullable(),
+  replaygainDb: z.number().nullable(),
+  integratedLufs: z.number().nullable(),
+  momentaryLufs: z.number().nullable(),
+  peakDb: z.number().nullable(),
+  outputPeakDb: z.number().nullable(),
+  limiterDb: z.number().nullable(),
+});
+export type AudioStats = z.infer<typeof AudioStats>;
+
+/** Readings for the song playing. Null outside Tauri. */
+export async function playerStats(): Promise<AudioStats | null> {
+  if (!isTauri) return null;
+  return invokeParsed("player_stats", AudioStats);
+}
+
 /**
  * `PlaybackEngine` backed by libmpv in the Rust core.
  *

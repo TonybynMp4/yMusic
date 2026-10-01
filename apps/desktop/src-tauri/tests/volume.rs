@@ -9,7 +9,9 @@
 
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
-use ymusic_lib::playback::{stable_volume_filter, MAX_BOOST_DB};
+use ymusic_lib::playback::{
+    limiter_reduction, measured_filter, stable_volume_filter, stable_volume_gain, MAX_BOOST_DB,
+};
 use ymusic_lib::settings::StableVolume;
 
 /// Must match `VOLUME_CURVE_EXPONENT` in `packages/core/src/volume.ts`.
@@ -125,6 +127,82 @@ fn stable_volume_turns_a_quiet_track_up_without_clipping() {
     );
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stats_for_nerds_meters_either_side_of_a_boost() {
+    let dir = std::env::temp_dir().join(format!("ymusic-stats-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    // The full-scale tone again, boosted 4 dB into the limiter: the input
+    // meter reads 0 dBTP, the output meter the limiter's -1 dB ceiling.
+    let tone = dir.join("tone.wav");
+    write_full_scale_tone(&tone);
+    let gain = stable_volume_filter(StableVolume::On, Some(-4.0));
+    let (input, output) = meter(&tone, &measured_filter(&gain));
+    let peak = true_peak_db(&input);
+    let output_peak = true_peak_db(&output.expect("a meter after the gain"));
+    assert!(
+        peak.abs() < 0.5,
+        "input true peak {peak:.2} dBTP, expected about 0"
+    );
+    assert!(
+        (output_peak + 1.0).abs() < 0.5,
+        "output true peak {output_peak:.2} dBTP, expected about -1"
+    );
+    let boost = stable_volume_gain(StableVolume::On, Some(-4.0)).expect("a boost");
+    let reduction = limiter_reduction(peak, boost, output_peak);
+    assert!(
+        (reduction - 5.0).abs() < 0.5,
+        "the limiter took off {reduction:.2} dB, expected about 5"
+    );
+    assert!(
+        input.contains("lavfi.r128.I"),
+        "no integrated loudness in {input}"
+    );
+
+    // With no gain there is only the one meter.
+    let (_, output) = meter(&tone, &measured_filter(""));
+    assert!(output.is_none());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Plays the tone through `af` and returns what the `in` and `out` meters
+/// last published.
+fn meter(tone: &Path, af: &str) -> (String, Option<String>) {
+    let mpv = Mpv::with_initializer(|init| {
+        init.set_property("vid", "no")?;
+        init.set_property("terminal", "no")?;
+        init.set_property("ytdl", "no")?;
+        init.set_property("ao", "null")?;
+        init.set_property("ao-null-untimed", "yes")?;
+        // Stay on the last frame, so the filters and their readings survive the end.
+        init.set_property("keep-open", "yes")?;
+        init.set_property("af", af)?;
+        Ok(())
+    })
+    .expect("libmpv");
+    mpv.command("loadfile", &[tone.to_str().expect("utf-8 path")])
+        .expect("loadfile");
+    for _ in 0..500 {
+        if mpv.get_property::<bool>("eof-reached").unwrap_or(false) {
+            break;
+        }
+        let _ = mpv.wait_event(0.02);
+    }
+    let input = mpv
+        .get_property::<String>("af-metadata/in")
+        .expect("a meter before the gain");
+    (input, mpv.get_property::<String>("af-metadata/out").ok())
+}
+
+fn true_peak_db(json: &str) -> f64 {
+    let values: std::collections::HashMap<String, String> =
+        serde_json::from_str(json).expect("filter metadata is a JSON object");
+    let linear: f64 = values["lavfi.r128.true_peak"].parse().expect("a number");
+    20.0 * linear.log10()
 }
 
 fn render_at(tone: &Path, dir: &Path, percent: f64) -> f64 {

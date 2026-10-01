@@ -260,6 +260,8 @@ export function App(props: { settings: Settings }) {
                 onClear={() => player.dispatch({ type: "clear" })}
                 onCollapse={() => setExpanded(false)}
                 rating={rating}
+                stats={settings.settings.statsForNerds}
+                onCloseStats={() => settings.update({ statsForNerds: false })}
               />
             )}
           </div>

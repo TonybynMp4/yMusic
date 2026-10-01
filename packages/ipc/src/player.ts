@@ -44,6 +44,7 @@ export const AudioStats = z.object({
   bitrate: z.number().nullable(),
   youtubeLoudnessDb: z.number().nullable(),
   gainDb: z.number().nullable(),
+  replaygainDb: z.number().nullable(),
   integratedLufs: z.number().nullable(),
   momentaryLufs: z.number().nullable(),
   peakDb: z.number().nullable(),

@@ -10,7 +10,7 @@
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
 use ymusic_lib::playback::{
-    limiter_reduction, measured_filter, stable_volume_filter, MAX_BOOST_DB,
+    limiter_reduction, measured_filter, stable_volume_filter, stable_volume_gain, MAX_BOOST_DB,
 };
 use ymusic_lib::settings::StableVolume;
 
@@ -151,7 +151,8 @@ fn stats_for_nerds_meters_either_side_of_a_boost() {
         (output_peak + 1.0).abs() < 0.5,
         "output true peak {output_peak:.2} dBTP, expected about -1"
     );
-    let reduction = limiter_reduction(peak, 4.0, output_peak);
+    let boost = stable_volume_gain(StableVolume::On, Some(-4.0)).expect("a boost");
+    let reduction = limiter_reduction(peak, boost, output_peak);
     assert!(
         (reduction - 5.0).abs() < 0.5,
         "the limiter took off {reduction:.2} dB, expected about 5"

@@ -62,13 +62,20 @@ function rows(s: AudioStats | null): [string, string][] {
     ["Codec", format(s)],
     ["Bitrate", s?.bitrate ? `${Math.round(s.bitrate / 1000)} kbps` : NONE],
     ["YouTube loudness", signed(s?.youtubeLoudnessDb, "dB")],
-    ["Stable volume", s?.gainDb == null ? "No change" : signed(s.gainDb, "dB")],
+    ["Stable volume", stableVolume(s)],
     ["Average loudness", unit(s?.integratedLufs, "LUFS")],
     ["Loudness now", unit(s?.momentaryLufs, "LUFS")],
     ["Peak", unit(s?.peakDb, "dBTP")],
     ["Peak after stable volume", unit(s?.outputPeakDb, "dBTP")],
     ["Limiter", s?.limiterDb == null ? "Not in use" : limiter(s.limiterDb)],
   ];
+}
+
+/** A local file's ReplayGain is applied after both meters, so it is named as such. */
+function stableVolume(s: AudioStats | null): string {
+  if (s?.gainDb != null) return signed(s.gainDb, "dB");
+  if (s?.replaygainDb != null) return `${signed(s.replaygainDb, "dB")} (ReplayGain)`;
+  return "No change";
 }
 
 function format(s: AudioStats | null): string {

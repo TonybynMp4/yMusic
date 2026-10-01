@@ -3,7 +3,8 @@
 //!
 //! The icon only exists while the setting is on. On Linux it goes through
 //! libayatana-appindicator, which the tray crate loads at run time and panics
-//! without, so a missing library costs the setting rather than the app.
+//! without. Release builds abort on panic, so the library is probed before the
+//! icon is built: a missing library costs the setting rather than the app.
 
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -25,14 +26,15 @@ pub fn keeps_playing<R: Runtime>(app: &AppHandle<R>) -> bool {
 pub fn sync<R: Runtime>(app: &AppHandle<R>, on: bool) {
     match (on, keeps_playing(app)) {
         (true, false) => {
-            let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build(app)));
-            match built {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => log::error!("could not add the tray icon: {error}"),
-                Err(_) => log::error!(
+            if !has_tray_support() {
+                log::error!(
                     "could not add the tray icon: no system tray support (on Linux, install \
                      libayatana-appindicator3-1)"
-                ),
+                );
+                return;
+            }
+            if let Err(error) = build(app) {
+                log::error!("could not add the tray icon: {error}");
             }
         }
         (false, true) => {
@@ -40,6 +42,32 @@ pub fn sync<R: Runtime>(app: &AppHandle<R>, on: bool) {
         }
         _ => {}
     }
+}
+
+/// Whether the tray crate will find an appindicator library. It tries these
+/// names in this order (libappindicator-sys) and panics when none loads.
+#[cfg(target_os = "linux")]
+fn has_tray_support() -> bool {
+    const LIBRARIES: [&std::ffi::CStr; 4] = [
+        c"libayatana-appindicator3.so.1",
+        c"libappindicator3.so.1",
+        c"libayatana-appindicator3.so",
+        c"libappindicator3.so",
+    ];
+    LIBRARIES.iter().any(|name| {
+        // SAFETY: dlopen with a valid C string; the handle is closed straight away.
+        let handle = unsafe { libc::dlopen(name.as_ptr(), libc::RTLD_LAZY) };
+        if handle.is_null() {
+            return false;
+        }
+        unsafe { libc::dlclose(handle) };
+        true
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn has_tray_support() -> bool {
+    true
 }
 
 fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {

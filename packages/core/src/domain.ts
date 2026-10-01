@@ -141,6 +141,13 @@ export const AudioCodec = z.enum([
 export type AudioCodec = z.infer<typeof AudioCodec>;
 
 /**
+ * Which of YouTube's audio formats to play. High is the best bitrate there is,
+ * low the smallest, and normal the one nearest 128 kbps.
+ */
+export const AudioQuality = z.enum(["high", "normal", "low"]);
+export type AudioQuality = z.infer<typeof AudioQuality>;
+
+/**
  * A resolved, playable stream.
  *
  * Remote leases are time-limited, so `expiresAt` must be checked before handing
@@ -150,13 +157,6 @@ export type AudioCodec = z.infer<typeof AudioCodec>;
  * a `file://` URL, no headers, and an `expiresAt` of null -- which is why
  * playback never needs to know which source it is playing.
  */
-/**
- * Which of YouTube's audio formats to play. High is the best bitrate there is,
- * low the smallest, and normal the one nearest 128 kbps.
- */
-export const AudioQuality = z.enum(["high", "normal", "low"]);
-export type AudioQuality = z.infer<typeof AudioQuality>;
-
 export const StreamLease = z.object({
   trackId: TrackId,
   url: z.url(),

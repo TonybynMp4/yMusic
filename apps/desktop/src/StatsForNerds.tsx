@@ -30,7 +30,7 @@ export function StatsForNerds(props: { onClose: () => void }) {
   }, []);
 
   return (
-    <div className="absolute top-0 left-0 z-10 w-80 rounded-lg bg-black/75 p-3 pr-2 text-xs text-white/90 shadow-lg backdrop-blur-sm">
+    <div className="absolute top-2 left-2 z-10 w-80 rounded-lg bg-black/75 p-3 pr-2 text-xs text-white/90 shadow-lg backdrop-blur-sm">
       <div className="mb-1 flex items-center justify-between">
         <span className="font-medium">Stats for nerds</span>
         <IconButton label="Close stats for nerds" onClick={props.onClose}>

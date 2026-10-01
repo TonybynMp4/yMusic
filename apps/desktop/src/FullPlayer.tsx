@@ -82,8 +82,10 @@ export function FullPlayer({
 
       <div className="flex min-h-0 flex-1 gap-8 px-8 pb-8">
         <div className="relative flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
-          {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}
-          <CoverArt track={track} />
+          <div className="relative w-full max-w-md">
+            {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}
+            <CoverArt track={track} />
+          </div>
           {track && (
             <div className="min-w-0 max-w-full text-center">
               <h1 className="truncate text-xl font-medium">{track.title}</h1>

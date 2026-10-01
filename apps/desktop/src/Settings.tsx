@@ -7,6 +7,7 @@ import {
   isTauri,
   openLogsFolder,
   platformSummary,
+  type PlatformSummary,
   playerAudioDevices,
   type StableVolume,
 } from "@ymusic/ipc";
@@ -53,7 +54,10 @@ export function SettingsView({
 }: Props) {
   const devices = useAudioDevices();
   const available = updates.update;
-  const version = useVersion();
+  const platform = usePlatform();
+  const version = platform?.appVersion ?? null;
+  // Assumed there until the summary says otherwise.
+  const hasTray = platform?.hasTray ?? true;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -175,10 +179,15 @@ export function SettingsView({
       <Section title="App">
         <Row
           label="Keep playing in the tray"
-          description="Closing the window leaves the music playing. Quit from the tray icon."
+          description={
+            hasTray
+              ? "Closing the window leaves the music playing. Quit from the tray icon."
+              : "Needs a system tray. On Linux, install libayatana-appindicator3-1."
+          }
           control={
             <Switch
-              checked={settings.closeToTray}
+              checked={settings.closeToTray && hasTray}
+              disabled={!hasTray}
               onCheckedChange={(closeToTray) => update({ closeToTray })}
             />
           }
@@ -349,15 +358,15 @@ function useBrowsers(enabled: boolean): Browser[] {
 
 const REPOSITORY = "https://github.com/TonybynMp4/yMusic";
 
-function useVersion(): string | null {
-  const [version, setVersion] = useState<string | null>(null);
+function usePlatform(): PlatformSummary | null {
+  const [summary, setSummary] = useState<PlatformSummary | null>(null);
   useEffect(() => {
     if (!isTauri) return;
     platformSummary()
-      .then((summary) => setVersion(summary.appVersion))
-      .catch((error: unknown) => console.warn("could not read the version", error));
+      .then(setSummary)
+      .catch((error: unknown) => console.warn("could not read the platform summary", error));
   }, []);
-  return version;
+  return summary;
 }
 
 /** Null until mpv lists them, and for good if it can't. */

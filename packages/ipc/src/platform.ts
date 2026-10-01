@@ -15,6 +15,11 @@ export const PlatformSummary = z.object({
    * instead of offering a button that cannot work.
    */
   supportsInAppUpdate: z.boolean(),
+  /**
+   * False on Linux without libayatana-appindicator, where "keep playing in
+   * the tray" would quit on close anyway.
+   */
+  hasTray: z.boolean(),
 });
 export type PlatformSummary = z.infer<typeof PlatformSummary>;
 

@@ -88,6 +88,7 @@ fn every_command_is_reachable_over_ipc() {
         "appVersion",
         "installFlavor",
         "supportsInAppUpdate",
+        "hasTray",
     ] {
         assert!(
             summary.get(field).is_some(),

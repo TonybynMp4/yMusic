@@ -21,6 +21,8 @@ pub struct PlatformSummary {
     app_version: String,
     install_flavor: InstallFlavor,
     supports_in_app_update: bool,
+    /// False without a system tray library, so the page can't offer the tray.
+    has_tray: bool,
 }
 
 #[tauri::command]
@@ -32,6 +34,7 @@ pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary
         app_version: app.package_info().version.to_string(),
         install_flavor: flavor,
         supports_in_app_update: flavor.supports_in_app_update(),
+        has_tray: crate::tray::has_tray_support(),
     }
 }
 

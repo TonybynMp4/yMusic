@@ -47,7 +47,7 @@ pub fn sync<R: Runtime>(app: &AppHandle<R>, on: bool) {
 /// Whether the tray crate will find an appindicator library. It tries these
 /// names in this order (libappindicator-sys) and panics when none loads.
 #[cfg(target_os = "linux")]
-fn has_tray_support() -> bool {
+pub fn has_tray_support() -> bool {
     const LIBRARIES: [&std::ffi::CStr; 4] = [
         c"libayatana-appindicator3.so.1",
         c"libappindicator3.so.1",
@@ -66,7 +66,7 @@ fn has_tray_support() -> bool {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn has_tray_support() -> bool {
+pub fn has_tray_support() -> bool {
     true
 }
 

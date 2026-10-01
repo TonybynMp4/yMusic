@@ -3,6 +3,7 @@ import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import { playlistIdFromBrowseId } from "./browse.ts";
 import { radioFrom } from "./radio.ts";
+import { ratingFrom, type Rating, type RawNext } from "./rating.ts";
 
 /**
  * YouTube Music keeps each account's queue on its servers, which is how
@@ -65,13 +66,16 @@ export function serverQueueFrom(panel: RawPanel): ServerQueue | null {
  * Makes `videoId` the account's current queue, so other devices offer to
  * resume it. With `playlistId` the queue is that playlist from this song on;
  * without, it is the song's radio, as when a song is played on its own.
+ *
+ * Returns the account's rating of the song, which the answer carries for
+ * free: reading it here saves a request per song.
  */
 export async function setServerQueue(
   youtube: Innertube,
   videoId: VideoId,
   playlistId: string | null,
-): Promise<void> {
-  await youtube.actions.execute("/next", {
+): Promise<Rating> {
+  const response = await youtube.actions.execute("/next", {
     videoId,
     ...(playlistId ? { playlistId: playlistIdFromBrowseId(playlistId) } : {}),
     enablePersistentPlaylistPanel: true,
@@ -80,4 +84,5 @@ export async function setServerQueue(
     queueContextParams: "",
     client: "YTMUSIC",
   });
+  return ratingFrom(response.data as RawNext);
 }

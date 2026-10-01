@@ -96,9 +96,10 @@ export function usePlayer({ settings, update }: SettingsState) {
   useEffect(() => {
     if (quality.current === settings.audioQuality) return;
     quality.current = settings.audioQuality;
-    // Leases already resolved are for the old quality. The song playing keeps
-    // its stream; the ones after it resolve again.
+    // Leases already resolved, or still resolving, are for the old quality.
+    // The song playing keeps its stream; the ones after it resolve again.
     leases.current.clear();
+    resolving.current.clear();
   }, [settings.audioQuality]);
 
   /** A cached lease while it is still usable, otherwise a fresh one. */
@@ -107,12 +108,17 @@ export function usePlayer({ settings, update }: SettingsState) {
     if (cached && isLeaseUsable(cached, Date.now())) return Promise.resolve(cached);
     const pending = resolving.current.get(id);
     if (pending) return pending;
-    const request = resolveTrack(id, { quality: quality.current })
+    const requested = quality.current;
+    const request = resolveTrack(id, { quality: requested })
       .then((lease) => {
-        leases.current.set(id, lease);
+        // Not cached if the quality changed while it resolved; a load already
+        // waiting on it still gets it.
+        if (quality.current === requested) leases.current.set(id, lease);
         return lease;
       })
-      .finally(() => resolving.current.delete(id));
+      .finally(() => {
+        if (resolving.current.get(id) === request) resolving.current.delete(id);
+      });
     resolving.current.set(id, request);
     return request;
   }, []);

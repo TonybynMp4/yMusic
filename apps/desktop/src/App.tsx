@@ -130,9 +130,10 @@ export function App(props: { settings: Settings }) {
   };
   // Null for a local file or while signed out: the rating is the account's.
   const playingId = player.track === null ? null : videoIdFromTrackId(player.track.id);
+  const playingRating = playingId === null ? null : player.ratingOf(playingId);
   const rating =
-    player.rating !== null && playingId !== null
-      ? { rating: player.rating, onRate: (value: Rating) => rate(playingId, value) }
+    playingRating !== null && playingId !== null
+      ? { rating: playingRating, onRate: (value: Rating) => rate(playingId, value) }
       : null;
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,

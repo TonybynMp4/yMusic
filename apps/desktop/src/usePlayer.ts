@@ -449,8 +449,6 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   }, [engine, position]);
 
   const videoId = trackId === null ? null : videoIdFromTrackId(trackId);
-  /** The song playing's rating; null for a local file or while signed out. */
-  const rating = videoId === null ? null : ratings.ratingOf(videoId);
   const sendRating = ratings.rate;
   /**
    * Rates a song. Disliking the one playing also skips it, as YouTube Music
@@ -503,7 +501,6 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     setVolume,
     setRepeat,
     setShuffle,
-    rating,
     ratingOf: ratings.ratingOf,
     rate,
   };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
-import type { Track, TrackId } from "@ymusic/core";
+import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
 import type { Settings } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -115,24 +115,25 @@ export function App(props: { settings: Settings }) {
     }
     player.playTrack(tracks, id, from);
   };
+  /** Rates a song, from the player bar or a song's menu, and says what happened. */
+  const rate = (videoId: VideoId, value: Rating) => {
+    const before = player.ratingOf(videoId);
+    void player
+      .rate(videoId, value)
+      .then(() => {
+        if (value === "like") notice.show("Saved to Liked Music");
+        else if (before === "like") notice.show("Removed from Liked Music");
+      })
+      .catch((error: unknown) =>
+        notice.show(error instanceof Error ? error.message : String(error)),
+      );
+  };
   // Null for a local file or while signed out: the rating is the account's.
+  const playingId = player.track === null ? null : videoIdFromTrackId(player.track.id);
+  const playingRating = playingId === null ? null : player.ratingOf(playingId);
   const rating =
-    player.rating !== null
-      ? {
-          rating: player.rating,
-          onRate: (value: Rating) => {
-            const before = player.rating;
-            void player
-              .rate(value)
-              .then(() => {
-                if (value === "like") notice.show("Saved to Liked Music");
-                else if (before === "like") notice.show("Removed from Liked Music");
-              })
-              .catch((error: unknown) =>
-                notice.show(error instanceof Error ? error.message : String(error)),
-              );
-          },
-        }
+    playingRating !== null && playingId !== null
+      ? { rating: playingRating, onRate: (value: Rating) => rate(playingId, value) }
       : null;
   const browse: BrowseActions = {
     currentId: player.track?.id ?? null,
@@ -149,6 +150,8 @@ export function App(props: { settings: Settings }) {
     open: go,
     notify: notice.show,
     libraryChanged: playlists.reload,
+    ratingOf: player.ratingOf,
+    rate,
   };
 
   return (

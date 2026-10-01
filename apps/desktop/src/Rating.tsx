@@ -13,6 +13,11 @@ export interface RatingProps {
   onRate: (rating: Rating) => void;
 }
 
+/** What picking `value` sets: picking the rating already on clears it. */
+export function toggled(rating: Rating | null, value: "like" | "dislike"): Rating {
+  return rating === value ? "none" : value;
+}
+
 /**
  * Thumbs down and up, as YouTube Music puts them beside the song playing.
  * Pressing the one already on clears it. Until YouTube has said how the song
@@ -26,13 +31,13 @@ export function RatingButtons(props: RatingProps & { size?: number }) {
     <>
       <IconButton
         label={disliked ? "Remove dislike" : "Dislike"}
-        onClick={() => onRate(disliked ? "none" : "dislike")}
+        onClick={() => onRate(toggled(rating, "dislike"))}
       >
         {disliked ? <IconThumbDownFilled size={size} /> : <IconThumbDown size={size} stroke={1.75} />}
       </IconButton>
       <IconButton
         label={liked ? "Remove like" : "Like"}
-        onClick={() => onRate(liked ? "none" : "like")}
+        onClick={() => onRate(toggled(rating, "like"))}
       >
         {liked ? <IconThumbUpFilled size={size} /> : <IconThumbUp size={size} stroke={1.75} />}
       </IconButton>

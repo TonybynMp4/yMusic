@@ -323,7 +323,10 @@ fn library_commands_round_trip_over_ipc() {
         assert!(lease.get(field).is_some(), "missing `{field}` in {lease}");
     }
     assert!(lease["expiresAt"].is_null(), "a local file never expires");
-    assert!(lease["loudnessDb"].is_null(), "a local file has no YouTube loudness");
+    assert!(
+        lease["loudnessDb"].is_null(),
+        "a local file has no YouTube loudness"
+    );
 
     let folders = get_ipc_response(&webview, request("library_folders", serde_json::json!({})))
         .expect("library_folders should succeed")

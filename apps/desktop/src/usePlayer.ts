@@ -164,13 +164,15 @@ export function usePlayer({ settings, update }: SettingsState) {
   // with resolving the track the user is waiting for.
   const upcomingId = peekNext(queue)?.id ?? null;
   const playing = state.status === "playing";
+  const audioQuality = settings.audioQuality;
   useEffect(() => {
     if (!playing || upcomingId === null || upcomingId === trackId) return;
     if (sourceOf(upcomingId) !== "youtube") return;
     void leaseFor(upcomingId).catch((error: unknown) =>
       console.error("could not resolve the next track ahead of time", error),
     );
-  }, [playing, upcomingId, trackId, leaseFor]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- audioQuality resolves again after a change of quality drops the lease
+  }, [playing, upcomingId, trackId, leaseFor, audioQuality]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
   // it, and a 403 surfaces only here. Retry such a track once on the PO-token

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { VideoId } from "@ymusic/core";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -42,11 +42,22 @@ function save(account: string, ratings: Map<VideoId, Rating>): void {
 export function useRatings(account: string | null) {
   const ratings = useMemo(() => (account === null ? null : load(account)), [account]);
   const [, setVersion] = useState(0);
+  /** Counts ratings given here, so an answer can tell whether one came after it was asked for. */
+  const clock = useRef(0);
+  const ratedAt = useRef(new Map<VideoId, number>());
 
-  /** Records a rating. Moving it to the end keeps the recent ones when trimming. */
+  /** Taken before asking YouTube for a rating, and passed to `learn` with the answer. */
+  const now = useCallback(() => clock.current, []);
+
+  /**
+   * Records a rating. Moving it to the end keeps the recent ones when trimming.
+   * With `asked`, from `now`, an answer older than a rating given here since
+   * is dropped: YouTube read it before that rating landed.
+   */
   const learn = useCallback(
-    (videoId: VideoId, rating: Rating) => {
+    (videoId: VideoId, rating: Rating, asked?: number) => {
       if (account === null || ratings === null) return;
+      if (asked !== undefined && (ratedAt.current.get(videoId) ?? 0) > asked) return;
       const before = ratings.get(videoId) ?? "none";
       ratings.delete(videoId);
       if (rating !== "none") ratings.set(videoId, rating);
@@ -70,6 +81,7 @@ export function useRatings(account: string | null) {
   const rate = useCallback(
     async (videoId: VideoId, rating: Rating) => {
       const before = ratingOf(videoId) ?? "none";
+      ratedAt.current.set(videoId, ++clock.current);
       learn(videoId, rating);
       try {
         await youtube.rate(videoId, rating);
@@ -81,5 +93,5 @@ export function useRatings(account: string | null) {
     [learn, ratingOf],
   );
 
-  return { ratingOf, learn, rate };
+  return { ratingOf, learn, now, rate };
 }

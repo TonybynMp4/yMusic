@@ -356,7 +356,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   // Music on other devices offers to resume it. Only once playing: a queue
   // resumed from elsewhere and still waiting here must not replace itself.
   const shared = useRef<TrackId | null>(null);
-  const { learn } = ratings;
+  const { learn, now } = ratings;
   useEffect(() => {
     if (!playing || trackId === null || shared.current === trackId) return;
     const videoId = videoIdFromTrackId(trackId);
@@ -364,11 +364,12 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     shared.current = trackId;
     const from = source.current;
     const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
+    const asked = now();
     void youtube
       .shareQueue(videoId, playlistId)
       .then((rating) => {
         if (rating === null) return;
-        learn(videoId, rating);
+        learn(videoId, rating, asked);
         // Disliked elsewhere since it was last seen here: it started, so skip
         // it now, unless the user has already moved on to another track.
         if (currentId.current === trackId && skips.current(trackId)) {
@@ -377,7 +378,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         }
       })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId, learn]);
+  }, [playing, trackId, learn, now]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.

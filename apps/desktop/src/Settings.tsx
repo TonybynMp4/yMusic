@@ -360,8 +360,9 @@ function useVersion(): string | null {
   return version;
 }
 
-function useAudioDevices(): AudioDevice[] {
-  const [devices, setDevices] = useState<AudioDevice[]>([]);
+/** Null until mpv lists them, and for good if it can't. */
+function useAudioDevices(): AudioDevice[] | null {
+  const [devices, setDevices] = useState<AudioDevice[] | null>(null);
   useEffect(() => {
     playerAudioDevices()
       .then(setDevices)
@@ -373,14 +374,15 @@ function useAudioDevices(): AudioDevice[] {
 /**
  * The system default first, then each device. A saved device that is not
  * plugged in stays listed, so the choice still reads as what was picked.
+ * Without a list it can't be told apart from one that is.
  */
-function deviceOptions(devices: AudioDevice[], saved: string) {
+function deviceOptions(devices: AudioDevice[] | null, saved: string) {
   const options = [
     { value: "auto", label: "System default" },
-    ...devices.map((device) => ({ value: device.name, label: device.description })),
+    ...(devices ?? []).map((device) => ({ value: device.name, label: device.description })),
   ];
   if (!options.some((option) => option.value === saved)) {
-    options.push({ value: saved, label: "Disconnected device" });
+    options.push({ value: saved, label: devices === null ? "Saved device" : "Disconnected device" });
   }
   return options;
 }

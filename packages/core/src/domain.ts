@@ -168,9 +168,9 @@ export const StreamLease = z.object({
   /** Set when the audio is the Premium-only format. Logged to verify Premium. */
   isPremiumFormat: z.boolean(),
   /**
-   * How much louder than YouTube's reference level the track is, in dB. Stable
-   * volume turns it down by this much. Null for local files, which carry
-   * ReplayGain tags instead.
+   * How far the track sits above YouTube's reference level, in dB, or below it
+   * when negative. Stable volume moves it to the reference. Null for local
+   * files, which carry ReplayGain tags instead.
    */
   loudnessDb: z.number().nullable(),
   headers: z.record(z.string(), z.string()),

@@ -82,6 +82,24 @@ fn stable_volume_turns_a_quiet_track_up_without_clipping() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
 
+    // A tone at -12 dBFS: the 4 dB boost leaves it well under the limiter, so
+    // it should come out 4 dB louder. A sign slip would turn it down instead.
+    let quiet = dir.join("quiet.wav");
+    write_tone(&quiet, 10f64.powf(-12.0 / 20.0));
+    let quiet_reference = render(&quiet, &dir, 100.0, "");
+    let louder = render(
+        &quiet,
+        &dir,
+        100.0,
+        &stable_volume_filter(StableVolume::On, Some(-4.0)),
+    ) / quiet_reference;
+    let expected = 10f64.powf(4.0 / 20.0);
+    assert!(
+        (louder - expected).abs() / expected < 0.05,
+        "a track 4 dB under the reference rendered at {louder:.4} of its level, \
+         expected {expected:.4}"
+    );
+
     // A full-scale tone standing in for a track YouTube measured 4 dB quiet:
     // quiet on average, peaks at the top. The boost must land in the limiter.
     let tone = dir.join("tone.wav");
@@ -192,15 +210,19 @@ fn pcm_data<'a>(bytes: &'a [u8], path: &Path) -> &'a [u8] {
     panic!("no data chunk in {}", path.display());
 }
 
-/// A one-second full-scale sine, written by hand so the test needs no ffmpeg
-/// and no committed binary fixture.
 fn write_full_scale_tone(path: &PathBuf) {
+    write_tone(path, 1.0);
+}
+
+/// A one-second sine peaking at `amplitude` of full scale, written by hand so
+/// the test needs no ffmpeg and no committed binary fixture.
+fn write_tone(path: &PathBuf, amplitude: f64) {
     const RATE: u32 = 48_000;
     const FRAMES: u32 = RATE;
     let mut pcm = Vec::with_capacity(FRAMES as usize * 2);
     for frame in 0..FRAMES {
         let phase = 2.0 * std::f64::consts::PI * 440.0 * frame as f64 / RATE as f64;
-        pcm.extend_from_slice(&((phase.sin() * i16::MAX as f64) as i16).to_le_bytes());
+        pcm.extend_from_slice(&((phase.sin() * amplitude * i16::MAX as f64) as i16).to_le_bytes());
     }
 
     let mut wav = Vec::new();

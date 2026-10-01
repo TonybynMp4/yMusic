@@ -56,8 +56,9 @@ function radioSeed(queue: QueueState): TrackId | null {
  * be turned into a path synchronously. Wiring YouTube in later then means
  * swapping the resolver, not restructuring playback around a step that suddenly
  * became slow and fallible.
+ *
+ * `account` is the signed-in account's name, which the saved ratings belong to.
  */
-/** `account` is the signed-in account's name, which the saved ratings belong to. */
 export function usePlayer({ settings, update }: SettingsState, account: string | null) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();

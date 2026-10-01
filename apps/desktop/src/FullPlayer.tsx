@@ -79,7 +79,7 @@ export function FullPlayer({ track, onCollapse, tabs = [], rating, ...queueProps
               </p>
             </div>
           )}
-          {track && rating && (
+          {rating && (
             <div className="flex items-center gap-2">
               <RatingButtons {...rating} size={20} />
             </div>

@@ -201,7 +201,9 @@ impl Player {
         {
             let mut loudness = self.loudness.lock().expect("loudness mutex");
             loudness.track_db = request.loudness_db;
-            self.apply_loudness(&loudness)?;
+            if let Err(error) = self.apply_loudness(&loudness) {
+                log::warn!("{error}");
+            }
         }
 
         self.set_property("pause", request.start_paused)?;

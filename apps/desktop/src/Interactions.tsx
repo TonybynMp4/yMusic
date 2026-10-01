@@ -60,6 +60,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { engine } from "./engine.ts";
+import { toggled } from "./Rating.tsx";
 import { patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
@@ -295,11 +296,11 @@ function RatingItems({ videoId }: { videoId: VideoId }) {
   const disliked = rating === "dislike";
   return (
     <>
-      <DropdownMenuItem onClick={() => x.rate(videoId, liked ? "none" : "like")}>
+      <DropdownMenuItem onClick={() => x.rate(videoId, toggled(rating, "like"))}>
         {liked ? <IconThumbUpFilled /> : <IconThumbUp />}
         {liked ? "Remove from liked songs" : "Add to liked songs"}
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => x.rate(videoId, disliked ? "none" : "dislike")}>
+      <DropdownMenuItem onClick={() => x.rate(videoId, toggled(rating, "dislike"))}>
         {disliked ? <IconThumbDownFilled /> : <IconThumbDown />}
         {disliked ? "Remove dislike" : "Dislike"}
       </DropdownMenuItem>

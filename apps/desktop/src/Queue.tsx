@@ -195,7 +195,7 @@ export function Queue({
                 const track = queue.suggestions[position - queued - 1];
                 if (!track) return null;
                 return (
-                  <Row track={track} onJump={onJump} className="opacity-70 hover:opacity-100" />
+                  <Row track={track} onJump={onJump} suggestion />
                 );
               }
               const source = sourceOf(position, drag);
@@ -228,6 +228,7 @@ function Row({
   onRemove,
   onDragStart,
   dragging = false,
+  suggestion = false,
   className,
 }: {
   track: Track;
@@ -237,6 +238,8 @@ function Row({
   onDragStart?: (event: ReactPointerEvent) => void;
   /** Picked up and following the pointer. */
   dragging?: boolean;
+  /** An autoplay suggestion, faded unless hovered. A disliked one fades as far as a queued one does. */
+  suggestion?: boolean;
   className?: string;
 }) {
   const remove = onRemove && (() => onRemove(track.id));
@@ -249,6 +252,7 @@ function Row({
         "group flex items-center gap-2 rounded-lg px-2 transition-colors",
         current ? "bg-accent" : "hover:bg-accent/60",
         dragging && "bg-accent shadow-lg ring-1 ring-foreground/10",
+        suggestion && !dimmed && "opacity-70 hover:opacity-100",
         className,
       )}
     >

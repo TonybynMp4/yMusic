@@ -264,10 +264,11 @@ impl Player {
 
     /// What stats for nerds shows. The meters read nothing while it is off.
     pub fn stats(&self) -> AudioStats {
-        let loudness = self.loudness.lock().expect("loudness mutex");
-        let gain_db = stable_volume_gain(loudness.stable, loudness.track_db);
-        let limited = matches!(gain_db, Some(gain) if gain > 0.0);
-        drop(loudness);
+        let (stable, track_db) = {
+            let loudness = self.loudness.lock().expect("loudness mutex");
+            (loudness.stable, loudness.track_db)
+        };
+        let gain_db = stable_volume_gain(stable, track_db);
 
         let string = |name: &str| self.mpv.get_property::<String>(name).ok();
         let params: Option<serde_json::Value> =
@@ -276,6 +277,15 @@ impl Player {
         let output = string("af-metadata/out").and_then(|json| Meter::parse(&json));
         let peak_db = input.as_ref().and_then(|m| m.peak_db);
         let output_peak_db = output.as_ref().and_then(|m| m.peak_db);
+        // mpv applies a local file's ReplayGain after the `af` chain, where
+        // neither meter sees it.
+        let replaygain_db = if stable == StableVolume::Off {
+            None
+        } else {
+            self.mpv
+                .get_property::<f64>("current-tracks/audio/replaygain-track-gain")
+                .ok()
+        };
 
         AudioStats {
             codec: string("audio-codec-name"),
@@ -284,14 +294,21 @@ impl Player {
                 .as_ref()
                 .and_then(|p| Some(p.get("hr-channels")?.as_str()?.to_string())),
             bitrate: self.mpv.get_property::<i64>("audio-bitrate").ok(),
-            youtube_loudness_db: self.loudness.lock().expect("loudness mutex").track_db,
+            youtube_loudness_db: track_db,
             gain_db,
+            replaygain_db,
             integrated_lufs: input.as_ref().and_then(|m| m.integrated),
             momentary_lufs: input.as_ref().and_then(|m| m.momentary),
             peak_db,
-            output_peak_db: output_peak_db.or(peak_db.zip(gain_db).map(|(p, g)| p + g)),
-            limiter_db: match (limited, peak_db, gain_db, output_peak_db) {
-                (true, Some(peak), Some(gain), Some(out)) => {
+            // With no gain there is no `out` meter, and nothing between the
+            // two: the output peak is the input's, unless ReplayGain moved it.
+            output_peak_db: match (gain_db, replaygain_db) {
+                (Some(_), _) => output_peak_db,
+                (None, None) => peak_db,
+                (None, Some(_)) => None,
+            },
+            limiter_db: match (gain_db, peak_db, output_peak_db) {
+                (Some(gain), Some(peak), Some(out)) if has_limiter(gain) => {
                     Some(limiter_reduction(peak, gain, out))
                 }
                 _ => None,
@@ -388,9 +405,17 @@ pub const MAX_BOOST_DB: f64 = 6.0;
 pub fn stable_volume_filter(mode: StableVolume, loudness_db: Option<f64>) -> String {
     match stable_volume_gain(mode, loudness_db) {
         None => String::new(),
-        Some(gain) if gain < 0.0 => format!("lavfi=[volume={gain:.2}dB]"),
-        Some(gain) => format!("lavfi=[volume={gain:.2}dB,alimiter=limit=0.891:level=disabled]"),
+        Some(gain) if has_limiter(gain) => {
+            format!("lavfi=[volume={gain:.2}dB,alimiter=limit=0.891:level=disabled]")
+        }
+        Some(gain) => format!("lavfi=[volume={gain:.2}dB]"),
     }
+}
+
+/// Whether stable volume puts `gain_db` through the limiter: a boost can
+/// clip, a cut cannot.
+pub fn has_limiter(gain_db: f64) -> bool {
+    gain_db > 0.0
 }
 
 /// The gain stable volume applies, in dB: negative turns a loud track down,
@@ -406,6 +431,8 @@ pub fn stable_volume_gain(mode: StableVolume, loudness_db: Option<f64>) -> Optio
 
 /// The meter ffmpeg's `ebur128` filter runs, publishing through mpv's
 /// `af-metadata/<label>`: loudness per EBU R128, and the true peak so far.
+/// It converts samples to doubles but keeps their rate, so it changes nothing
+/// that plays.
 const METER: &str = "lavfi=[ebur128=metadata=1:peak=true]";
 
 /// `gain` between two meters, `in` before it and `out` after it. With no gain
@@ -444,13 +471,16 @@ pub struct AudioStats {
     pub youtube_loudness_db: Option<f64>,
     /// Stable volume's gain; None when it leaves the track alone.
     pub gain_db: Option<f64>,
+    /// The ReplayGain tag mpv applies to a local file with stable volume on.
+    pub replaygain_db: Option<f64>,
     /// Loudness over the song so far, in LUFS: its average level.
     pub integrated_lufs: Option<f64>,
     /// Loudness over the last 400 ms.
     pub momentary_lufs: Option<f64>,
     /// The track's loudest true peak so far, before the gain, in dBTP.
     pub peak_db: Option<f64>,
-    /// The loudest true peak after the gain and limiter.
+    /// The loudest true peak after the gain and limiter. None under
+    /// ReplayGain, which no meter sees.
     pub output_peak_db: Option<f64>,
     /// How far the limiter pulled peaks down; None when there is no limiter.
     pub limiter_db: Option<f64>,
@@ -665,6 +695,28 @@ mod tests {
             .map(|d| d.name)
             .collect();
         assert_eq!(names, ["pipewire/speakers", "pipewire/hdmi"]);
+    }
+
+    #[test]
+    fn a_meter_reads_loudness_and_converts_the_peak_to_db() {
+        let meter = Meter::parse(
+            r#"{"lavfi.r128.I":"-14.2","lavfi.r128.M":"-70.0","lavfi.r128.true_peak":"0.5"}"#,
+        )
+        .expect("a reading");
+        assert_eq!(meter.integrated, Some(-14.2));
+        assert_eq!(meter.momentary, None, "silence is no reading");
+        let peak = meter.peak_db.expect("a peak");
+        assert!(
+            (peak + 6.02).abs() < 0.01,
+            "half scale is -6 dB, got {peak}"
+        );
+    }
+
+    #[test]
+    fn a_silent_meter_has_no_peak() {
+        let meter = Meter::parse(r#"{"lavfi.r128.true_peak":"0"}"#).expect("a reading");
+        assert_eq!(meter.peak_db, None);
+        assert!(Meter::parse("not json").is_none());
     }
 
     #[test]

@@ -20,6 +20,7 @@ use ymusic_lib::{
     library::Library,
     platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
+    settings::SettingsStore,
     ymusic_commands,
 };
 
@@ -87,6 +88,7 @@ fn every_command_is_reachable_over_ipc() {
         "appVersion",
         "installFlavor",
         "supportsInAppUpdate",
+        "hasTray",
     ] {
         assert!(
             summary.get(field).is_some(),
@@ -192,6 +194,40 @@ fn http_fetch_reads_a_raw_frame_over_ipc() {
     );
 }
 
+/// Pins the casing the zod schema in `packages/ipc` parses, and that a patch
+/// arrives under the argument name the TS client sends.
+#[test]
+fn settings_round_trip_over_ipc() {
+    let app = mock_builder()
+        .invoke_handler(ymusic_commands!())
+        .build(tauri::generate_context!())
+        .expect("mock app");
+    app.manage(SettingsStore::in_memory());
+    let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("mock webview");
+
+    let settings = get_ipc_response(&webview, request("settings_get", serde_json::json!({})))
+        .expect("settings_get should succeed")
+        .deserialize::<serde_json::Value>()
+        .expect("settings json");
+    assert_eq!(settings["audioQuality"], "high", "{settings}");
+    assert_eq!(settings["autoplay"], true, "{settings}");
+
+    let changed = get_ipc_response(
+        &webview,
+        request(
+            "settings_set",
+            serde_json::json!({ "patch": { "pauseWatchHistory": true } }),
+        ),
+    )
+    .expect("settings_set should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("settings json");
+    assert_eq!(changed["pauseWatchHistory"], true, "{changed}");
+    assert_eq!(changed["autoplay"], true, "{changed}");
+}
+
 /// The library half of the surface, driven the same way. Kept separate from the
 /// player test because it needs no audio device and no waiting.
 #[test]
@@ -283,10 +319,15 @@ fn library_commands_round_trip_over_ipc() {
         "isPremiumFormat",
         "headers",
         "expiresAt",
+        "loudnessDb",
     ] {
         assert!(lease.get(field).is_some(), "missing `{field}` in {lease}");
     }
     assert!(lease["expiresAt"].is_null(), "a local file never expires");
+    assert!(
+        lease["loudnessDb"].is_null(),
+        "a local file has no YouTube loudness"
+    );
 
     let folders = get_ipc_response(&webview, request("library_folders", serde_json::json!({})))
         .expect("library_folders should succeed")

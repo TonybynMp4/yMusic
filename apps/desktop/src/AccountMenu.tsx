@@ -11,6 +11,7 @@ import {
   IconLoader2,
   IconLogin2,
   IconLogout,
+  IconSettings,
 } from "@tabler/icons-react";
 import { accountBrowsers, isTauri, type Browser } from "@ymusic/ipc";
 
@@ -29,7 +30,7 @@ import {
 import type { AccountState } from "./useAccount.ts";
 
 /** The avatar in the top-right corner, where YouTube Music keeps it. */
-export function AccountMenu({ state }: { state: AccountState }) {
+export function AccountMenu({ state, onSettings }: { state: AccountState; onSettings: () => void }) {
   if (!isTauri) return null;
   if (state.busy) {
     return (
@@ -48,7 +49,7 @@ export function AccountMenu({ state }: { state: AccountState }) {
             <IconAlertTriangle size={16} className="text-amber-500" />
           </IconButton>
         )}
-        <SignInMenu state={state} />
+        <SignInMenu state={state} onSettings={onSettings} />
       </div>
     );
   }
@@ -81,6 +82,10 @@ export function AccountMenu({ state }: { state: AccountState }) {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSettings}>
+          <IconSettings />
+          Settings
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={state.signOut}>
           <IconLogout />
           Sign out
@@ -94,7 +99,7 @@ export function AccountMenu({ state }: { state: AccountState }) {
  * Signing in through Google's page, or taking the session from a browser that
  * is already signed in. The browsers are looked up each time the menu opens.
  */
-function SignInMenu({ state }: { state: AccountState }) {
+function SignInMenu({ state, onSettings }: { state: AccountState; onSettings: () => void }) {
   const [browsers, setBrowsers] = useState<Browser[] | null>(null);
   const load = (open: boolean) => {
     if (!open) return;
@@ -137,6 +142,11 @@ function SignInMenu({ state }: { state: AccountState }) {
             ))
           )}
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSettings}>
+          <IconSettings />
+          Settings
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

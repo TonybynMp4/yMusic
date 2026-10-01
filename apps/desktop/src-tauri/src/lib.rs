@@ -6,11 +6,15 @@ pub mod images;
 pub mod library;
 pub mod platform;
 pub mod playback;
+pub mod settings;
+mod tray;
+pub mod updates;
 
 use account::{Account, OsKeyring};
 use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
+use settings::SettingsStore;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
@@ -30,6 +34,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_seek,
             $crate::commands::player_set_volume,
             $crate::commands::player_stop,
+            $crate::commands::player_audio_devices,
             $crate::commands::media_subscribe,
             $crate::commands::media_set_track,
             $crate::commands::media_set_volume,
@@ -46,7 +51,11 @@ macro_rules! ymusic_commands {
             $crate::commands::account_sign_in,
             $crate::commands::account_browsers,
             $crate::commands::account_import,
-            $crate::commands::account_sign_out
+            $crate::commands::account_sign_out,
+            $crate::commands::settings_get,
+            $crate::commands::settings_set,
+            $crate::commands::update_check,
+            $crate::commands::open_logs_folder
         ]
     };
 }
@@ -57,11 +66,7 @@ pub fn run() {
         // First, so a second launch hands over to the running window before
         // anything else starts, a second player above all.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            tray::show_window(app);
         }))
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -97,6 +102,9 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            let settings = open_settings(app.handle());
+            let startup_settings = settings.get();
+            app.manage(settings);
 
             // The loader already refuses to start without `libmpv.so.2` (mpv
             // 0.35), so what can still fail here is mpv itself. The app is a
@@ -108,6 +116,7 @@ pub fn run() {
                     // without them rather than failing startup.
                     let media = MediaSession::attach(&window);
                     player.observe(media.clone());
+                    player.apply_settings(&startup_settings);
                     app.manage(player);
                     app.manage(media);
                 }
@@ -132,7 +141,16 @@ pub fn run() {
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
+            tray::sync(app.handle(), startup_settings.close_to_tray);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && tray::keeps_playing(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(ymusic_commands!())
         .run(tauri::generate_context!())
@@ -165,6 +183,16 @@ fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf
     app.path()
         .app_cache_dir()
         .unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
+}
+
+fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => SettingsStore::open(dir.join("settings.json")),
+        Err(err) => {
+            log::error!("no app data directory, settings will not persist: {err}");
+            SettingsStore::in_memory()
+        }
+    }
 }
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {

@@ -49,6 +49,18 @@ describe("bestAudioFormat", () => {
     expect(chosen?.itag).toBe(251);
   });
 
+  it("takes the smallest for low quality and the one nearest 128 kbps for normal", () => {
+    const formats = [
+      format({ itag: 249, bitrate: 50_000 }),
+      format({ itag: 140, bitrate: 130_000 }),
+      format({ itag: 251, bitrate: 160_000 }),
+    ];
+
+    expect(bestAudioFormat(formats, "low")?.itag).toBe(249);
+    expect(bestAudioFormat(formats, "normal")?.itag).toBe(140);
+    expect(bestAudioFormat(formats, "high")?.itag).toBe(251);
+  });
+
   // The video formats carry audio too, at several times the bitrate for a
   // picture a music player never shows. Picking one would work and waste
   // bandwidth silently, which is why this is asserted rather than assumed.

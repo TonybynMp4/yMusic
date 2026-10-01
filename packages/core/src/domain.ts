@@ -141,6 +141,13 @@ export const AudioCodec = z.enum([
 export type AudioCodec = z.infer<typeof AudioCodec>;
 
 /**
+ * Which of YouTube's audio formats to play. High is the best bitrate there is,
+ * low the smallest, and normal the one nearest 128 kbps.
+ */
+export const AudioQuality = z.enum(["high", "normal", "low"]);
+export type AudioQuality = z.infer<typeof AudioQuality>;
+
+/**
  * A resolved, playable stream.
  *
  * Remote leases are time-limited, so `expiresAt` must be checked before handing
@@ -160,6 +167,12 @@ export const StreamLease = z.object({
   bitrate: z.number().int().positive().nullable(),
   /** Set when the audio is the Premium-only format. Logged to verify Premium. */
   isPremiumFormat: z.boolean(),
+  /**
+   * How far the track sits above YouTube's reference level, in dB, or below it
+   * when negative. Stable volume moves it to the reference. Null for local
+   * files, which carry ReplayGain tags instead.
+   */
+  loudnessDb: z.number().nullable(),
   headers: z.record(z.string(), z.string()),
   /** Null means the lease never expires, as for a file on disk. */
   expiresAt: z.number().int().positive().nullable(),

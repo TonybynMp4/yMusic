@@ -18,6 +18,7 @@ const localLease = {
   codec: "flac",
   bitrate: 1024,
   isPremiumFormat: false,
+  loudnessDb: null,
   headers: {},
   expiresAt: null,
 };
@@ -30,6 +31,7 @@ const remoteLease = {
   codec: "opus",
   bitrate: 160000,
   isPremiumFormat: false,
+  loudnessDb: null,
   headers: { "User-Agent": "YMUSIC/0.1", Cookie: "a=1, b=2" },
   expiresAt: Date.now() + 6 * 60 * 60 * 1000,
 };

@@ -9,6 +9,8 @@
 
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
+use ymusic_lib::playback::{stable_volume_filter, MAX_BOOST_DB};
+use ymusic_lib::settings::StableVolume;
 
 /// Must match `VOLUME_CURVE_EXPONENT` in `packages/core/src/volume.ts`.
 const VOLUME_CURVE_EXPONENT: f64 = 3.0;
@@ -44,9 +46,94 @@ fn mpv_applies_the_cubic_taper_the_volume_slider_assumes() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Decodes the tone with mpv writing raw samples to a file, and returns the RMS.
+#[test]
+fn stable_volume_turns_a_loud_track_down_by_its_loudness() {
+    let dir = std::env::temp_dir().join(format!("ymusic-stable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    let tone = dir.join("tone.wav");
+    write_full_scale_tone(&tone);
+    let reference = render(&tone, &dir, 100.0, "");
+    for mode in [StableVolume::On, StableVolume::LoudOnly] {
+        let quieter =
+            render(&tone, &dir, 100.0, &stable_volume_filter(mode, Some(6.0))) / reference;
+        let expected = 10f64.powf(-6.0 / 20.0);
+        assert!(
+            (quieter - expected).abs() / expected < 0.05,
+            "{mode:?}: a track 6 dB over the reference rendered at {quieter:.4} of \
+             full scale, expected {expected:.4}"
+        );
+    }
+    assert_eq!(
+        stable_volume_filter(StableVolume::LoudOnly, Some(-3.0)),
+        "",
+        "only loud songs: quiet tracks are left alone"
+    );
+    assert_eq!(stable_volume_filter(StableVolume::Off, Some(6.0)), "");
+    assert_eq!(stable_volume_filter(StableVolume::On, None), "");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stable_volume_turns_a_quiet_track_up_without_clipping() {
+    let dir = std::env::temp_dir().join(format!("ymusic-boost-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+
+    // A tone at -12 dBFS: the 4 dB boost leaves it well under the limiter, so
+    // it should come out 4 dB louder. A sign slip would turn it down instead.
+    let quiet = dir.join("quiet.wav");
+    write_tone(&quiet, 10f64.powf(-12.0 / 20.0));
+    let quiet_reference = render(&quiet, &dir, 100.0, "");
+    let louder = render(
+        &quiet,
+        &dir,
+        100.0,
+        &stable_volume_filter(StableVolume::On, Some(-4.0)),
+    ) / quiet_reference;
+    let expected = 10f64.powf(4.0 / 20.0);
+    assert!(
+        (louder - expected).abs() / expected < 0.05,
+        "a track 4 dB under the reference rendered at {louder:.4} of its level, \
+         expected {expected:.4}"
+    );
+
+    // A full-scale tone standing in for a track YouTube measured 4 dB quiet:
+    // quiet on average, peaks at the top. The boost must land in the limiter.
+    let tone = dir.join("tone.wav");
+    write_full_scale_tone(&tone);
+    let reference = render(&tone, &dir, 100.0, "");
+    let boosted = render(
+        &tone,
+        &dir,
+        100.0,
+        &stable_volume_filter(StableVolume::On, Some(-4.0)),
+    );
+    let ceiling = 10f64.powf(-1.0 / 20.0);
+    assert!(
+        boosted / reference <= ceiling * 1.02,
+        "a boosted full-scale tone should be held at -1 dBFS, got {:.4} of full scale",
+        boosted / reference
+    );
+
+    // And a boost never goes past the cap, however quiet YouTube says it is.
+    assert_eq!(
+        stable_volume_filter(StableVolume::On, Some(-20.0)),
+        format!("lavfi=[volume={MAX_BOOST_DB:.2}dB,alimiter=limit=0.891:level=disabled]")
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn render_at(tone: &Path, dir: &Path, percent: f64) -> f64 {
-    let out = dir.join(format!("out-{percent:.0}.wav"));
+    render(tone, dir, percent, "")
+}
+
+/// Decodes the tone with mpv writing raw samples to a file, and returns the RMS.
+fn render(tone: &Path, dir: &Path, percent: f64, af: &str) -> f64 {
+    let out = dir.join(format!("out-{percent:.0}-{}.wav", af.len()));
     let _ = std::fs::remove_file(&out);
 
     let mpv = Mpv::with_initializer(|init| {
@@ -60,6 +147,7 @@ fn render_at(tone: &Path, dir: &Path, percent: f64) -> f64 {
         init.set_property("audio-format", "s16")?;
         init.set_property("audio-samplerate", 48000)?;
         init.set_property("volume", percent)?;
+        init.set_property("af", af)?;
         Ok(())
     })
     .expect("libmpv");
@@ -122,15 +210,19 @@ fn pcm_data<'a>(bytes: &'a [u8], path: &Path) -> &'a [u8] {
     panic!("no data chunk in {}", path.display());
 }
 
-/// A one-second full-scale sine, written by hand so the test needs no ffmpeg
-/// and no committed binary fixture.
 fn write_full_scale_tone(path: &PathBuf) {
+    write_tone(path, 1.0);
+}
+
+/// A one-second sine peaking at `amplitude` of full scale, written by hand so
+/// the test needs no ffmpeg and no committed binary fixture.
+fn write_tone(path: &PathBuf, amplitude: f64) {
     const RATE: u32 = 48_000;
     const FRAMES: u32 = RATE;
     let mut pcm = Vec::with_capacity(FRAMES as usize * 2);
     for frame in 0..FRAMES {
         let phase = 2.0 * std::f64::consts::PI * 440.0 * frame as f64 / RATE as f64;
-        pcm.extend_from_slice(&((phase.sin() * i16::MAX as f64) as i16).to_le_bytes());
+        pcm.extend_from_slice(&((phase.sin() * amplitude * i16::MAX as f64) as i16).to_le_bytes());
     }
 
     let mut wav = Vec::new();

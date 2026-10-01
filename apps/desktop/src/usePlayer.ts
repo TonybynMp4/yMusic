@@ -18,6 +18,7 @@ import { engine as youtube } from "./engine.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
+import type { SettingsState } from "./useSettings.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
 /** A transport failure that has no user-visible consequence beyond not happening. */
@@ -53,7 +54,7 @@ function radioSeed(queue: QueueState): TrackId | null {
  * swapping the resolver, not restructuring playback around a step that suddenly
  * became slow and fallible.
  */
-export function usePlayer() {
+export function usePlayer({ settings, update }: SettingsState) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
@@ -61,8 +62,8 @@ export function usePlayer() {
    * because the OS can set it too, from the MPRIS volume control.
    */
   const [volume, setVolumeState] = useState(1);
-  /** On, as in YouTube Music: when the queue runs out, its suggestions play on. */
-  const [autoplay, setAutoplayState] = useState(true);
+  /** On by default, as in YouTube Music: when the queue runs out, its suggestions play on. */
+  const autoplay = settings.autoplay;
   /** The queue's source is still arriving, so autoplay waits for its real end. */
   const [filling, setFilling] = useState(false);
   /** Stops following the current source. Replaced on every new queue. */
@@ -77,7 +78,7 @@ export function usePlayer() {
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
-  useWatchHistory(trackId, state.status, position);
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -90,18 +91,34 @@ export function usePlayer() {
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
 
+  /** Read at resolve time, so a change reaches the next song without a reload. */
+  const quality = useRef(settings.audioQuality);
+  useEffect(() => {
+    if (quality.current === settings.audioQuality) return;
+    quality.current = settings.audioQuality;
+    // Leases already resolved, or still resolving, are for the old quality.
+    // The song playing keeps its stream; the ones after it resolve again.
+    leases.current.clear();
+    resolving.current.clear();
+  }, [settings.audioQuality]);
+
   /** A cached lease while it is still usable, otherwise a fresh one. */
   const leaseFor = useCallback((id: TrackId): Promise<StreamLease> => {
     const cached = leases.current.get(id);
     if (cached && isLeaseUsable(cached, Date.now())) return Promise.resolve(cached);
     const pending = resolving.current.get(id);
     if (pending) return pending;
-    const request = resolveTrack(id)
+    const requested = quality.current;
+    const request = resolveTrack(id, { quality: requested })
       .then((lease) => {
-        leases.current.set(id, lease);
+        // Not cached if the quality changed while it resolved; a load already
+        // waiting on it still gets it.
+        if (quality.current === requested) leases.current.set(id, lease);
         return lease;
       })
-      .finally(() => resolving.current.delete(id));
+      .finally(() => {
+        if (resolving.current.get(id) === request) resolving.current.delete(id);
+      });
     resolving.current.set(id, request);
     return request;
   }, []);
@@ -147,13 +164,15 @@ export function usePlayer() {
   // with resolving the track the user is waiting for.
   const upcomingId = peekNext(queue)?.id ?? null;
   const playing = state.status === "playing";
+  const audioQuality = settings.audioQuality;
   useEffect(() => {
     if (!playing || upcomingId === null || upcomingId === trackId) return;
     if (sourceOf(upcomingId) !== "youtube") return;
     void leaseFor(upcomingId).catch((error: unknown) =>
       console.error("could not resolve the next track ahead of time", error),
     );
-  }, [playing, upcomingId, trackId, leaseFor]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- audioQuality resolves again after a change of quality drops the lease
+  }, [playing, upcomingId, trackId, leaseFor, audioQuality]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
   // it, and a 403 surfaces only here. Retry such a track once on the PO-token
@@ -168,7 +187,7 @@ export function usePlayer() {
         retried.current = failed;
         leases.current.delete(failed);
         void (async () => {
-          const lease = await resolveTrack(failed, { fallback: true });
+          const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
           leases.current.set(failed, lease);
           await load(lease);
@@ -336,13 +355,13 @@ export function usePlayer() {
     };
   }, [wantsSuggestions, seed]);
 
-  const setAutoplay = useCallback((on: boolean) => {
-    setAutoplayState(on);
-    if (!on) {
-      askedSeed.current = null;
-      dispatch({ type: "setSuggestions", tracks: [] });
-    }
-  }, []);
+  // Turned off from the queue or the settings page alike.
+  useEffect(() => {
+    if (autoplay) return;
+    askedSeed.current = null;
+    dispatch({ type: "setSuggestions", tracks: [] });
+  }, [autoplay]);
+  const setAutoplay = useCallback((on: boolean) => update({ autoplay: on }), [update]);
 
   const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
   const pause = useCallback(() => void engine.pause().catch(logPlaybackFailure), [engine]);

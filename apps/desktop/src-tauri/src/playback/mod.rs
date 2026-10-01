@@ -337,12 +337,11 @@ pub fn stable_volume_filter(mode: StableVolume, loudness_db: Option<f64>) -> Str
     }
 }
 
+/// Leaves out mpv's own `auto` entry: the settings page offers it as "System
+/// default" itself, and would otherwise list it twice.
 fn preferred_devices(devices: Vec<AudioDevice>) -> Vec<AudioDevice> {
-    let Some(backend) = devices
-        .iter()
-        .map(|d| d.name.as_str())
-        .find(|n| *n != "auto")
-    else {
+    let devices: Vec<AudioDevice> = devices.into_iter().filter(|d| d.name != "auto").collect();
+    let Some(backend) = devices.first().map(|d| d.name.as_str()) else {
         return devices;
     };
     let prefix = format!("{}/", backend.split('/').next().unwrap_or(backend));
@@ -526,8 +525,8 @@ mod tests {
     }
 
     #[test]
-    fn a_backend_without_named_devices_lists_everything() {
+    fn a_backend_without_named_devices_lists_everything_but_auto() {
         let devices = vec![device("auto"), device("null")];
-        assert_eq!(preferred_devices(devices.clone()), devices);
+        assert_eq!(preferred_devices(devices), vec![device("null")]);
     }
 }

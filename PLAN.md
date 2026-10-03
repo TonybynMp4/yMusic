@@ -85,6 +85,7 @@ Plugin ideas:
 - **Tour dates** from Bandsintown. `player.panel`, `artist.section`, `home.shelf`.
 - **Downloader.** A backend plugin that writes the video id into the file's tags, so the local-to-YouTube link is exact from the start.
 - **Duplicate collapsing.** A song released as a single and again on the album shows up twice. Keep one, preferring the album version, without merging live, acoustic, remix or remaster versions. Those differ by a title suffix or by more than a second or two of duration, the same signals as local-file linking, so the matcher is shared. It needs the list it is handed and nothing else.
+- **Audio visualizer**
 
 ## Risks
 

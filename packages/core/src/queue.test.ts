@@ -18,6 +18,7 @@ const track = (id: string): Track => ({
   durationMs: 180_000,
   thumbnails: [],
   isExplicit: false,
+  year: null,
 });
 
 const tracks = ["a", "b", "c", "d"].map(track);

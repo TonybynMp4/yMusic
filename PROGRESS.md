@@ -93,6 +93,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Albums and playlists: shuffle play, start mix, play next, add to queue, save to library, save to playlist, go to artist
 - [x] Artists: shuffle play, start mix, play next, add to queue, subscribe and unsubscribe
 - [x] Player bar: a click opens the full player, a right click the song's menu
+- [x] Player bar and full player: title, album and artists open their pages, with the release year in the byline
 - [ ] Pin and unpin albums, playlists and artists to quick access on the home page
 - [ ] Like and dislike songs
 - [ ] Setting to skip disliked songs

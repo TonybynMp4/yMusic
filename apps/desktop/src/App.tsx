@@ -219,6 +219,7 @@ export function App() {
                 onMove={(from, to) => player.dispatch({ type: "move", from, to })}
                 onClear={() => player.dispatch({ type: "clear" })}
                 onCollapse={() => setExpanded(false)}
+                onOpen={go}
               />
             )}
           </div>
@@ -240,6 +241,7 @@ export function App() {
           onShuffle={player.setShuffle}
           expanded={expanded}
           onToggleExpanded={() => setExpanded((open) => !open)}
+          onOpen={go}
         />
         {notice.message && (
           <p

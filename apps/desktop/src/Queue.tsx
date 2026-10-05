@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { IconGripVertical, IconLoader2, IconX } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -194,9 +194,7 @@ export function Queue({
               if (position > queued) {
                 const track = queue.suggestions[position - queued - 1];
                 if (!track) return null;
-                return (
-                  <Row track={track} onJump={onJump} suggestion />
-                );
+                return <Row track={track} onJump={onJump} suggestion />;
               }
               const source = sourceOf(position, drag);
               const itemIndex = queue.order[source]!;

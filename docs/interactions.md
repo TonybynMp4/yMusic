@@ -15,7 +15,7 @@ Local files have their own items. A folder's menu opens it in the file manager, 
 
 The thumbs down and up sit beside the song in the player bar and under the artwork in the full player, for a YouTube song while signed in. Pressing the one already on clears it. Liking a song adds it to Liked Music, which is YouTube's doing, not the app's.
 
-A song's menu has the same two, as "Add to liked songs" and "Dislike", for any YouTube song. They show the rating as last seen: a song liked elsewhere and never played here reads as unrated until it plays. Liking it again does no harm. Disliking the song playing from its menu skips it, as the player bar does.
+A song's menu has the same two, as "Add to liked songs" and "Dislike", for any YouTube song while signed in. They show the rating as last seen: a song liked elsewhere and never played here reads as unrated until it plays. Liking it again does no harm. Disliking the song playing from its menu skips it, as the player bar does.
 
 A disliked song's row is dimmed in lists and in the queue, as YouTube Music does, except while it is the song playing. On a list row the cover, title and artists fade, but the play button over the cover stays clear.
 

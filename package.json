@@ -23,8 +23,8 @@
     "app": "pnpm --filter @ymusic/desktop tauri dev"
   },
   "devDependencies": {
-    "oxlint": "^1.83.0",
-    "turbo": "^2.11.3",
+    "oxlint": "^1.86.0",
+    "turbo": "^2.11.6",
     "typescript": "^7.0.2"
   }
 }

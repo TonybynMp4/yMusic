@@ -74,6 +74,7 @@ pub struct LocalLease {
     pub codec: String,
     pub bitrate: Option<u32>,
     pub is_premium_format: bool,
+    pub loudness_db: Option<f64>,
     pub headers: std::collections::HashMap<String, String>,
     pub expires_at: Option<i64>,
 }
@@ -211,6 +212,7 @@ impl Library {
             codec: track.codec,
             bitrate: track.bitrate,
             is_premium_format: false,
+            loudness_db: None,
             headers: std::collections::HashMap::new(),
             expires_at: None,
         })

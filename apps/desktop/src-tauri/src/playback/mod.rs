@@ -12,7 +12,9 @@ pub use event::{PlaybackEvent, PlaybackStatus};
 
 use event::seconds_to_ms;
 use libmpv2::{events::Event, Format, Mpv};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+use crate::settings::StableVolume;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -61,6 +63,24 @@ pub struct LoadRequest {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub start_paused: bool,
+    /// YouTube's loudness for the track, in dB above its reference level.
+    #[serde(default)]
+    pub loudness_db: Option<f64>,
+}
+
+/// An output mpv can play through. `name` is what `audio-device` takes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub name: String,
+    pub description: String,
+}
+
+/// Stable volume's state: whether it is on, and the loudness of the track
+/// playing, kept so switching it mid-song applies to that song.
+#[derive(Default)]
+struct Loudness {
+    stable: StableVolume,
+    track_db: Option<f64>,
 }
 
 pub struct Player {
@@ -70,6 +90,7 @@ pub struct Player {
     /// treating it as an error.
     sink: Sink,
     current_track: Arc<Mutex<Option<String>>>,
+    loudness: Mutex<Loudness>,
 }
 
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
@@ -146,6 +167,7 @@ impl Player {
             mpv,
             sink,
             current_track,
+            loudness: Mutex::default(),
         })
     }
 
@@ -176,8 +198,69 @@ impl Player {
             )?;
         }
 
+        {
+            let mut loudness = self.loudness.lock().expect("loudness mutex");
+            loudness.track_db = request.loudness_db;
+            if let Err(error) = self.apply_loudness(&loudness) {
+                log::warn!("{error}");
+            }
+        }
+
         self.set_property("pause", request.start_paused)?;
         self.command("loadfile", &[&request.url, "replace"])
+    }
+
+    /// Applies the settings mpv owns. Called at startup and after each change;
+    /// a setting mpv refuses is logged rather than failing the others.
+    pub fn apply_settings(&self, settings: &crate::settings::Settings) {
+        if let Err(error) = self.set_stable_volume(settings.stable_volume) {
+            log::warn!("{error}");
+        }
+        if let Err(error) = self.set_audio_device(&settings.audio_device) {
+            log::warn!("{error}");
+        }
+    }
+
+    /// Stable volume moves YouTube tracks toward YouTube's reference level by
+    /// the loudness YouTube measured for them, and has mpv apply ReplayGain
+    /// tags to local files.
+    pub fn set_stable_volume(&self, mode: StableVolume) -> Result<(), String> {
+        let mut loudness = self.loudness.lock().expect("loudness mutex");
+        loudness.stable = mode;
+        let replaygain = if mode == StableVolume::Off {
+            "no"
+        } else {
+            "track"
+        };
+        self.set_property("replaygain", replaygain)?;
+        self.apply_loudness(&loudness)
+    }
+
+    fn apply_loudness(&self, loudness: &Loudness) -> Result<(), String> {
+        let filter = stable_volume_filter(loudness.stable, loudness.track_db);
+        self.set_property("af", filter.as_str())
+    }
+
+    /// The outputs to offer, on the audio backend mpv would pick by itself.
+    ///
+    /// mpv lists every device of every backend it was built with, so the same
+    /// speakers show up under PipeWire, PulseAudio and several ALSA names. The
+    /// first entry after `auto` is the default of the preferred backend, and
+    /// its devices are the ones worth showing.
+    pub fn audio_devices(&self) -> Result<Vec<AudioDevice>, String> {
+        let json = self
+            .mpv
+            .get_property::<String>("audio-device-list")
+            .map_err(|error| format!("could not list audio devices: {error}"))?;
+        let devices: Vec<AudioDevice> = serde_json::from_str(&json)
+            .map_err(|error| format!("unexpected audio device list: {error}"))?;
+        Ok(preferred_devices(devices))
+    }
+
+    /// `auto` follows the system's default output. A saved device that has
+    /// since gone away also plays through the default, which mpv does itself.
+    pub fn set_audio_device(&self, name: &str) -> Result<(), String> {
+        self.set_property("audio-device", name)
     }
 
     pub fn play(&self) -> Result<(), String> {
@@ -186,6 +269,10 @@ impl Player {
 
     pub fn pause(&self) -> Result<(), String> {
         self.set_property("pause", true)
+    }
+
+    pub fn toggle_pause(&self) -> Result<(), String> {
+        self.command("cycle", &["pause"])
     }
 
     pub fn seek(&self, position_ms: u64) -> Result<(), String> {
@@ -226,6 +313,49 @@ impl Player {
         self.mpv
             .set_property(name, value)
             .map_err(|error| format!("mpv property `{name}` failed: {error}"))
+    }
+}
+
+/// The most a quiet track is turned up. Past this the limiter would be
+/// flattening a dynamic track's loudest moments by more than it is worth.
+pub const MAX_BOOST_DB: f64 = 6.0;
+
+/// The `af` value that plays a track `loudness_db` above YouTube's reference
+/// (below it, when negative) at the reference instead. Empty, so no filter,
+/// when there is nothing to change.
+///
+/// A boost goes through a limiter holding peaks at -1 dBFS: a quiet track can
+/// still have peaks at full scale, which a plain gain would clip. It leaves
+/// everything under that ceiling untouched.
+pub fn stable_volume_filter(mode: StableVolume, loudness_db: Option<f64>) -> String {
+    match (mode, loudness_db) {
+        (StableVolume::Off, _) | (_, None) => String::new(),
+        (_, Some(db)) if db > 0.0 => format!("lavfi=[volume={:.2}dB]", -db),
+        (StableVolume::On, Some(db)) if db < 0.0 => format!(
+            "lavfi=[volume={:.2}dB,alimiter=limit=0.891:level=disabled]",
+            (-db).min(MAX_BOOST_DB)
+        ),
+        _ => String::new(),
+    }
+}
+
+/// Leaves out mpv's own `auto` entry: the settings page offers it as "System
+/// default" itself, and would otherwise list it twice.
+fn preferred_devices(devices: Vec<AudioDevice>) -> Vec<AudioDevice> {
+    let devices: Vec<AudioDevice> = devices.into_iter().filter(|d| d.name != "auto").collect();
+    let Some(backend) = devices.first().map(|d| d.name.as_str()) else {
+        return devices;
+    };
+    let prefix = format!("{}/", backend.split('/').next().unwrap_or(backend));
+    let preferred: Vec<AudioDevice> = devices
+        .iter()
+        .filter(|d| d.name.starts_with(&prefix))
+        .cloned()
+        .collect();
+    if preferred.is_empty() {
+        devices
+    } else {
+        preferred
     }
 }
 
@@ -364,5 +494,41 @@ fn emit(sink: &Sink, event: PlaybackEvent) {
     }
     if let Some(frontend) = sink.frontend.lock().expect("sink mutex").as_ref() {
         frontend.send(event);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn device(name: &str) -> AudioDevice {
+        AudioDevice {
+            name: name.into(),
+            description: name.into(),
+        }
+    }
+
+    #[test]
+    fn devices_come_from_the_preferred_backend() {
+        let devices = vec![
+            device("auto"),
+            device("pipewire"),
+            device("pipewire/speakers"),
+            device("pipewire/hdmi"),
+            device("pulse/speakers"),
+            device("alsa"),
+            device("alsa/hw:0"),
+        ];
+        let names: Vec<_> = preferred_devices(devices)
+            .into_iter()
+            .map(|d| d.name)
+            .collect();
+        assert_eq!(names, ["pipewire/speakers", "pipewire/hdmi"]);
+    }
+
+    #[test]
+    fn a_backend_without_named_devices_lists_everything_but_auto() {
+        let devices = vec![device("auto"), device("null")];
+        assert_eq!(preferred_devices(devices), vec![device("null")]);
     }
 }

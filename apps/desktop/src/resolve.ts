@@ -1,4 +1,5 @@
 import {
+  type AudioQuality,
   sourceOf,
   type StreamLease,
   type TrackId,
@@ -18,11 +19,12 @@ import { engine } from "./engine.ts";
  */
 /**
  * `fallback` skips YouTube's usual client for the PO-token one, for a stream
- * that resolved but that mpv could not play. Meaningless for local files.
+ * that resolved but that mpv could not play. It and `quality` mean nothing for
+ * local files, which have one format: the file.
  */
 export async function resolveTrack(
   id: TrackId,
-  options: { fallback?: boolean } = {},
+  options: { fallback?: boolean; quality?: AudioQuality } = {},
 ): Promise<StreamLease> {
   switch (sourceOf(id)) {
     case "local":

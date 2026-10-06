@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TrackId } from "@ymusic/core";
 import type { PlaybackEngine, PlaybackEvent, StreamLease } from "@ymusic/core";
-import { invokeVoid, isTauri } from "./tauri.ts";
+import { invokeParsed, invokeVoid, isTauri } from "./tauri.ts";
 
 /**
  * Mirrors the Rust `PlaybackEvent`. Parsed rather than cast: these arrive over
@@ -27,6 +27,15 @@ export const RustPlaybackEvent = z.discriminatedUnion("type", [
 ]);
 export type RustPlaybackEvent = z.infer<typeof RustPlaybackEvent>;
 
+export const AudioDevice = z.object({ name: z.string(), description: z.string() });
+export type AudioDevice = z.infer<typeof AudioDevice>;
+
+/** The outputs mpv can play through. Empty outside Tauri. */
+export async function playerAudioDevices(): Promise<AudioDevice[]> {
+  if (!isTauri) return [];
+  return invokeParsed("player_audio_devices", z.array(AudioDevice));
+}
+
 /**
  * `PlaybackEngine` backed by libmpv in the Rust core.
  *
@@ -45,6 +54,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
         trackId: lease.trackId,
         url: lease.url,
         headers: lease.headers,
+        loudnessDb: lease.loudnessDb,
         startPaused: paused,
       },
     });

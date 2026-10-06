@@ -101,6 +101,22 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Menus on the queue's rows, with remove from queue
 - [x] Local folders: open in files. Local songs: show in files, with the file selected
 
+### Settings
+
+- [x] Settings saved to a file in Rust, read before the first render
+- [x] Settings page, opened from the account menu
+- [x] Autoplay remembered across restarts
+- [x] Audio quality: high, normal, low
+- [x] Stable volume: YouTube's loudness value per track, ReplayGain for local files
+- [x] Audio output device
+- [x] Pause watch history
+- [x] Pause search history
+- [x] Music folders: add, remove, rescan
+- [x] Keep playing in the tray when the window closes
+- [x] Update check at startup, with prereleases opt-in and a link to the release
+- [x] About: version, logs folder, source code, issue link
+- [x] Account: sign in, import from a browser, sign out
+
 ### Features
 
 - [x] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)

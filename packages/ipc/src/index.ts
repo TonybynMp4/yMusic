@@ -5,3 +5,4 @@ export * from "./platform.ts";
 export * from "./library.ts";
 export * from "./media.ts";
 export * from "./account.ts";
+export * from "./settings.ts";

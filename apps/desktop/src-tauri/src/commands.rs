@@ -7,8 +7,9 @@
 use crate::account::{import, sign_in, Account};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
-use crate::playback::{LoadRequest, PlaybackEvent, Player};
-use tauri::{ipc::Channel, Runtime, State};
+use crate::playback::{AudioDevice, LoadRequest, PlaybackEvent, Player};
+use crate::settings::{Settings, SettingsStore};
+use tauri::{ipc::Channel, Manager, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
 /// on the about screen; the updater decides what it may do with the rest.
@@ -20,6 +21,8 @@ pub struct PlatformSummary {
     app_version: String,
     install_flavor: InstallFlavor,
     supports_in_app_update: bool,
+    /// False without a system tray library, so the page can't offer the tray.
+    has_tray: bool,
 }
 
 #[tauri::command]
@@ -31,6 +34,7 @@ pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary
         app_version: app.package_info().version.to_string(),
         install_flavor: flavor,
         supports_in_app_update: flavor.supports_in_app_update(),
+        has_tray: crate::tray::has_tray_support(),
     }
 }
 
@@ -74,6 +78,11 @@ pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), St
 #[tauri::command]
 pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), String> {
     player.set_volume(volume)
+}
+
+#[tauri::command]
+pub fn player_audio_devices(player: State<'_, Player>) -> Result<Vec<AudioDevice>, String> {
+    player.audio_devices()
 }
 
 #[tauri::command]
@@ -214,4 +223,45 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
 #[tauri::command]
 pub fn account_sign_out(account: State<'_, Account>) -> Result<(), String> {
     account.clear()
+}
+
+#[tauri::command]
+pub fn settings_get(settings: State<'_, SettingsStore>) -> Settings {
+    settings.get()
+}
+
+/// Changes the settings named in `patch`, applies the ones mpv owns, and
+/// returns all of them.
+#[tauri::command]
+pub fn settings_set<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    settings: State<'_, SettingsStore>,
+    patch: serde_json::Value,
+) -> Result<Settings, String> {
+    let next = settings.update(patch)?;
+    if let Some(player) = app.try_state::<Player>() {
+        player.apply_settings(&next);
+    }
+    crate::tray::sync(&app, next.close_to_tray);
+    Ok(next)
+}
+
+/// A release newer than this build, if there is one. Prereleases count when
+/// the settings say so.
+#[tauri::command]
+pub async fn update_check<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    settings: State<'_, SettingsStore>,
+) -> Result<Option<crate::updates::Update>, String> {
+    let include_prereleases = settings.get().include_prereleases;
+    crate::updates::check(&app.package_info().version, include_prereleases).await
+}
+
+/// Opens the folder `tauri-plugin-log` writes to, for attaching a log to a bug
+/// report.
+#[tauri::command]
+pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
 }

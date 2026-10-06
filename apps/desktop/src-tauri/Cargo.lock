@@ -6590,6 +6590,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rusqlite",
  "secret-service",
+ "semver",
  "serde",
  "serde_json",
  "sha1 0.11.0",

@@ -82,6 +82,14 @@ export function NowPlaying(props: Props) {
   const position = scrubbing ?? playing;
   const isPlaying = playback.status === "playing";
   const decibels = decibelsForVolume(volume / 100);
+  /**
+   * The level to go back to on unmute: the last one the slider shows above
+   * zero. It is held while the slider is dragged, so a drag down to zero
+   * restores the level from before the drag, not the last step on the way.
+   */
+  const unmuted = useRef(1);
+  const draggingVolume = useRef(false);
+  if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
 
   return (
     // As in YouTube Music: a click on the bar, anywhere but its controls,
@@ -206,7 +214,12 @@ export function NowPlaying(props: Props) {
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-2">
-          <VolumeIcon volume={volume} />
+          <IconButton
+            label={volume === 0 ? "Unmute" : "Mute"}
+            onClick={() => props.onVolume(volume === 0 ? unmuted.current : 0)}
+          >
+            <VolumeIcon volume={volume} />
+          </IconButton>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -217,6 +230,17 @@ export function NowPlaying(props: Props) {
                   // The position is sent as a fraction; the perceptual curve is
                   // applied downstream, by mpv, and pinned by tests on both sides.
                   onValueChange={(value) => props.onVolume((value as number) / 100)}
+                  onPointerDownCapture={(event) => {
+                    draggingVolume.current = event.button === 0;
+                  }}
+                  // A press that leaves the value unchanged commits nothing.
+                  onPointerUpCapture={() => {
+                    draggingVolume.current = false;
+                  }}
+                  onValueCommitted={(value) => {
+                    draggingVolume.current = false;
+                    if ((value as number) > 0) unmuted.current = (value as number) / 100;
+                  }}
                   className="w-24"
                 />
               }
@@ -236,8 +260,7 @@ export function NowPlaying(props: Props) {
 /** Reflects the slider position, so the icon tracks the handle rather than the
  *  amplitude, which at a quarter travel would already look muted. */
 function VolumeIcon({ volume }: { volume: number }) {
-  const className = "shrink-0 text-muted-foreground";
-  if (volume === 0) return <IconVolume3 size={16} className={className} />;
-  if (volume < 50) return <IconVolume2 size={16} className={className} />;
-  return <IconVolume size={16} className={className} />;
+  if (volume === 0) return <IconVolume3 size={16} />;
+  if (volume < 50) return <IconVolume2 size={16} />;
+  return <IconVolume size={16} />;
 }

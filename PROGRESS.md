@@ -21,6 +21,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] libmpv in Rust: load, play, pause, seek, volume, state and position over a `Channel`
 - [x] Perceptual volume (mpv's cubic taper, applied once)
+- [x] Mute button next to the volume slider, restoring the previous level
 - [x] Gapless audio in mpv
 - [x] Stale stream leases re-resolved before playing
 - [x] Resolve the next YouTube track while the current one plays, so there is no gap while its stream resolves

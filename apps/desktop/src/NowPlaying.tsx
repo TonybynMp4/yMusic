@@ -82,9 +82,14 @@ export function NowPlaying(props: Props) {
   const position = scrubbing ?? playing;
   const isPlaying = playback.status === "playing";
   const decibels = decibelsForVolume(volume / 100);
-  /** The level to go back to on unmute: the last one the slider shows above zero. */
+  /**
+   * The level to go back to on unmute: the last one the slider shows above
+   * zero. It is held while the slider is dragged, so a drag down to zero
+   * restores the level from before the drag, not the last step on the way.
+   */
   const unmuted = useRef(1);
-  if (volume > 0) unmuted.current = props.volume;
+  const draggingVolume = useRef(false);
+  if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
 
   return (
     // As in YouTube Music: a click on the bar, anywhere but its controls,
@@ -225,6 +230,13 @@ export function NowPlaying(props: Props) {
                   // The position is sent as a fraction; the perceptual curve is
                   // applied downstream, by mpv, and pinned by tests on both sides.
                   onValueChange={(value) => props.onVolume((value as number) / 100)}
+                  onPointerDownCapture={() => {
+                    draggingVolume.current = true;
+                  }}
+                  onValueCommitted={(value) => {
+                    draggingVolume.current = false;
+                    if ((value as number) > 0) unmuted.current = (value as number) / 100;
+                  }}
                   className="w-24"
                 />
               }

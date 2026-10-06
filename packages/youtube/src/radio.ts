@@ -88,9 +88,10 @@ export function radioFrom(panel: UpNextResponse, seed: VideoId | null): Track[] 
       artists: video.artists ?? null,
       thumbnails: video.thumbnail ?? null,
       badges: video.badges ?? null,
-      // youtubei.js takes the byline's last run, which is the year when the
-      // row has an album and anything else when it does not.
-      year: video.album?.year,
+      // youtubei.js only reads an album off a byline with an album run, and
+      // takes the last run as its year. With no year run that is the album's
+      // own name, which an album called "1999" would pass off as a year.
+      year: video.album?.year === video.album?.name ? undefined : video.album?.year,
     };
     const track = toTrack(raw);
     if (track !== null) tracks.push(track);

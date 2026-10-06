@@ -80,7 +80,12 @@ export function FullPlayer({ track, onCollapse, onOpen, tabs = [], rating, ...qu
           {track && (
             <div className="min-w-0 max-w-full text-center">
               <h1>
-                <TitleLink track={track} onOpen={onOpen} className="text-xl font-medium" />
+                <TitleLink
+                  track={track}
+                  onOpen={onOpen}
+                  // A block button shrinks to its text, so it is centred here.
+                  className="mx-auto text-xl font-medium"
+                />
               </h1>
               <Byline track={track} onOpen={onOpen} year={year} className="text-sm" />
             </div>

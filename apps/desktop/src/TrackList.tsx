@@ -230,25 +230,26 @@ export function TitleLink({
 }) {
   const albumId = track.albumId;
   if (!albumId) return <span className={cn("block truncate", className)}>{track.title}</span>;
+  // The button itself truncates: inside a truncating span, an inline-block
+  // button that overflows is dropped whole and leaves a bare ellipsis.
   return (
-    <span className={cn("block truncate", className)}>
-      <BylineLink onClick={() => onOpen({ kind: "album", id: albumId })} underlineOnly>
-        {track.title}
-      </BylineLink>
-    </span>
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen({ kind: "album", id: albumId });
+      }}
+      className={cn(
+        "block max-w-full truncate outline-none hover:underline focus-visible:underline",
+        className,
+      )}
+    >
+      {track.title}
+    </button>
   );
 }
 
-function BylineLink({
-  onClick,
-  underlineOnly,
-  children,
-}: {
-  onClick: () => void;
-  /** Keep the text's own colour on hover, for a title that is already bright. */
-  underlineOnly?: boolean;
-  children: ReactNode;
-}) {
+function BylineLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -256,10 +257,7 @@ function BylineLink({
         event.stopPropagation();
         onClick();
       }}
-      className={cn(
-        "outline-none hover:underline focus-visible:underline",
-        !underlineOnly && "hover:text-foreground",
-      )}
+      className="outline-none hover:text-foreground hover:underline focus-visible:underline"
     >
       {children}
     </button>

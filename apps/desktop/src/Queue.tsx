@@ -146,20 +146,25 @@ function useFollowPlaying(
     }
     measure();
     // Scrolling by hand cuts a smooth scroll short, so stop waiting for it.
+    // Listened for on the scroll area's root, which holds the scrollbar as
+    // well as the viewport.
+    const root = viewport.parentElement ?? viewport;
     const interrupt = () => {
+      if (!revealing.current) return;
       revealing.current = false;
+      measure();
     };
     viewport.addEventListener("scroll", measure, { passive: true });
-    viewport.addEventListener("wheel", interrupt, { passive: true });
-    viewport.addEventListener("pointerdown", interrupt);
-    viewport.addEventListener("keydown", interrupt);
+    root.addEventListener("wheel", interrupt, { passive: true });
+    root.addEventListener("pointerdown", interrupt);
+    root.addEventListener("keydown", interrupt);
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     return () => {
       viewport.removeEventListener("scroll", measure);
-      viewport.removeEventListener("wheel", interrupt);
-      viewport.removeEventListener("pointerdown", interrupt);
-      viewport.removeEventListener("keydown", interrupt);
+      root.removeEventListener("wheel", interrupt);
+      root.removeEventListener("pointerdown", interrupt);
+      root.removeEventListener("keydown", interrupt);
       observer.disconnect();
     };
   }, [viewport, position, dragging, scrollToPlaying]);

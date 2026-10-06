@@ -23,7 +23,9 @@ For anything visible in the app, add before and after screenshots: main and
 this branch in the same state (same song, same window size, both playing or
 both paused). Add a short recording when the change is about motion or
 timing, such as scrolling, dragging or transitions. Paste or drag images into
-this box, if you are an AI agent, give the images to the user in your response so they can do it themselves; don't commit them. Drop the table for changes with nothing to see. -->
+this box. If you are an AI agent, give the images to the user in your reply so
+they can add them. Don't commit images. Drop the table for changes with nothing
+to see. -->
 
 | Before | After |
 | --- | --- |

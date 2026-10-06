@@ -82,9 +82,9 @@ export function NowPlaying(props: Props) {
   const position = scrubbing ?? playing;
   const isPlaying = playback.status === "playing";
   const decibels = decibelsForVolume(volume / 100);
-  /** The level to go back to on unmute: the last one above zero. */
-  const unmuted = useRef(props.volume > 0 ? props.volume : 1);
-  if (props.volume > 0) unmuted.current = props.volume;
+  /** The level to go back to on unmute: the last one the slider shows above zero. */
+  const unmuted = useRef(1);
+  if (volume > 0) unmuted.current = props.volume;
 
   return (
     // As in YouTube Music: a click on the bar, anywhere but its controls,

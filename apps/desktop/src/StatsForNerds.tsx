@@ -20,7 +20,7 @@ export function StatsForNerds(props: { onClose: () => void }) {
     const read = () =>
       void playerStats()
         .then((next) => live && setStats(next))
-        .catch(() => {});
+        .catch((error: unknown) => console.warn("could not read player stats", error));
     read();
     const timer = window.setInterval(read, POLL_MS);
     return () => {

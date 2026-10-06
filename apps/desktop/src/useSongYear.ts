@@ -18,7 +18,11 @@ export function useSongYear(track: Track | null): number | null {
     if (videoId === null) return;
     let lookup = years.get(videoId);
     if (!lookup) {
-      lookup = engine.songYear(videoId).catch(() => null);
+      // A failed lookup is not kept, so the next mount tries again.
+      lookup = engine.songYear(videoId).catch(() => {
+        years.delete(videoId);
+        return null;
+      });
       years.set(videoId, lookup);
     }
     let live = true;

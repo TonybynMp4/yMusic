@@ -42,7 +42,6 @@ export interface LocalTrack extends Track {
   albumArtist: string | null;
   trackNumber: number | null;
   discNumber: number | null;
-  year: number | null;
 }
 
 export const ScanFailure = z.object({ path: z.string(), reason: z.string() });

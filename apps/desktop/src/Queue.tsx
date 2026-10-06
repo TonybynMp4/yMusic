@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { IconGripVertical, IconLoader2, IconX } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
-import { InteractionArea, InteractionButton } from "./Interactions.tsx";
+import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
 
 const ROW_HEIGHT = 48;
@@ -194,9 +194,7 @@ export function Queue({
               if (position > queued) {
                 const track = queue.suggestions[position - queued - 1];
                 if (!track) return null;
-                return (
-                  <Row track={track} onJump={onJump} className="opacity-70 hover:opacity-100" />
-                );
+                return <Row track={track} onJump={onJump} suggestion />;
               }
               const source = sourceOf(position, drag);
               const itemIndex = queue.order[source]!;
@@ -228,6 +226,7 @@ function Row({
   onRemove,
   onDragStart,
   dragging = false,
+  suggestion = false,
   className,
 }: {
   track: Track;
@@ -237,9 +236,12 @@ function Row({
   onDragStart?: (event: ReactPointerEvent) => void;
   /** Picked up and following the pointer. */
   dragging?: boolean;
+  /** An autoplay suggestion, faded unless hovered. A disliked one fades as far as a queued one does. */
+  suggestion?: boolean;
   className?: string;
 }) {
   const remove = onRemove && (() => onRemove(track.id));
+  const dimmed = useDisliked(track) && !current;
   return (
     <InteractionArea
       subject={{ kind: "song", track, ...(remove && { onRemove: remove }) }}
@@ -248,6 +250,7 @@ function Row({
         "group flex items-center gap-2 rounded-lg px-2 transition-colors",
         current ? "bg-accent" : "hover:bg-accent/60",
         dragging && "bg-accent shadow-lg ring-1 ring-foreground/10",
+        suggestion && !dimmed && "opacity-70 hover:opacity-100",
         className,
       )}
     >
@@ -266,7 +269,10 @@ function Row({
       <button
         type="button"
         onClick={() => onJump(track.id)}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2 text-left outline-none",
+          dimmed && "opacity-40",
+        )}
       >
         <Artwork track={track} size={36} />
         <span className="min-w-0">

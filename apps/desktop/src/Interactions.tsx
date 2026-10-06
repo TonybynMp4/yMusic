@@ -13,6 +13,10 @@ import {
   IconPlaylistAdd,
   IconPlaylistX,
   IconPlus,
+  IconThumbDown,
+  IconThumbDownFilled,
+  IconThumbUp,
+  IconThumbUpFilled,
   IconUser,
   IconUserMinus,
   IconUserPlus,
@@ -22,7 +26,7 @@ import {
   sourceOf,
   videoIdFromTrackId,
   type Artist, type Track, type TrackId, type VideoId } from "@ymusic/core";
-import type { NewPlaylist, PlaylistTarget } from "@ymusic/youtube/host";
+import type { NewPlaylist, PlaylistTarget, Rating } from "@ymusic/youtube/host";
 import {
   cloneElement,
   createContext,
@@ -56,6 +60,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { engine } from "./engine.ts";
+import { toggled } from "./Rating.tsx";
 import { patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
@@ -74,6 +79,9 @@ export interface Interactions {
   notify: (message: string) => void;
   /** The library's playlists changed, so the sidebar should refetch them. */
   libraryChanged: () => void;
+  /** A song's rating as last seen; null while signed out. */
+  ratingOf: (videoId: VideoId) => Rating | null;
+  rate: (videoId: VideoId, rating: Rating) => void;
 }
 
 /** What the menus get: the app's interactions, and the dialogs this module owns. */
@@ -109,6 +117,16 @@ function useInteractions(): Context {
   const value = useContext(InteractionsContext);
   if (value === null) throw new Error("interactions used outside InteractionsProvider");
   return value;
+}
+
+/**
+ * Whether the account dislikes a song, as last seen. Its row is dimmed for
+ * it, as YouTube Music dims disliked songs in a list.
+ */
+export function useDisliked(track: Track): boolean {
+  const x = useInteractions();
+  const videoId = videoIdFromTrackId(track.id);
+  return videoId !== null && x.ratingOf(videoId) === "dislike";
 }
 
 /**
@@ -247,6 +265,7 @@ function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) 
         </DropdownMenuItem>
       )}
       {videoId && x.signedIn && <SaveToPlaylist videoIds={() => Promise.resolve([videoId])} />}
+      {videoId && <RatingItems videoId={videoId} />}
       {(albumId || linked(track.artists).length > 0) && <DropdownMenuSeparator />}
       {albumId && (
         <DropdownMenuItem onClick={() => x.open({ kind: "album", id: albumId })}>
@@ -264,6 +283,27 @@ function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) 
           </DropdownMenuItem>
         </>
       )}
+    </>
+  );
+}
+
+/** Like and dislike, each undone by picking it again, as on the player bar. */
+function RatingItems({ videoId }: { videoId: VideoId }) {
+  const x = useInteractions();
+  const rating = x.ratingOf(videoId);
+  if (rating === null) return null;
+  const liked = rating === "like";
+  const disliked = rating === "dislike";
+  return (
+    <>
+      <DropdownMenuItem onClick={() => x.rate(videoId, toggled(rating, "like"))}>
+        {liked ? <IconThumbUpFilled /> : <IconThumbUp />}
+        {liked ? "Remove from liked songs" : "Add to liked songs"}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => x.rate(videoId, toggled(rating, "dislike"))}>
+        {disliked ? <IconThumbDownFilled /> : <IconThumbDown />}
+        {disliked ? "Remove dislike" : "Dislike"}
+      </DropdownMenuItem>
     </>
   );
 }

@@ -9,7 +9,7 @@ import {
 } from "@ymusic/core";
 import { YTNodes, type Innertube } from "youtubei.js";
 
-import { toArtists, toTrack, type RawSong } from "./parse.ts";
+import { toArtists, toTrack, yearFrom, type RawSong } from "./parse.ts";
 import { squareCrop, toThumbnails, type RawThumbnail } from "./thumbnails.ts";
 
 /**
@@ -97,12 +97,14 @@ export function albumFrom(
   const title = text(header.title) ?? "";
   const artists = artistsFromRuns(header.strapline_text_one);
   const thumbnails = headerThumbnails(header);
+  const year = yearFrom(text(header.subtitle));
   const tracks: Track[] = [];
   for (const row of raw.contents ?? []) {
     const track = toTrack(row as RawSong);
     if (track === null) continue;
     tracks.push({
       ...track,
+      year: track.year ?? year,
       artists: track.artists.length > 0 ? track.artists : artists,
       album: track.album ?? title,
       albumId: track.albumId ?? id,

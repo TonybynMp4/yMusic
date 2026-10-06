@@ -31,6 +31,7 @@ export interface EngineWorkerApi {
   account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];
   radio: YouTubeEngine["radio"];
+  songYear: YouTubeEngine["songYear"];
   album: YouTubeEngine["album"];
   artist: YouTubeEngine["artist"];
   playlist: YouTubeEngine["playlist"];

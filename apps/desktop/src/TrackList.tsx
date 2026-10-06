@@ -166,19 +166,26 @@ function Equalizer() {
   );
 }
 
-/** "Artist, Artist • Album", each part a link when it has a page to open. */
-function Byline({
+/**
+ * "Artist, Artist • Album", each part a link when it has a page to open. With
+ * `year`, the release year follows, as in the player bar.
+ */
+export function Byline({
   track,
   onOpen,
   hideAlbum,
+  year,
+  className,
 }: {
   track: Track;
   onOpen: ((route: Route) => void) | undefined;
-  hideAlbum: boolean | undefined;
+  hideAlbum?: boolean | undefined;
+  year?: number | null;
+  className?: string;
 }) {
   const albumId = track.albumId;
   return (
-    <span className="block truncate text-xs text-muted-foreground">
+    <span className={cn("block truncate text-xs text-muted-foreground", className)}>
       {track.artists.map((artist, i) => (
         <Fragment key={`${artist.name}:${i}`}>
           {i > 0 && ", "}
@@ -203,7 +210,42 @@ function Byline({
           )}
         </>
       )}
+      {year != null && ` • ${year}`}
     </span>
+  );
+}
+
+/**
+ * The song's title, opening its album when it has one: the nearest thing the
+ * app has to a page for the song.
+ */
+export function TitleLink({
+  track,
+  onOpen,
+  className,
+}: {
+  track: Track;
+  onOpen: (route: Route) => void;
+  className?: string;
+}) {
+  const albumId = track.albumId;
+  if (!albumId) return <span className={cn("block truncate", className)}>{track.title}</span>;
+  // The button itself truncates: inside a truncating span, an inline-block
+  // button that overflows is dropped whole and leaves a bare ellipsis.
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen({ kind: "album", id: albumId });
+      }}
+      className={cn(
+        "block max-w-full truncate outline-none hover:underline focus-visible:underline",
+        className,
+      )}
+    >
+      {track.title}
+    </button>
   );
 }
 

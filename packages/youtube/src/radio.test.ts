@@ -11,7 +11,7 @@ const row = (id: string, title: string) => ({
   video_id: id,
   title: text(title),
   duration: { text: "2:30", seconds: 150 },
-  album: { id: "MPREb_x", name: "An Album" },
+  album: { id: "MPREb_x", name: "An Album", year: "2019" },
   artists: [{ name: "Someone", channel_id: "UCx" }],
   thumbnail: [{ url: "https://i.ytimg.com/vi/x/sddefault.jpg", width: 640, height: 480 }],
 });
@@ -26,6 +26,7 @@ describe("radioFrom", () => {
     expect(tracks[0]!.title).toBe("One");
     expect(tracks[0]!.album).toBe("An Album");
     expect(tracks[0]!.durationMs).toBe(150_000);
+    expect(tracks[0]!.year).toBe(2019);
   });
 
   it("unwraps wrapped rows and drops repeats", () => {

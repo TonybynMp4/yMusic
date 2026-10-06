@@ -1,5 +1,5 @@
 import { YTNodes, type Innertube } from "youtubei.js";
-import type { Track, VideoId } from "@ymusic/core";
+import { trackIdForVideo, type Track, type VideoId } from "@ymusic/core";
 
 import { toTrack, type RawSong } from "./parse.ts";
 import type { RawThumbnail } from "./thumbnails.ts";
@@ -10,7 +10,7 @@ interface RawPanelVideo {
   video_id?: unknown;
   title?: { toString(): string } | string | null;
   duration?: { seconds?: unknown } | null;
-  album?: { id?: unknown; name?: unknown } | null;
+  album?: { id?: unknown; name?: unknown; year?: unknown } | null;
   artists?: readonly { name?: unknown; channel_id?: unknown }[] | null;
   thumbnail?: readonly RawThumbnail[] | null;
   badges?: readonly { icon_type?: unknown }[] | null;
@@ -54,6 +54,23 @@ export async function getMix(
   return radioFrom((panel ?? {}) as unknown as UpNextResponse, null);
 }
 
+/**
+ * The year `videoId`'s album came out, from the song's own row in its up-next
+ * panel: the one place YouTube puts it for a song on its own. Null when the
+ * row has no album, as for a music video.
+ */
+export async function getSongYear(youtube: Innertube, videoId: VideoId): Promise<number | null> {
+  const response = await youtube.actions.execute("/next", {
+    videoId,
+    isAudioOnly: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const panel = response.contents_memo?.getType(YTNodes.PlaylistPanel)[0];
+  const tracks = radioFrom((panel ?? {}) as unknown as UpNextResponse, null);
+  return tracks.find((track) => track.id === trackIdForVideo(videoId))?.year ?? null;
+}
+
 /** Exported for tests, like `songsFrom`. `seed`, the song the radio grew from, is left out. */
 export function radioFrom(panel: UpNextResponse, seed: VideoId | null): Track[] {
   const tracks: Track[] = [];
@@ -71,6 +88,10 @@ export function radioFrom(panel: UpNextResponse, seed: VideoId | null): Track[] 
       artists: video.artists ?? null,
       thumbnails: video.thumbnail ?? null,
       badges: video.badges ?? null,
+      // youtubei.js only reads an album off a byline with an album run, and
+      // takes the last run as its year. With no year run that is the album's
+      // own name, which an album called "1999" would pass off as a year.
+      year: video.album?.year === video.album?.name ? undefined : video.album?.year,
     };
     const track = toTrack(raw);
     if (track !== null) tracks.push(track);

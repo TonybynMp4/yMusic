@@ -38,6 +38,7 @@ import {
 } from "./history.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio } from "./radio.ts";
+import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
@@ -222,10 +223,18 @@ export class YouTubeEngine {
     return getServerQueue(await this.#browseClient());
   }
 
-  /** Makes a song the account's current queue, for "Resume" elsewhere. Nothing when signed out. */
-  async shareQueue(videoId: VideoId, playlistId: string | null): Promise<void> {
-    if (this.#cookie === null) return;
-    await setServerQueue(await this.#browseClient(), videoId, playlistId);
+  /**
+   * Makes a song the account's current queue, for "Resume" elsewhere, and
+   * returns the account's rating of it. Nothing, and null, when signed out.
+   */
+  async shareQueue(videoId: VideoId, playlistId: string | null): Promise<Rating | null> {
+    if (this.#cookie === null) return null;
+    return setServerQueue(await this.#browseClient(), videoId, playlistId);
+  }
+
+  /** Likes or dislikes a song, or clears either. Liking adds it to Liked Music. */
+  async rate(videoId: VideoId, rating: Rating): Promise<void> {
+    await setRating(await this.#signedIn(), videoId, rating);
   }
 
   /**

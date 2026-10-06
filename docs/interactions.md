@@ -10,3 +10,13 @@ YouTube Music's own buttons name what to call:
 - Signed out, anything that writes to the account is hidden.
 
 Local files have their own items. A folder's menu opens it in the file manager, and a local song's shows its file there, selected (the `FileManager1` D-Bus interface on Linux, Explorer on Windows). The Rust commands take a library folder or a track id, never a raw path, so the webview cannot open arbitrary files.
+
+## Liking and disliking
+
+The thumbs down and up sit beside the song in the player bar and under the artwork in the full player, for a YouTube song while signed in. Pressing the one already on clears it. Liking a song adds it to Liked Music, which is YouTube's doing, not the app's.
+
+A song's rating costs no request of its own. Every signed-in play already sends a YouTube Music `/next` to share the queue for Resume, and its answer carries the like button, which `setServerQueue` reads. Signed in, it is a view model under `playerOverlays.playerOverlayRenderer.videoActionBar` (`...likeButtonViewModel.likeStatusEntity.likeStatus`). Signed out, it is the older `actions[].likeButtonRenderer.likeStatus`, always `INDIFFERENT`, so the live test only pins the signed-out shape. `useRatings` keeps the likes and dislikes seen in `localStorage`, for the signed-in account only and up to 5,000 songs, so they survive a restart. Setting a rating posts to `like/like`, `like/dislike` or `like/removelike` through the YouTube Music client. youtubei.js's `interact.like` sends the TV client, and a web session's cookie on another client is the mismatch YouTube flags. The buttons change at once and go back if YouTube refuses.
+
+The Liked Music playlist would say which songs are liked, but not which are disliked (YouTube has no list of those), and reading all of it is a request per hundred songs. The rating read with each play covers both for nothing.
+
+Disliking the song playing skips it, as YouTube Music does. With "Skip disliked songs" on, a disliked song is also skipped when it comes up in the queue: at the end of the one before, or on Next. One you pick yourself plays, and so does one where skipping would not move to a different song, such as the last in the queue or one on repeat. A queue of only disliked songs on repeat stops skipping after one pass and plays. A song already known as disliked is passed over before it loads. One disliked on another device since it last played here is only found out once it starts, and is skipped then.

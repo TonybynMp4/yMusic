@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { InteractionArea } from "./Interactions.tsx";
+import { RatingButtons, type RatingProps } from "./Rating.tsx";
 import { Artwork } from "./TrackList.tsx";
 import { formatDuration } from "./format.ts";
 import { usePosition, type PlaybackState, type PositionStore } from "./usePlayback.ts";
@@ -40,6 +41,8 @@ interface Props {
   onShuffle: (shuffle: boolean) => void;
   expanded: boolean;
   onToggleExpanded: () => void;
+  /** Null when the song can't be rated: a local file, or signed out. */
+  rating: RatingProps | null;
 }
 
 /** Whether a click landed on one of the bar's controls rather than the bar. */
@@ -118,6 +121,11 @@ export function NowPlaying(props: Props) {
                   {track.artists[0]?.name}
                 </span>
               </span>
+              {props.rating && (
+                <span className="flex shrink-0 items-center">
+                  <RatingButtons {...props.rating} />
+                </span>
+              )}
             </>
           ) : (
             <span className="text-sm text-muted-foreground">Nothing playing</span>

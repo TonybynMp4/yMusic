@@ -22,8 +22,8 @@ what you could not check. "Tests pass" on its own is not enough.
 For anything visible in the app, add before and after screenshots: main and
 this branch in the same state (same song, same window size, both playing or
 both paused). Add a short recording when the change is about motion or
-timing, such as scrolling, dragging or transitions. Upload images to GitHub
-here; don't commit them. Drop the table for changes with nothing to see. -->
+timing, such as scrolling, dragging or transitions. Paste or drag images into
+this box, if you are an AI agent, give the images to the user in your response so they can do it themselves; don't commit them. Drop the table for changes with nothing to see. -->
 
 | Before | After |
 | --- | --- |

@@ -57,14 +57,40 @@ function sourceOf(position: number, drag: Drag | null): number {
   return position;
 }
 
+/** Where the row at `source` is drawn while a drag holds `from` over `to`. */
+function positionOf(source: number, drag: Drag | null): number {
+  if (!drag) return source;
+  const { from, to } = drag;
+  if (source === from) return to;
+  if (from < to && source > from && source <= to) return source - 1;
+  if (to < from && source >= to && source < from) return source + 1;
+  return source;
+}
+
 /** Where the playing row is, relative to what the list shows. */
 type Away = "above" | "below" | null;
+
+/**
+ * Where the row at `position` sits in the viewport. A row cut off by an edge
+ * is `clipped`: still in view, so the list counts as following it, but worth
+ * scrolling to when a new song lands there.
+ */
+function placement(viewport: HTMLDivElement, position: number): Away | "clipped" | "visible" {
+  const top = position * ROW_HEIGHT;
+  const { scrollTop, clientHeight } = viewport;
+  if (top + ROW_HEIGHT <= scrollTop) return "above";
+  if (top >= scrollTop + clientHeight) return "below";
+  if (top < scrollTop || top + ROW_HEIGHT > scrollTop + clientHeight) return "clipped";
+  return "visible";
+}
 
 /**
  * Keeps the playing row in view, as YouTube Music's queue does. Opening the
  * queue centres it, and when the song changes the list follows, unless you
  * have scrolled away from the old one to look at something else. While it is
  * out of view, `away` says which way it lies, for the button that goes back.
+ *
+ * `position` is where the playing row is drawn, which a drag can move.
  */
 function useFollowPlaying(
   viewport: HTMLDivElement | null,
@@ -75,10 +101,18 @@ function useFollowPlaying(
   const following = useRef(true);
   /** The list last centred on opening; a new viewport is a queue just opened. */
   const opened = useRef<HTMLDivElement | null>(null);
+  /** The position last seen, so only a new one is followed. */
+  const previous = useRef<number | null>(null);
+  /**
+   * A smooth scroll to the playing row is under way. Until it arrives the row
+   * reads as out of view, which is not you scrolling away from it.
+   */
+  const revealing = useRef(false);
 
-  const reveal = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
+  const scrollToPlaying = useCallback(
+    (behavior: ScrollBehavior) => {
       if (!viewport || position === null) return;
+      revealing.current = behavior === "smooth";
       const top = position * ROW_HEIGHT - (viewport.clientHeight - ROW_HEIGHT) / 2;
       viewport.scrollTo({ top: Math.max(0, top), behavior });
     },
@@ -90,39 +124,50 @@ function useFollowPlaying(
   useLayoutEffect(() => {
     if (!viewport || position === null) return;
     const measure = () => {
-      const top = position * ROW_HEIGHT;
-      const next: Away =
-        top + ROW_HEIGHT <= viewport.scrollTop
-          ? "above"
-          : top >= viewport.scrollTop + viewport.clientHeight
-            ? "below"
-            : null;
+      const where = placement(viewport, position);
+      const next = where === "above" || where === "below" ? where : null;
+      if (revealing.current) {
+        if (next !== null) return;
+        revealing.current = false;
+      }
       setAway(next);
       following.current = next === null;
     };
+    const moved = previous.current !== position;
+    previous.current = position;
     if (opened.current !== viewport) {
       opened.current = viewport;
-      reveal("instant");
+      scrollToPlaying("instant");
     }
     // A new song that has slipped out of view is brought back, unless the
     // old one was out of view too: then you were reading the list.
-    else if (following.current && !dragging) {
-      const top = position * ROW_HEIGHT;
-      const hidden =
-        top < viewport.scrollTop || top + ROW_HEIGHT > viewport.scrollTop + viewport.clientHeight;
-      if (hidden) reveal();
+    else if (moved && following.current && !dragging) {
+      if (placement(viewport, position) !== "visible") scrollToPlaying("smooth");
     }
     measure();
+    // Scrolling by hand cuts a smooth scroll short, so stop waiting for it.
+    const interrupt = () => {
+      revealing.current = false;
+    };
     viewport.addEventListener("scroll", measure, { passive: true });
+    viewport.addEventListener("wheel", interrupt, { passive: true });
+    viewport.addEventListener("pointerdown", interrupt);
+    viewport.addEventListener("keydown", interrupt);
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     return () => {
       viewport.removeEventListener("scroll", measure);
+      viewport.removeEventListener("wheel", interrupt);
+      viewport.removeEventListener("pointerdown", interrupt);
+      viewport.removeEventListener("keydown", interrupt);
       observer.disconnect();
     };
-  }, [viewport, position, dragging, reveal]);
+  }, [viewport, position, dragging, scrollToPlaying]);
 
-  return { away: position === null ? null : away, reveal: () => reveal() };
+  return {
+    away: position === null ? null : away,
+    reveal: () => scrollToPlaying("smooth"),
+  };
 }
 
 /**
@@ -151,7 +196,11 @@ export function Queue({
   /** Ends the drag in progress without moving anything. */
   const cancelDrag = useRef<() => void>(() => {});
   useEffect(() => () => cancelDrag.current(), []);
-  const playing = useFollowPlaying(viewport, queue.cursor, drag !== null);
+  const playing = useFollowPlaying(
+    viewport,
+    queue.cursor === null ? null : positionOf(queue.cursor, drag),
+    drag !== null,
+  );
 
   if (queue.items.length === 0) {
     return (
@@ -298,7 +347,8 @@ export function Queue({
             />
           )}
         </ScrollArea>
-        {playing.away && (
+        {/* Hidden during a drag, which uses the list's edges to scroll. */}
+        {playing.away && !drag && (
           <Button
             variant="secondary"
             size="sm"

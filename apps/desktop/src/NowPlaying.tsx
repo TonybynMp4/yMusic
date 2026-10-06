@@ -230,8 +230,12 @@ export function NowPlaying(props: Props) {
                   // The position is sent as a fraction; the perceptual curve is
                   // applied downstream, by mpv, and pinned by tests on both sides.
                   onValueChange={(value) => props.onVolume((value as number) / 100)}
-                  onPointerDownCapture={() => {
-                    draggingVolume.current = true;
+                  onPointerDownCapture={(event) => {
+                    draggingVolume.current = event.button === 0;
+                  }}
+                  // A press that leaves the value unchanged commits nothing.
+                  onPointerUpCapture={() => {
+                    draggingVolume.current = false;
                   }}
                   onValueCommitted={(value) => {
                     draggingVolume.current = false;

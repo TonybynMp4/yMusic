@@ -25,6 +25,9 @@ pub enum PlaybackEvent {
     },
     #[serde(rename_all = "camelCase")]
     Ended { track_id: Option<String> },
+    /// mpv went on to the appended track by itself, with no gap.
+    #[serde(rename_all = "camelCase")]
+    Advanced { track_id: String },
     #[serde(rename_all = "camelCase")]
     Error {
         track_id: Option<String>,

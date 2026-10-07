@@ -5,6 +5,11 @@
 //! resolved the URL (googlevideo binds the stream to that session, so a
 //! mismatch is a 403 that looks like a bug elsewhere), and a URL that has not
 //! expired yet. The second is the queue's job; the first is handled here.
+//!
+//! The track after the playing one is appended to mpv's playlist, so mpv opens
+//! it ahead of time and joins the two with no gap. Each file carries its own
+//! stable volume filter as a per-file option, so the next song's gain never
+//! lands on the one still playing.
 
 mod event;
 
@@ -85,14 +90,72 @@ struct Loudness {
     measure: bool,
 }
 
+impl Loudness {
+    /// The `af` for a track this loud, meters included when they are on.
+    fn filter(&self, track_db: Option<f64>) -> String {
+        let gain = stable_volume_filter(self.stable, track_db);
+        if self.measure {
+            measured_filter(&gain)
+        } else {
+            gain
+        }
+    }
+}
+
+/// An option value for `loadfile`, which splits its options at commas: a
+/// filter chain has commas and brackets of its own, so the value goes in
+/// mpv's `%length%` form, which takes the next `length` bytes as they are.
+pub fn quote_option(value: &str) -> String {
+    format!("%{}%{value}", value.len())
+}
+
+/// The major and minor version out of `mpv-version`, as in `mpv v0.41.0` or
+/// `mpv 0.35.1`.
+fn mpv_version(version: &str) -> Option<(u32, u32)> {
+    let number = version.strip_prefix("mpv ")?.trim_start_matches('v');
+    let mut parts = number.split(['.', '-', '+']);
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    Some((major, minor))
+}
+
+/// The track appended after the playing one.
+struct Next {
+    track_id: String,
+    url: String,
+    loudness_db: Option<f64>,
+}
+
+/// What mpv will play when the current song ends. Locked before the current
+/// track and the loudness wherever more than one is held.
+#[derive(Default)]
+struct Gapless {
+    next: Option<Next>,
+    /// The playing song reached its end with `next` behind it, and mpv has
+    /// not started `next` yet. It can no longer be taken back.
+    advancing: bool,
+    /// The headers mpv sends, which are global: a next track resolved with
+    /// different ones loads after the end instead of being appended.
+    headers: HashMap<String, String>,
+}
+
+/// What the event thread shares with the player.
+#[derive(Clone, Default)]
+struct State {
+    current_track: Arc<Mutex<Option<String>>>,
+    loudness: Arc<Mutex<Loudness>>,
+    gapless: Arc<Mutex<Gapless>>,
+}
+
 pub struct Player {
     mpv: Arc<Mpv>,
     /// The frontend's event sink is None until the UI has asked for events,
     /// which is why the event thread tolerates its absence rather than
     /// treating it as an error.
     sink: Sink,
-    current_track: Arc<Mutex<Option<String>>>,
-    loudness: Mutex<Loudness>,
+    state: State,
+    /// mpv 0.38 added an index argument to `loadfile`, before the options.
+    loadfile_index: bool,
 }
 
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
@@ -147,14 +210,22 @@ impl Player {
         })
         .map_err(|error| format!("could not start libmpv: {error}"))?;
 
-        match mpv.get_property::<String>("mpv-version") {
-            Ok(version) => log::info!("playing through {version}"),
-            Err(error) => log::warn!("could not read the mpv version: {error}"),
-        }
+        let version = match mpv.get_property::<String>("mpv-version") {
+            Ok(version) => {
+                log::info!("playing through {version}");
+                mpv_version(&version)
+            }
+            Err(error) => {
+                log::warn!("could not read the mpv version: {error}");
+                None
+            }
+        };
+        // A version that doesn't parse is a development build, so newer.
+        let loadfile_index = version.is_none_or(|version| version >= (0, 38));
 
         let mpv = Arc::new(mpv);
         let sink = Sink::default();
-        let current_track = Arc::new(Mutex::new(None));
+        let state = State::default();
 
         mpv.observe_property("time-pos", Format::Double, OBSERVE_TIME_POS)
             .map_err(|error| format!("could not observe time-pos: {error}"))?;
@@ -163,13 +234,13 @@ impl Player {
         mpv.observe_property("pause", Format::Flag, OBSERVE_PAUSE)
             .map_err(|error| format!("could not observe pause: {error}"))?;
 
-        spawn_event_thread(Arc::clone(&mpv), sink.clone(), Arc::clone(&current_track));
+        spawn_event_thread(Arc::clone(&mpv), sink.clone(), state.clone());
 
         Ok(Self {
             mpv,
             sink,
-            current_track,
-            loudness: Mutex::default(),
+            state,
+            loadfile_index,
         })
     }
 
@@ -187,7 +258,12 @@ impl Player {
     }
 
     pub fn load(&self, request: LoadRequest) -> Result<(), String> {
-        *self.current_track.lock().expect("track mutex") = Some(request.track_id.clone());
+        // Replacing the playlist drops whatever was appended after the song
+        // this replaces.
+        let mut gapless = self.state.gapless.lock().expect("gapless mutex");
+        gapless.next = None;
+        gapless.advancing = false;
+        *self.state.current_track.lock().expect("track mutex") = Some(request.track_id.clone());
 
         // Headers go on one at a time through change-list rather than as a
         // single comma-joined string: a Cookie or PO token containing a comma
@@ -199,17 +275,88 @@ impl Player {
                 &["http-header-fields", "append", &format!("{name}: {value}")],
             )?;
         }
+        gapless.headers = request.headers;
 
-        {
-            let mut loudness = self.loudness.lock().expect("loudness mutex");
+        let filter = {
+            let mut loudness = self.state.loudness.lock().expect("loudness mutex");
             loudness.track_db = request.loudness_db;
-            if let Err(error) = self.apply_loudness(&loudness) {
-                log::warn!("{error}");
-            }
-        }
+            loudness.filter(request.loudness_db)
+        };
 
         self.set_property("pause", request.start_paused)?;
-        self.command("loadfile", &[&request.url, "replace"])
+        self.loadfile(&request.url, "replace", &filter)
+    }
+
+    /// Appends the track to play when `after` ends, or with None, takes back
+    /// the one appended. Ignored when `after` is no longer playing, because
+    /// the queue asked about a song that has since changed.
+    pub fn queue_next(&self, after: &str, request: Option<LoadRequest>) -> Result<(), String> {
+        let mut gapless = self.state.gapless.lock().expect("gapless mutex");
+        let current = self
+            .state
+            .current_track
+            .lock()
+            .expect("track mutex")
+            .clone();
+        // Once advancing, mpv is already starting the old next track. The
+        // queue hears `Advanced` for it and loads the right one if it differs.
+        if gapless.advancing || current.as_deref() != Some(after) {
+            return Ok(());
+        }
+        gapless.next = None;
+        self.command("playlist-clear", &[])?;
+        let Some(request) = request else {
+            return Ok(());
+        };
+        if request.headers != gapless.headers {
+            log::info!(
+                "not appending {}: its headers differ from the playing song's",
+                request.track_id
+            );
+            return Ok(());
+        }
+        let next = Next {
+            track_id: request.track_id,
+            url: request.url,
+            loudness_db: request.loudness_db,
+        };
+        self.append(&next)?;
+        gapless.next = Some(next);
+        Ok(())
+    }
+
+    fn append(&self, next: &Next) -> Result<(), String> {
+        let filter = self
+            .state
+            .loudness
+            .lock()
+            .expect("loudness mutex")
+            .filter(next.loudness_db);
+        self.loadfile(&next.url, "append", &filter)
+    }
+
+    /// Appends the next track again, so a change to stable volume or the
+    /// meters reaches its filter too.
+    fn refresh_next(&self) -> Result<(), String> {
+        let gapless = self.state.gapless.lock().expect("gapless mutex");
+        let Some(next) = gapless.next.as_ref().filter(|_| !gapless.advancing) else {
+            return Ok(());
+        };
+        self.command("playlist-clear", &[])?;
+        self.append(next)
+    }
+
+    /// `loadfile` with the track's filter as a per-file option. mpv puts the
+    /// global `af` back when a file with its own ends, so every file gets
+    /// one, or a song loaded over an appended one would play with whatever
+    /// that put back.
+    fn loadfile(&self, url: &str, flags: &str, filter: &str) -> Result<(), String> {
+        let options = format!("af={}", quote_option(filter));
+        if self.loadfile_index {
+            self.command("loadfile", &[url, flags, "-1", &options])
+        } else {
+            self.command("loadfile", &[url, flags, &options])
+        }
     }
 
     /// Applies the settings mpv owns. Called at startup and after each change;
@@ -230,42 +377,44 @@ impl Player {
     /// the loudness YouTube measured for them, and has mpv apply ReplayGain
     /// tags to local files.
     pub fn set_stable_volume(&self, mode: StableVolume) -> Result<(), String> {
-        let mut loudness = self.loudness.lock().expect("loudness mutex");
-        loudness.stable = mode;
-        let replaygain = if mode == StableVolume::Off {
-            "no"
-        } else {
-            "track"
-        };
-        self.set_property("replaygain", replaygain)?;
-        self.apply_loudness(&loudness)
+        {
+            let mut loudness = self.state.loudness.lock().expect("loudness mutex");
+            loudness.stable = mode;
+            let replaygain = if mode == StableVolume::Off {
+                "no"
+            } else {
+                "track"
+            };
+            self.set_property("replaygain", replaygain)?;
+            self.apply_loudness(&loudness)?;
+        }
+        self.refresh_next()
     }
 
+    /// Sets the playing song's filter. mpv puts the one it started with back
+    /// when it ends, which is harmless: every file brings its own.
     fn apply_loudness(&self, loudness: &Loudness) -> Result<(), String> {
-        let gain = stable_volume_filter(loudness.stable, loudness.track_db);
-        let filter = if loudness.measure {
-            measured_filter(&gain)
-        } else {
-            gain
-        };
-        self.set_property("af", filter.as_str())
+        self.set_property("af", loudness.filter(loudness.track_db).as_str())
     }
 
     /// Turns the stats for nerds meters on or off. They restart from nothing,
     /// as they do at the start of every song.
     pub fn set_stats(&self, on: bool) -> Result<(), String> {
-        let mut loudness = self.loudness.lock().expect("loudness mutex");
-        if loudness.measure == on {
-            return Ok(());
+        {
+            let mut loudness = self.state.loudness.lock().expect("loudness mutex");
+            if loudness.measure == on {
+                return Ok(());
+            }
+            loudness.measure = on;
+            self.apply_loudness(&loudness)?;
         }
-        loudness.measure = on;
-        self.apply_loudness(&loudness)
+        self.refresh_next()
     }
 
     /// What stats for nerds shows. The meters read nothing while it is off.
     pub fn stats(&self) -> AudioStats {
         let (stable, track_db) = {
-            let loudness = self.loudness.lock().expect("loudness mutex");
+            let loudness = self.state.loudness.lock().expect("loudness mutex");
             (loudness.stable, loudness.track_db)
         };
         let gain_db = stable_volume_gain(stable, track_db);
@@ -367,8 +516,12 @@ impl Player {
     }
 
     pub fn stop(&self) -> Result<(), String> {
-        *self.current_track.lock().expect("track mutex") = None;
+        let mut gapless = self.state.gapless.lock().expect("gapless mutex");
+        gapless.next = None;
+        gapless.advancing = false;
+        *self.state.current_track.lock().expect("track mutex") = None;
         self.command("stop", &[])?;
+        drop(gapless);
         emit(
             &self.sink,
             PlaybackEvent::Status {
@@ -530,7 +683,7 @@ fn preferred_devices(devices: Vec<AudioDevice>) -> Vec<AudioDevice> {
     }
 }
 
-fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option<String>>>) {
+fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
     thread::Builder::new()
         .name("mpv-events".into())
         .spawn(move || {
@@ -540,7 +693,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                 let Some(event) = mpv.wait_event(0.5) else {
                     continue;
                 };
-                let track = || current_track.lock().expect("track mutex").clone();
+                let track = || state.current_track.lock().expect("track mutex").clone();
 
                 // libmpv2 hands an `END_FILE` that carries an error back as
                 // this `Err`, never as `EndFile(Error)`. Nothing here makes
@@ -568,12 +721,28 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                 match event {
                     Event::StartFile => {
                         duration_ms = None;
-                        emit(
-                            &sink,
-                            PlaybackEvent::Status {
-                                status: PlaybackStatus::Loading,
-                            },
-                        );
+                        match advance(&mpv, &state) {
+                            Advance::None => emit(
+                                &sink,
+                                PlaybackEvent::Status {
+                                    status: PlaybackStatus::Loading,
+                                },
+                            ),
+                            // No loading status: the song changes with no
+                            // gap, and the player bar shouldn't blink.
+                            Advance::Joined(track_id) => {
+                                emit(&sink, PlaybackEvent::Advanced { track_id })
+                            }
+                            Advance::Missed(previous) => {
+                                emit(
+                                    &sink,
+                                    PlaybackEvent::Status {
+                                        status: PlaybackStatus::Ended,
+                                    },
+                                );
+                                emit(&sink, PlaybackEvent::Ended { track_id: previous });
+                            }
+                        }
                     }
                     // mpv restarts playback after every seek too, including a
                     // seek while paused, so "playing" has to be checked rather
@@ -589,6 +758,14 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
                     }
                     Event::EndFile(reason) => match reason {
                         libmpv2::mpv_end_file_reason::Eof => {
+                            // With a track appended, mpv goes straight on to
+                            // it, and `StartFile` reports the change.
+                            let mut gapless = state.gapless.lock().expect("gapless mutex");
+                            if gapless.next.is_some() {
+                                gapless.advancing = true;
+                                continue;
+                            }
+                            drop(gapless);
                             emit(
                                 &sink,
                                 PlaybackEvent::Status {
@@ -659,6 +836,36 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, current_track: Arc<Mutex<Option
         .expect("spawning the mpv event thread");
 }
 
+/// What a file starting means for the queue.
+enum Advance {
+    /// A song we loaded.
+    None,
+    /// The appended track, which is now the current one.
+    Joined(String),
+    /// The playing song ended into something that is not the appended track.
+    /// Not expected, and reported as a plain end so the queue still moves on.
+    Missed(Option<String>),
+}
+
+fn advance(mpv: &Mpv, state: &State) -> Advance {
+    let mut gapless = state.gapless.lock().expect("gapless mutex");
+    if !gapless.advancing {
+        return Advance::None;
+    }
+    gapless.advancing = false;
+    let next = gapless.next.take().expect("advancing has a next track");
+    let mut current = state.current_track.lock().expect("track mutex");
+    let path = mpv.get_property::<String>("path").ok();
+    if path.as_deref() != Some(next.url.as_str()) {
+        log::warn!("mpv went on to {path:?}, not the appended track");
+        return Advance::Missed(current.clone());
+    }
+    log::info!("went on to {} with no gap", next.track_id);
+    *current = Some(next.track_id.clone());
+    state.loudness.lock().expect("loudness mutex").track_db = next.loudness_db;
+    Advance::Joined(next.track_id)
+}
+
 fn emit(sink: &Sink, event: PlaybackEvent) {
     for observer in sink.observers.lock().expect("observer mutex").iter() {
         observer.send(event.clone());
@@ -717,6 +924,20 @@ mod tests {
         let meter = Meter::parse(r#"{"lavfi.r128.true_peak":"0"}"#).expect("a reading");
         assert_eq!(meter.peak_db, None);
         assert!(Meter::parse("not json").is_none());
+    }
+
+    #[test]
+    fn reads_the_mpv_version_from_release_and_git_builds() {
+        assert_eq!(mpv_version("mpv v0.41.0"), Some((0, 41)));
+        assert_eq!(mpv_version("mpv 0.35.1"), Some((0, 35)));
+        assert_eq!(mpv_version("mpv v0.38.0-123-gabcdef"), Some((0, 38)));
+        assert_eq!(mpv_version("mpv 38f1b4c"), None);
+    }
+
+    #[test]
+    fn an_option_value_is_quoted_by_its_length_in_bytes() {
+        assert_eq!(quote_option(""), "%0%");
+        assert_eq!(quote_option("lavfi=[a,b]"), "%11%lavfi=[a,b]");
     }
 
     #[test]

@@ -19,6 +19,7 @@ export const RustPlaybackEvent = z.discriminatedUnion("type", [
     durationMs: z.number().int().nonnegative().nullable(),
   }),
   z.object({ type: z.literal("ended"), trackId: z.string().nullable() }),
+  z.object({ type: z.literal("advanced"), trackId: z.string() }),
   z.object({
     type: z.literal("error"),
     trackId: z.string().nullable(),
@@ -79,6 +80,18 @@ export class MpvPlaybackEngine implements PlaybackEngine {
         headers: lease.headers,
         loudnessDb: lease.loudnessDb,
         startPaused: paused,
+      },
+    });
+  }
+
+  queueNext(after: TrackId, lease: StreamLease | null): Promise<void> {
+    return invokeVoid("player_queue_next", {
+      after,
+      request: lease && {
+        trackId: lease.trackId,
+        url: lease.url,
+        headers: lease.headers,
+        loudnessDb: lease.loudnessDb,
       },
     });
   }
@@ -146,6 +159,8 @@ function toCoreEvent(event: RustPlaybackEvent): PlaybackEvent {
       return { type: "position", positionMs: event.positionMs, durationMs: event.durationMs };
     case "ended":
       return { type: "ended", trackId: toTrackId(event.trackId)! };
+    case "advanced":
+      return { type: "advanced", trackId: toTrackId(event.trackId)! };
     case "error":
       return { type: "error", trackId: toTrackId(event.trackId), message: event.message };
   }

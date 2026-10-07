@@ -221,6 +221,11 @@ impl EventSink for MediaSession {
                     None
                 }
             },
+            // The next song started with no gap: still playing, from zero.
+            PlaybackEvent::Advanced { .. } => {
+                state.position_ms = 0;
+                state.reported.map(|reported| (reported.playing, 0))
+            }
             PlaybackEvent::Ended { .. } | PlaybackEvent::Error { .. } => None,
         };
 

@@ -61,6 +61,15 @@ pub fn player_load(player: State<'_, Player>, request: LoadRequest) -> Result<()
 }
 
 #[tauri::command]
+pub fn player_queue_next(
+    player: State<'_, Player>,
+    after: String,
+    request: Option<LoadRequest>,
+) -> Result<(), String> {
+    player.queue_next(&after, request)
+}
+
+#[tauri::command]
 pub fn player_play(player: State<'_, Player>) -> Result<(), String> {
     player.play()
 }

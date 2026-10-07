@@ -98,6 +98,137 @@ fn request(url: String) -> LoadRequest {
     }
 }
 
+fn track(id: &str, url: String) -> LoadRequest {
+    LoadRequest {
+        track_id: id.into(),
+        ..request(url)
+    }
+}
+
+/// The fixture under another name, so mpv's `path` tells the two apart.
+fn second_fixture() -> String {
+    let dir = std::env::temp_dir().join(format!("ymusic-gapless-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let copy = dir.join("second.wav");
+    std::fs::copy(fixture_url("tone.wav"), &copy).expect("copy the fixture");
+    copy.to_string_lossy().into_owned()
+}
+
+impl Recorder {
+    fn ended(&self) -> Vec<Option<String>> {
+        self.events()
+            .into_iter()
+            .filter_map(|event| match event {
+                PlaybackEvent::Ended { track_id } => Some(track_id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn advanced(&self) -> Vec<String> {
+        self.events()
+            .into_iter()
+            .filter_map(|event| match event {
+                PlaybackEvent::Advanced { track_id } => Some(track_id),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+#[test]
+fn an_appended_track_follows_without_ending_the_queue() {
+    let (player, recorder) = player();
+    player
+        .load(track("first", fixture_url("tone.wav")))
+        .expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_playback()),
+        "never started playing"
+    );
+    player
+        .queue_next("first", Some(track("second", second_fixture())))
+        .expect("queue the next track");
+
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| !r.ended().is_empty()),
+        "never reached the end; events: {:?}",
+        recorder.events()
+    );
+    assert_eq!(recorder.advanced(), ["second"]);
+    // Only the second song ends: the first went straight on into it.
+    assert_eq!(recorder.ended(), [Some("second".to_string())]);
+    let loading = recorder
+        .events()
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                PlaybackEvent::Status {
+                    status: PlaybackStatus::Loading
+                }
+            )
+        })
+        .count();
+    assert_eq!(loading, 1, "the join showed a loading status");
+    assert!(recorder.errors().is_empty(), "{:?}", recorder.errors());
+}
+
+#[test]
+fn a_next_track_taken_back_or_meant_for_another_song_is_not_played() {
+    let (player, recorder) = player();
+    player
+        .load(track("first", fixture_url("tone.wav")))
+        .expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_playback()),
+        "never started playing"
+    );
+    player
+        .queue_next("first", Some(track("second", second_fixture())))
+        .expect("queue the next track");
+    player.queue_next("first", None).expect("take it back");
+    // Asked about a song that is no longer playing, so it is dropped.
+    player
+        .queue_next("earlier", Some(track("third", second_fixture())))
+        .expect("queue for another song");
+
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| !r.ended().is_empty()),
+        "never reached the end; events: {:?}",
+        recorder.events()
+    );
+    assert_eq!(recorder.ended(), [Some("first".to_string())]);
+    assert!(recorder.advanced().is_empty());
+}
+
+/// Loading a song replaces the appended one: the queue moved on by hand.
+#[test]
+fn loading_a_song_drops_the_appended_one() {
+    let (player, recorder) = player();
+    player
+        .load(track("first", fixture_url("tone.wav")))
+        .expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.saw_playback()),
+        "never started playing"
+    );
+    player
+        .queue_next("first", Some(track("second", second_fixture())))
+        .expect("queue the next track");
+    player
+        .load(track("picked", fixture_url("tone.wav")))
+        .expect("load another");
+
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| !r.ended().is_empty()),
+        "never reached the end; events: {:?}",
+        recorder.events()
+    );
+    assert_eq!(recorder.ended(), [Some("picked".to_string())]);
+    assert!(recorder.advanced().is_empty());
+}
+
 #[test]
 fn plays_a_local_file_through_to_the_end() {
     let (player, recorder) = player();

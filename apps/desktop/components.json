@@ -19,5 +19,8 @@
     "hooks": "@/hooks"
   },
   "menuColor": "inverted",
-  "menuAccent": "subtle"
+  "menuAccent": "subtle",
+  "registries": {
+    "@audiocn": "https://audiocn.dev/r/{name}.json"
+  }
 }

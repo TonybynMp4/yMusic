@@ -23,6 +23,7 @@ export const Settings = z.object({
   closeToTray: z.boolean().default(false),
   checkForUpdates: z.boolean().default(true),
   includePrereleases: z.boolean().default(false),
+  statsForNerds: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof Settings>;
 

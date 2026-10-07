@@ -118,6 +118,16 @@ export function SettingsView({
             />
           }
         />
+        <Row
+          label="Stats for nerds"
+          description="Shows the stream, stable volume's gain, and the loudness and peaks of the song playing, over the artwork in the expanded player."
+          control={
+            <Switch
+              checked={settings.statsForNerds}
+              onCheckedChange={(statsForNerds) => update({ statsForNerds })}
+            />
+          }
+        />
       </Section>
 
       <Section title="Library">

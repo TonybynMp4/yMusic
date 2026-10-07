@@ -7,6 +7,7 @@ import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Queue } from "./Queue.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
+import { StatsForNerds } from "./StatsForNerds.tsx";
 import { Byline, TitleLink } from "./TrackList.tsx";
 import type { Route } from "./useBrowse.ts";
 import { useSongYear } from "./useSongYear.ts";
@@ -37,6 +38,9 @@ interface Props {
   onCollapse: () => void;
   /** Opens the album or an artist from the song's title and byline. */
   onOpen: (route: Route) => void;
+  /** Show the stats for nerds panel over the artwork. */
+  stats: boolean;
+  onCloseStats: () => void;
   /** Contributed tabs. Empty until plugins exist; the strip is built for them. */
   tabs?: readonly PlayerPanelTab[];
   /** Null when the song can't be rated: a local file, or signed out. */
@@ -50,7 +54,16 @@ interface Props {
  * YouTube Music keeps the queue inside the expanded player, which is also
  * what gives plugin panels somewhere to live.
  */
-export function FullPlayer({ track, onCollapse, onOpen, tabs = [], rating, ...queueProps }: Props) {
+export function FullPlayer({
+  track,
+  onCollapse,
+  onOpen,
+  stats,
+  onCloseStats,
+  tabs = [],
+  rating,
+  ...queueProps
+}: Props) {
   const [active, setActive] = useState("queue");
   const year = useSongYear(track);
 
@@ -76,7 +89,10 @@ export function FullPlayer({ track, onCollapse, onOpen, tabs = [], rating, ...qu
 
       <div className="flex min-h-0 flex-1 gap-8 px-8 pb-8">
         <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
-          <CoverArt track={track} />
+          <div className="relative w-full max-w-md">
+            {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}
+            <CoverArt track={track} />
+          </div>
           {track && (
             <div className="min-w-0 max-w-full text-center">
               <h1>

@@ -1,4 +1,4 @@
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useRef, useState } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -49,20 +49,16 @@ interface Props {
   onOpen: (route: Route) => void;
 }
 
-const CONTROLS =
-  "button, input, select, textarea, a, label, [data-slot=slider], [role=button], [role=link], [role=slider]";
-
 /**
  * Whether a click landed on one of the bar's controls rather than the bar.
- * React bubbles events out of a portal rendered inside the bar, such as a
- * control's tooltip, so a target outside the bar's own DOM counts as a control.
- * The song's menu never gets here: it sits beside the bar, not in it, and
- * stops its own clicks.
+ * Sliders are matched by their control: a slider rendered as a tooltip trigger,
+ * like the volume one, has its root's slot replaced by the trigger's.
  */
-function onControl(event: SyntheticEvent): boolean {
-  const target = event.target;
-  if (!(target instanceof Element) || !event.currentTarget.contains(target)) return true;
-  return target.closest(CONTROLS) !== null;
+function onControl(target: EventTarget): boolean {
+  return (
+    target instanceof Element &&
+    target.closest("button, input, a, [data-slot=slider-control]") !== null
+  );
 }
 
 const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
@@ -111,10 +107,10 @@ export function NowPlaying(props: Props) {
       // Checked on the press too: a seek dragged off the slider ends in a
       // click on the bar itself.
       onPointerDown={(event) => {
-        pressedControl.current = onControl(event);
+        pressedControl.current = onControl(event.target);
       }}
       onClick={(event) => {
-        if (track && !pressedControl.current && !onControl(event)) props.onToggleExpanded();
+        if (track && !pressedControl.current && !onControl(event.target)) props.onToggleExpanded();
       }}
       className={cn("border-t bg-card px-4 py-3", track && "cursor-pointer")}
     >

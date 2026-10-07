@@ -3,6 +3,7 @@ import type { VideoId } from "@ymusic/core";
 
 import { YouTubeEngine } from "./engine.ts";
 import { connectEngine } from "./host.ts";
+import { live, unlessBotChecked } from "./live.ts";
 import { exposeEngine } from "./worker.ts";
 
 describe("the worker's forwarding", () => {
@@ -31,10 +32,8 @@ describe("the worker's forwarding", () => {
  *
  * Network-gated like `live.test.ts`; run with `YMUSIC_NETWORK_TESTS=1`.
  */
-const live = process.env.YMUSIC_NETWORK_TESTS === "1" ? describe : describe.skip;
-
 live("the engine across a message port", () => {
-  it("searches and resolves a stream", { timeout: 60_000 }, async () => {
+  it("searches and resolves a stream", { timeout: 60_000 }, async (context) => {
     const { port1, port2 } = new MessageChannel();
     exposeEngine(port1);
     let requests = 0;
@@ -49,7 +48,10 @@ live("the engine across a message port", () => {
     expect(requests).toBeGreaterThan(0);
 
     const first = tracks[0]!;
-    const lease = await engine.resolve(first.id.slice("yt:".length) as VideoId);
+    const lease = await unlessBotChecked(
+      context,
+      engine.resolve(first.id.slice("yt:".length) as VideoId),
+    );
     expect(lease.trackId).toBe(first.id);
     expect(lease.url).toMatch(/^https:\/\/.*googlevideo\.com\//);
 

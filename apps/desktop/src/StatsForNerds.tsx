@@ -144,10 +144,10 @@ function ClipLight(props: { peakDb: number | null }) {
   const last = useRef(SILENCE_DB);
 
   useEffect(() => {
-    const peak = props.peakDb ?? SILENCE_DB;
-    const changed = peak !== last.current;
-    last.current = peak;
-    actions.current?.report(changed ? peak : SILENCE_DB);
+    const db = props.peakDb ?? SILENCE_DB;
+    const changed = db !== last.current;
+    last.current = db;
+    actions.current?.report(changed ? db : SILENCE_DB);
   }, [props.peakDb]);
 
   return <ClipIndicator actionsRef={actions} holdMs={Infinity} thresholdDb={CLIP_DB} />;

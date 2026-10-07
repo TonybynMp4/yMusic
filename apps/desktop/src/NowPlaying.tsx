@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type SyntheticEvent } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -49,9 +49,19 @@ interface Props {
   onOpen: (route: Route) => void;
 }
 
-/** Whether a click landed on one of the bar's controls rather than the bar. */
-function onControl(target: EventTarget): boolean {
-  return target instanceof Element && target.closest("button, input, a, [data-slot=slider]") !== null;
+const CONTROLS =
+  "button, input, select, textarea, a, label, [data-slot=slider], [role=button], [role=link], [role=slider], [role=menuitem]";
+
+/**
+ * Whether a click landed on one of the bar's controls rather than the bar.
+ * React bubbles events out of portals along the component tree, so a click in
+ * the song's menu reaches the bar too; anything outside the bar's own DOM
+ * counts as a control.
+ */
+function onControl(event: SyntheticEvent): boolean {
+  const target = event.target;
+  if (!(target instanceof Element) || !event.currentTarget.contains(target)) return true;
+  return target.closest(CONTROLS) !== null;
 }
 
 const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
@@ -100,10 +110,10 @@ export function NowPlaying(props: Props) {
       // Checked on the press too: a seek dragged off the slider ends in a
       // click on the bar itself.
       onPointerDown={(event) => {
-        pressedControl.current = onControl(event.target);
+        pressedControl.current = onControl(event);
       }}
       onClick={(event) => {
-        if (track && !pressedControl.current && !onControl(event.target)) props.onToggleExpanded();
+        if (track && !pressedControl.current && !onControl(event)) props.onToggleExpanded();
       }}
       className={cn("border-t bg-card px-4 py-3", track && "cursor-pointer")}
     >

@@ -39,12 +39,14 @@ function TooltipContent({
   >) {
   return (
     <TooltipPrimitive.Portal>
+      {/* Clicks pass through: a tooltip can sit over a control, as the volume
+          one does over the volume slider's thumb, and would swallow the press. */}
       <TooltipPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-50"
+        className="pointer-events-none isolate z-50"
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"

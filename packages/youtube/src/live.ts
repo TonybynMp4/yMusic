@@ -1,5 +1,7 @@
 import { describe, type TestContext } from "vitest";
 
+import { NotPlayableError } from "./stream.ts";
+
 /**
  * Gates the tests that talk to the real YouTube. Opt-in, because a test suite
  * that fails when the network is down or when YouTube is rate limiting is a
@@ -22,7 +24,7 @@ export async function unlessBotChecked<T>(context: TestContext, work: Promise<T>
   try {
     return await work;
   } catch (error) {
-    if (error instanceof Error && error.name === "NotPlayableError" && /not a bot/i.test(error.message)) {
+    if (error instanceof Error && error.name === NotPlayableError.name && /not a bot/i.test(error.message)) {
       context.skip(`YouTube bot-checked this machine: ${error.message}`);
     }
     throw error;

@@ -129,6 +129,12 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const resolving = useRef(new Map<TrackId, Promise<StreamLease>>());
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
+  /**
+   * Whether the user wants the loaded track paused: set when it is cued or
+   * paused, cleared on play. Its load and retry read it so neither overrides
+   * the user.
+   */
+  const wantsPaused = useRef(false);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -181,7 +187,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     skipped.current = 0;
     loadedId.current = trackId;
     retried.current = null;
-    const paused = cued.current === trackId;
+    wantsPaused.current = cued.current === trackId;
     cued.current = null;
 
     let cancelled = false;
@@ -190,6 +196,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       // The user can skip while a lease is in flight; dropping the result is
       // correct, because a newer effect is already resolving the new track.
       if (cancelled) return;
+      // Read after the lease, so a play pressed while it resolved holds.
+      const paused = wantsPaused.current;
       await load(lease, paused);
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
@@ -235,8 +243,11 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
           const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
           leases.current.set(failed, lease);
-          await load(lease);
-          await engine.play();
+          // A song paused by the user, or cued by a resumed queue, stays
+          // paused; being refused once must not start it playing.
+          const paused = wantsPaused.current;
+          await load(lease, paused);
+          if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
           if (loadedId.current === failed) {
@@ -422,12 +433,19 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   }, [autoplay]);
   const setAutoplay = useCallback((on: boolean) => update({ autoplay: on }), [update]);
 
-  const play = useCallback(() => void engine.play().catch(logPlaybackFailure), [engine]);
-  const pause = useCallback(() => void engine.pause().catch(logPlaybackFailure), [engine]);
+  const play = useCallback(() => {
+    wantsPaused.current = false;
+    void engine.play().catch(logPlaybackFailure);
+  }, [engine]);
+  const pause = useCallback(() => {
+    wantsPaused.current = true;
+    void engine.pause().catch(logPlaybackFailure);
+  }, [engine]);
 
   const toggle = useCallback(() => {
-    void (state.status === "playing" ? engine.pause() : engine.play());
-  }, [engine, state.status]);
+    if (state.status === "playing") pause();
+    else play();
+  }, [play, pause, state.status]);
 
   const next = useCallback(() => {
     cameUp.current = true;

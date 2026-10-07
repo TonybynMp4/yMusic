@@ -50,13 +50,14 @@ interface Props {
 }
 
 const CONTROLS =
-  "button, input, select, textarea, a, label, [data-slot=slider], [role=button], [role=link], [role=slider], [role=menuitem]";
+  "button, input, select, textarea, a, label, [data-slot=slider], [role=button], [role=link], [role=slider]";
 
 /**
  * Whether a click landed on one of the bar's controls rather than the bar.
- * React bubbles events out of portals along the component tree, so a click in
- * the song's menu reaches the bar too; anything outside the bar's own DOM
- * counts as a control.
+ * React bubbles events out of a portal rendered inside the bar, such as a
+ * control's tooltip, so a target outside the bar's own DOM counts as a control.
+ * The song's menu never gets here: it sits beside the bar, not in it, and
+ * stops its own clicks.
  */
 function onControl(event: SyntheticEvent): boolean {
   const target = event.target;

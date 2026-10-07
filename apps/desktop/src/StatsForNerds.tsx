@@ -135,20 +135,19 @@ function limiter(reduction: number | null): ReactNode {
 
 /**
  * Lights when the output's true peak reaches 0 dBTP, and stays lit until
- * clicked. The meter reports the loudest peak so far, so only a new loudest
- * peak counts: after a reset, the light waits for the track to clip harder.
+ * clicked. The meter reports the loudest peak so far, so only a changed
+ * reading counts: higher is a new peak, lower means mpv rebuilt the meter
+ * (the same song reloaded, a stable volume change) and it counts from there.
  */
 function ClipLight(props: { peakDb: number | null }) {
   const actions = useRef<ClipIndicatorActions>(null);
-  const loudest = useRef(SILENCE_DB);
+  const last = useRef(SILENCE_DB);
 
   useEffect(() => {
-    if (props.peakDb == null || props.peakDb <= loudest.current) {
-      actions.current?.report(SILENCE_DB);
-      return;
-    }
-    loudest.current = props.peakDb;
-    actions.current?.report(props.peakDb);
+    const peak = props.peakDb ?? SILENCE_DB;
+    const changed = peak !== last.current;
+    last.current = peak;
+    actions.current?.report(changed ? peak : SILENCE_DB);
   }, [props.peakDb]);
 
   return <ClipIndicator actionsRef={actions} holdMs={Infinity} thresholdDb={CLIP_DB} />;

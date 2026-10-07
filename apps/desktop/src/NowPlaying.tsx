@@ -49,9 +49,16 @@ interface Props {
   onOpen: (route: Route) => void;
 }
 
-/** Whether a click landed on one of the bar's controls rather than the bar. */
+/**
+ * Whether a click landed on one of the bar's controls rather than the bar.
+ * Sliders are matched by their control: a slider rendered as a tooltip trigger,
+ * like the volume one, has its root's slot replaced by the trigger's.
+ */
 function onControl(target: EventTarget): boolean {
-  return target instanceof Element && target.closest("button, input, a, [data-slot=slider]") !== null;
+  return (
+    target instanceof Element &&
+    target.closest("button, input, a, [data-slot=slider-control]") !== null
+  );
 }
 
 const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };

@@ -72,7 +72,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Prereleases tag the built commit without a bump commit, and dry runs stop at a draft (written, not run yet)
 - [ ] Release assets carry `SHA256SUMS` and a build provenance attestation (written, not run yet)
 - [x] CI on every push to `main` and every pull request: oxlint, typecheck, tests, rustfmt and clippy
-- [ ] Windows build in the release workflow (needs `libmpv-2.dll` bundled)
+- [ ] Playback on Windows through Media Foundation, with the Opus check and AAC fallback
+- [ ] Windows build in the release workflow: NSIS and MSI on `windows-latest`
 - [ ] Run the whole MVP on Windows
 - [x] Nightly run of the live YouTube tests that opens an issue when they fail
 

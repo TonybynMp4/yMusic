@@ -1,6 +1,7 @@
 //! Filesystem walk and tag extraction.
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use lofty::file::{AudioFile, FileType, TaggedFileExt};
@@ -19,6 +20,14 @@ const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "m4a", "m4b", "aac", "ogg", "oga", "opus", "wav", "wv", "aiff", "aif", "ape",
     "mpc", "alac",
 ];
+
+/// Image files a folder's cover art is commonly saved as, best first. Matched
+/// on the stem, in any case, with any of `COVER_EXTENSIONS`.
+const COVER_NAMES: &[&str] = &["cover", "folder", "front", "album"];
+const COVER_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+
+/// A cover art file in the art cache: (path, width, height).
+type Art = (String, u32, u32);
 
 pub fn is_supported_audio(path: &Path) -> bool {
     path.extension()
@@ -87,6 +96,8 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
     let folder_key = folder.to_string_lossy().to_string();
     let mut report = ScanReport::default();
     let mut seen: Vec<String> = Vec::new();
+    // Each directory's cover image, looked up once per scan.
+    let mut covers: HashMap<PathBuf, Option<Art>> = HashMap::new();
 
     for entry in WalkDir::new(folder)
         .follow_links(false)
@@ -101,21 +112,32 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         seen.push(id.clone());
 
         let mtime = mtime_of(path);
-        let known_mtime: Option<i64> = library.with_conn(|conn| {
+        let known: Option<(i64, bool)> = library.with_conn(|conn| {
             Ok(conn
-                .query_row("SELECT mtime FROM tracks WHERE id = ?1", [&id], |row| {
-                    row.get(0)
-                })
+                .query_row(
+                    "SELECT mtime, art_path IS NULL FROM tracks WHERE id = ?1",
+                    [&id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
                 .ok())
         })?;
 
-        if known_mtime == Some(mtime) {
-            report.unchanged += 1;
-            continue;
+        if let Some((known_mtime, no_art)) = known {
+            if known_mtime == mtime {
+                // A cover image added to the folder since the last scan still
+                // reaches the songs with no art of their own.
+                if no_art {
+                    if let Some(art) = folder_cover(library, &mut covers, path) {
+                        set_art(library, &id, &art)?;
+                    }
+                }
+                report.unchanged += 1;
+                continue;
+            }
         }
-        let is_update = known_mtime.is_some();
+        let is_update = known.is_some();
 
-        match index_file(library, &folder_key, &id, path, mtime) {
+        match index_file(library, &folder_key, &id, path, mtime, &mut covers) {
             Ok(()) if is_update => report.updated += 1,
             Ok(()) => report.added += 1,
             Err(err) => report.failed.push(ScanFailure {
@@ -153,6 +175,7 @@ fn index_file(
     id: &str,
     path: &Path,
     mtime: i64,
+    covers: &mut HashMap<PathBuf, Option<Art>>,
 ) -> Result<()> {
     let tagged = Probe::open(path).map_err(to_io)?.read().map_err(to_io)?;
 
@@ -194,7 +217,9 @@ fn index_file(
     let disc_number = tag.and_then(|t| t.disk());
     let year = tag.and_then(|t| t.date().map(|date| u32::from(date.year)));
 
-    let art = tag.and_then(|t| extract_cover_art(library, id, t).ok().flatten());
+    let art = tag
+        .and_then(|t| extract_cover_art(library, id, t).ok().flatten())
+        .or_else(|| folder_cover(library, covers, path));
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -244,7 +269,7 @@ fn index_file(
 /// Writes the first embedded picture to the art cache and returns
 /// (path, width, height). Art is written once per track id and overwritten on
 /// rescan, so the cache cannot grow without bound.
-fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(String, u32, u32)>> {
+fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<Art>> {
     let Some(picture) = tag.pictures().first() else {
         return Ok(None);
     };
@@ -267,6 +292,67 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(S
     // anyway, so an unparsed header is not worth failing a scan over.
     let (width, height) = image_dimensions(picture.data()).unwrap_or((0, 0));
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
+}
+
+fn set_art(library: &Library, id: &str, art: &Art) -> Result<()> {
+    library.with_conn(|conn| {
+        conn.execute(
+            "UPDATE tracks SET art_path = ?2, art_width = ?3, art_height = ?4 WHERE id = ?1",
+            params![id, art.0, art.1, art.2],
+        )?;
+        Ok(())
+    })
+}
+
+/// The cover image saved beside a song, copied to the art cache, for songs
+/// with no embedded art. The webview can only load images from the cache.
+fn folder_cover(
+    library: &Library,
+    covers: &mut HashMap<PathBuf, Option<Art>>,
+    track: &Path,
+) -> Option<Art> {
+    let dir = track.parent()?;
+    covers
+        .entry(dir.to_path_buf())
+        .or_insert_with(|| copy_cover(library, dir).ok().flatten())
+        .clone()
+}
+
+fn copy_cover(library: &Library, dir: &Path) -> Result<Option<Art>> {
+    let Some(image) = cover_in(dir) else {
+        return Ok(None);
+    };
+    let data = std::fs::read(&image)?;
+    let extension = image
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+    // Named after the directory, so every song in it shares one copy.
+    let hash = track_id_for(dir).replace("local:", "folder_");
+    let out = library.art_dir().join(format!("{hash}.{extension}"));
+    std::fs::write(&out, &data)?;
+    let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
+    Ok(Some((out.to_string_lossy().to_string(), width, height)))
+}
+
+/// The best-named cover image directly in `dir`, if any.
+fn cover_in(dir: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            let stem = path.file_stem()?.to_str()?.to_ascii_lowercase();
+            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+            if !COVER_EXTENSIONS.contains(&extension.as_str()) || !path.is_file() {
+                return None;
+            }
+            let rank = COVER_NAMES.iter().position(|name| *name == stem)?;
+            Some((rank, path))
+        })
+        .min()
+        .map(|(_, path)| path)
 }
 
 /// Minimal PNG/JPEG header reads. Avoids pulling in a full image crate for two
@@ -316,4 +402,22 @@ fn codec_name(file_type: FileType) -> String {
 
 fn to_io(err: lofty::error::FileParseError) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cover_in_prefers_cover_over_folder_and_ignores_other_images() {
+        let dir = std::env::temp_dir().join(format!("ymusic-cover-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["scan.jpg", "Folder.JPG", "notes.txt"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        assert_eq!(cover_in(&dir), Some(dir.join("Folder.JPG")));
+        std::fs::write(dir.join("cover.png"), b"x").unwrap();
+        assert_eq!(cover_in(&dir), Some(dir.join("cover.png")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

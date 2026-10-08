@@ -64,6 +64,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] Scan folders into SQLite and play from disk
 - [x] Folders and all files in the sidebar
+- [x] Cover art from a folder's cover image, and folder pages with art, song count and length
 
 ### Releases
 

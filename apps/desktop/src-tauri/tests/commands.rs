@@ -122,6 +122,22 @@ fn every_command_is_reachable_over_ipc() {
     // The transport commands, with the argument names the TS client sends;
     // Tauri maps camelCase onto the snake_case parameters.
     let calls = [
+        (
+            "player_queue_next",
+            serde_json::json!({
+                "after": "abc123",
+                "request": {
+                    "trackId": "def456",
+                    "url": format!("{}/tests/fixtures/tone.wav", env!("CARGO_MANIFEST_DIR")),
+                    "headers": { "User-Agent": "YMUSIC/0.1", "Cookie": "a=1, b=2" },
+                    "loudnessDb": -2.5
+                }
+            }),
+        ),
+        (
+            "player_queue_next",
+            serde_json::json!({ "after": "abc123", "request": null }),
+        ),
         ("player_set_volume", serde_json::json!({ "volume": 0.5 })),
         ("player_play", serde_json::json!({})),
         ("player_pause", serde_json::json!({})),

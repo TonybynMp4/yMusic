@@ -10,7 +10,8 @@
 use libmpv2::{events::Event, Mpv};
 use std::path::{Path, PathBuf};
 use ymusic_lib::playback::{
-    limiter_reduction, measured_filter, stable_volume_filter, stable_volume_gain, MAX_BOOST_DB,
+    limiter_reduction, measured_filter, quote_option, stable_volume_filter, stable_volume_gain,
+    MAX_BOOST_DB,
 };
 use ymusic_lib::settings::StableVolume;
 
@@ -165,6 +166,90 @@ fn stats_for_nerds_meters_either_side_of_a_boost() {
     // With no gain there is only the one meter.
     let (_, output) = meter(&tone, &measured_filter(""));
     assert!(output.is_none());
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Two tones, the second appended with its own filter the way `Player`
+/// appends the next track. `ao=pcm` reopens its file whenever mpv reopens the
+/// audio output, which a gap between songs does, so two full seconds in one
+/// file means mpv joined them. The filters have commas, which the option
+/// quoting has to carry through `loadfile`.
+#[test]
+fn an_appended_track_joins_with_no_gap_at_its_own_gain() {
+    let dir = std::env::temp_dir().join(format!("ymusic-join-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let first = dir.join("first.wav");
+    let second = dir.join("second.wav");
+    write_full_scale_tone(&first);
+    write_full_scale_tone(&second);
+    let out = dir.join("joined.wav");
+
+    let mpv = Mpv::with_initializer(|init| {
+        init.set_property("vid", "no")?;
+        init.set_property("terminal", "no")?;
+        init.set_property("ytdl", "no")?;
+        init.set_property("ao", "pcm")?;
+        init.set_property("ao-pcm-file", out.to_str().expect("utf-8 path"))?;
+        init.set_property("audio-format", "s16")?;
+        init.set_property("audio-samplerate", 48000)?;
+        init.set_property("gapless-audio", "yes")?;
+        init.set_property("prefetch-playlist", "yes")?;
+        Ok(())
+    })
+    .expect("libmpv");
+
+    // 6 dB down, then 4 dB up into the limiter, with the meters around it.
+    let cut = stable_volume_filter(StableVolume::On, Some(6.0));
+    let boost = measured_filter(&stable_volume_filter(StableVolume::On, Some(-4.0)));
+    for (file, flags, filter) in [(&first, "replace", &cut), (&second, "append", &boost)] {
+        let options = format!("af={}", quote_option(filter));
+        mpv.command(
+            "loadfile",
+            &[file.to_str().expect("utf-8 path"), flags, "-1", &options],
+        )
+        .expect("loadfile");
+    }
+    let mut ended = 0;
+    while ended < 2 {
+        match mpv.wait_event(10.0) {
+            Some(Ok(Event::EndFile(_))) => ended += 1,
+            Some(Err(error)) => panic!("mpv refused a file: {error}"),
+            Some(Ok(Event::Shutdown)) | None => break,
+            _ => {}
+        }
+    }
+    drop(mpv);
+
+    let bytes = std::fs::read(&out).expect("mpv should have written a pcm file");
+    let samples: Vec<f64> = pcm_data(&bytes, &out)
+        .chunks_exact(2)
+        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f64)
+        .collect();
+    let seconds = samples.len() as f64 / 48_000.0;
+    assert!(
+        (seconds - 2.0).abs() < 0.05,
+        "expected two joined seconds, got {seconds:.3}"
+    );
+
+    // A full-scale sine's RMS, against the middle of each half.
+    let full = i16::MAX as f64 / 2f64.sqrt();
+    let rms = |range: std::ops::Range<usize>| {
+        let part = &samples[range];
+        (part.iter().map(|s| s * s).sum::<f64>() / part.len() as f64).sqrt() / full
+    };
+    let first_level = rms(4_800..43_200);
+    let second_level = rms(52_800..91_200);
+    let cut_level = 10f64.powf(-6.0 / 20.0);
+    assert!(
+        (first_level - cut_level).abs() / cut_level < 0.05,
+        "the first song played at {first_level:.3} of full scale, expected {cut_level:.3}"
+    );
+    assert!(
+        second_level > 0.8 && second_level <= 0.891 * 1.02,
+        "the second song played at {second_level:.3}, expected its boost held at -1 dBFS"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

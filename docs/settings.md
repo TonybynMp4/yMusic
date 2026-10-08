@@ -58,4 +58,4 @@ The meters start again with each song and whenever the setting or stable volume 
 
 ## What is not a setting
 
-Gapless playback. The player loads each song with `loadfile <url> replace`, so mpv's `gapless-audio` never has a next file to join, and a switch would do nothing. The next track has to be appended to mpv's playlist instead; PLAN.md has the design.
+Gapless playback. It is always on, and there is nothing to switch: see [Playback](playback.md).

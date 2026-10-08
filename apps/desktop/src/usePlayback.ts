@@ -60,7 +60,7 @@ export function usePlayback() {
     () =>
       engine.subscribe((event) => {
         if (event.type === "position") position.set(event.positionMs);
-        if (event.type === "ended") position.set(0);
+        if (event.type === "ended" || event.type === "advanced") position.set(0);
         setState((previous) => {
           switch (event.type) {
             case "status":
@@ -72,6 +72,9 @@ export function usePlayback() {
             }
             case "ended":
               return { ...previous, status: "ended" };
+            // Still playing; the new song reports its own duration.
+            case "advanced":
+              return { ...previous, durationMs: null, error: null };
             case "error":
               return { ...previous, status: "idle", error: event.message };
           }

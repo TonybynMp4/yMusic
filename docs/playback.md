@@ -11,6 +11,16 @@ Two details that each cost a day if missed:
 - googlevideo binds a stream to the session that resolved it, so mpv gets the same `User-Agent`, cookies and PO token through `http-header-fields`.
 - Stream URLs expire after about six hours, so the player re-resolves a track whose lease is stale.
 
+**Gapless.** While a song plays, the queue resolves the next one's lease and calls `player_queue_next`, and Rust appends it to mpv's playlist with `loadfile <url> append`. With `gapless-audio=yes` and `prefetch-playlist=yes`, mpv opens it ahead of time and joins the two with no gap. A song loaded with `replace` drops whatever was appended.
+
+- Stable volume's filter goes on every file as a per-file `af` option, not the global property, or the next song's gain would land on the one still playing. mpv splits per-file options on commas, so the value is quoted by its byte length (`%12%lavfi=[...]`). Every file gets one because mpv restores per-file options when a file ends. Changing stable volume or stats re-appends the next song with the new filter.
+- mpv 0.38 added an index argument to `loadfile` (`<url> <flags> <index> <options>`). The player reads the version at startup and leaves the index out before 0.38.
+- On `start-file` Rust reads `path`. If it is the appended URL, it emits `Advanced { trackId }` instead of `Ended`, the queue moves to Next without loading, and the 403 retry follows the track mpv reports. If mpv started something else, the queue gets `Ended` and loads its next track as before.
+- The queue calls `player_queue_next` again whenever the next track changes (skip, reorder, play next, shuffle, a cleared queue), which runs `playlist-clear` and appends the new one, or nothing. Rust ignores a call meant for a song that is no longer playing. Repeat-one and a disliked next song under "Skip disliked songs" append nothing. Neither does a next track whose headers differ from the current one's, because `http-header-fields` is global.
+- mpv keeps the audio device open with the first file's format, so a file at another sample rate (YouTube's Opus is 48 kHz, a local file may be 44.1 kHz) is resampled rather than reopening the device. Silence encoded into the files themselves stays, as on YouTube Music.
+
+The log records each join (`went on to <id> with no gap`).
+
 Volume is perceptual. mpv's `volume` property already applies a cubic taper, so the UI sends the slider position as a linear fraction and never applies the curve again.
 
 The queue, in the full player's Up next tab, keeps the playing song in view. Opening it centres that row before the first paint. When the song changes and the new row is out of view, the list scrolls to it, unless the old row was out of view too: then you had scrolled away to read the list, and it stays where you left it. While the playing row is hidden, a "Now playing" button at the top or bottom edge, on the side where the row is, scrolls back to it. The button is hidden during a drag, which scrolls the list from those same edges, and a drag that moves rows around the playing one does not count as the song changing. Rows are a fixed 48 px, so the row's offset is its position times that, with no measuring.

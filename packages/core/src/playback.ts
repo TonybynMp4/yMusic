@@ -8,6 +8,12 @@ import type { StreamLease, TrackId } from "./domain.ts";
 export interface PlaybackEngine {
   /** Starts playing once loaded, unless `paused`. */
   load(lease: StreamLease, paused?: boolean): Promise<void>;
+  /**
+   * The track to go on to with no gap when `after` ends, or null to take it
+   * back. Ignored once `after` is no longer playing. When the engine goes on
+   * to it, it reports `advanced` instead of `ended`.
+   */
+  queueNext(after: TrackId, lease: StreamLease | null): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   seek(positionMs: number): Promise<void>;
@@ -22,4 +28,5 @@ export type PlaybackEvent =
   | { type: "status"; status: PlaybackStatus }
   | { type: "position"; positionMs: number; durationMs: number | null }
   | { type: "ended"; trackId: TrackId }
+  | { type: "advanced"; trackId: TrackId }
   | { type: "error"; trackId: TrackId | null; message: string };

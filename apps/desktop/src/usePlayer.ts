@@ -135,6 +135,16 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
    * the user.
    */
   const wantsPaused = useRef(false);
+  /**
+   * What mpv has appended after the playing track, as `current>next>quality`. Loading
+   * a track replaces mpv's playlist, so every load clears it.
+   */
+  const queued = useRef<string | null>(null);
+  /**
+   * The track mpv has, set once its load completes or mpv goes on to it.
+   * `loadedId` moves as soon as a load starts, before mpv knows about it.
+   */
+  const inMpv = useRef<TrackId | null>(null);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -174,6 +184,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       // is both pointless and, outside the Tauri webview, an error.
       if (loadedId.current !== null) {
         loadedId.current = null;
+        inMpv.current = null;
         void engine.stop().catch(logPlaybackFailure);
       }
       return;
@@ -198,7 +209,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       if (cancelled) return;
       // Read after the lease, so a play pressed while it resolved holds.
       const paused = wantsPaused.current;
+      queued.current = null;
       await load(lease, paused);
+      inMpv.current = trackId;
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
@@ -212,20 +225,46 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     };
   }, [trackId, engine, load, reportError, leaseFor]);
 
-  // Resolve the next YouTube track while this one plays, so the change of
-  // track doesn't wait on YouTube. Only once playing, so it never competes
-  // with resolving the track the user is waiting for.
+  // Hand mpv the next track while this one plays, so it opens it ahead of
+  // time and goes on to it with no gap. Only once playing, so resolving it
+  // never competes with the track the user is waiting for. Repeat-one keeps
+  // reloading the same track, and a disliked track about to be skipped is
+  // left out, or mpv would play it.
   const upcomingId = peekNext(queue)?.id ?? null;
   const playing = state.status === "playing";
   const audioQuality = settings.audioQuality;
+  const upcomingVideo = upcomingId === null ? null : videoIdFromTrackId(upcomingId);
+  const upcomingSkipped =
+    settings.skipDisliked &&
+    upcomingVideo !== null &&
+    ratings.ratingOf(upcomingVideo) === "dislike";
+  const joinable = upcomingId !== null && upcomingId !== trackId && !upcomingSkipped;
   useEffect(() => {
-    if (!playing || upcomingId === null || upcomingId === trackId) return;
-    if (sourceOf(upcomingId) !== "youtube") return;
-    void leaseFor(upcomingId).catch((error: unknown) =>
-      console.error("could not resolve the next track ahead of time", error),
-    );
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- audioQuality resolves again after a change of quality drops the lease
-  }, [playing, upcomingId, trackId, leaseFor, audioQuality]);
+    // Until mpv has the track, Rust would ignore a next meant to follow it.
+    if (!playing || trackId === null || inMpv.current !== trackId) return;
+    if (!joinable || upcomingId === null) {
+      if (queued.current === null) return;
+      queued.current = null;
+      void engine.queueNext(trackId, null).catch(logPlaybackFailure);
+      return;
+    }
+    // A change of quality resolves the next track again at the new one.
+    const key = `${trackId}>${upcomingId}>${audioQuality}`;
+    if (queued.current === key) return;
+    let cancelled = false;
+    void leaseFor(upcomingId)
+      .then((lease) => {
+        if (cancelled) return;
+        queued.current = key;
+        return engine.queueNext(trackId, lease);
+      })
+      .catch((error: unknown) =>
+        console.error("could not hand the next track to the player ahead of time", error),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [playing, joinable, upcomingId, trackId, leaseFor, audioQuality, engine]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
   // it, and a 403 surfaces only here. Retry such a track once on the PO-token
@@ -246,7 +285,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
           // A song paused by the user, or cued by a resumed queue, stays
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;
+          queued.current = null;
           await load(lease, paused);
+          inMpv.current = failed;
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
@@ -266,6 +307,26 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         if (event.type !== "ended") return;
         // Repeat-one returns the same id, so the load effect would skip it.
         loadedId.current = null;
+        cameUp.current = true;
+        dispatch({ type: "next", reason: "trackEnded" });
+      }),
+    [engine],
+  );
+
+  // mpv went on to the appended track by itself. The queue moves to it with
+  // nothing to load, and if its next track turns out to be a different one,
+  // the load effect loads that over it.
+  useEffect(
+    () =>
+      engine.subscribe((event) => {
+        if (event.type !== "advanced") return;
+        // The user picked another song while mpv was finishing this one. Its
+        // load replaces what mpv started, so the queue stays on it.
+        if (inMpv.current !== currentId.current) return;
+        inMpv.current = event.trackId;
+        loadedId.current = event.trackId;
+        retried.current = null;
+        queued.current = null;
         cameUp.current = true;
         dispatch({ type: "next", reason: "trackEnded" });
       }),

@@ -34,6 +34,18 @@ The t3code mirror (`/home/tony/code/t3code/mirror-fixes`) already does this in p
 
 Sign release assets with the updater's minisign key so the download is verified before dpkg sees it.
 
+## Next
+
+- **Player tabs.** The full player's side panel gets YouTube Music's tabs plus two of its own: Details, Up next, Lyrics, Related and Comments, with Details first and open by default. Up next is the queue as it is today. Each tab loads when first opened, and stays loaded for the song.
+  - *Details* is the scrolling page Spotify puts under its player, built from what YouTube has: the song's title, artists, album and year; the album's art, type, year and track count, which opens the album; each artist's picture, subscriber count and the start of their description, which opens the artist; and the song's credits when YouTube has them (the same data as the planned credits dialog). For a local song it shows the tags, the file's path, codec and bitrate.
+  - *Lyrics* are YouTube's own, from the `MPLY` browse id the `/next` response names, with timings when YouTube has them so the current line follows playback. A song with none says so. Other providers stay a plugin idea.
+  - *Related* is YouTube Music's tab: the shelves from the related browse id in `/next`, as cards that play or open like anywhere else.
+  - *Comments* are the comments on the song's video, which YouTube Music shows for songs with one. Read only at first: top comments, with replies collapsed. Hidden for local songs and songs without a video.
+- **Library page.** One page for everything saved, as YouTube Music's Library is: chips for Playlists, Songs, Albums, Artists and Local files, a sort (recently added, recently played, A to Z) and a grid or list toggle. Signed out, it shows the local files and folders. The sidebar stays the quick list; "Library" in it opens this page.
+- **Playlist art, details and editing.** A playlist's page shows its owner, privacy, song count, total length and description. The owner can rename it, change the description and privacy, remove songs, reorder them by dragging, and delete it, through InnerTube's `browse/edit_playlist` actions and `playlist/delete`, which is what YouTube Music's web player sends. A custom cover upload comes last: YouTube Music supports it, but the upload flow needs research.
+- **The queue across restarts.** The queue, the song in it and the position are saved locally whenever they change, and come back at launch, paused, the way a resumed queue does now. The saved queue wins over the account's server queue, because it is exactly what this device left. The server queue still fills an empty player, so a second device picks up from the first. Signed out, the local queue is the only one.
+- **Search history.** Recent searches show under the empty search box, each with a button to remove it. They are kept locally by default. A setting, "Use YouTube search history", switches to the account's own: YouTube Music returns it from the search suggestions request with an empty query, and removing one sends the entry's feedback token. Whether the app's searches already land in the account's history needs checking first, since it decides what the setting can promise.
+
 ## Later
 
 - **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.
@@ -72,7 +84,7 @@ Pear Desktop compiles its plugins into the app and runs them with full Electron 
 
 Plugin ideas:
 
-- **Lyrics**, synced where the provider has timings. `player.panel`.
+- **More lyrics providers**, for songs YouTube has no lyrics for, synced where the provider has timings. `player.panel`.
 - **Trivia** about the song and artist. `player.panel`, `artist.section`.
 - **Tour dates** from Bandsintown. `player.panel`, `artist.section`, `home.shelf`.
 - **Downloader.** A backend plugin that writes the video id into the file's tags, so the local-to-YouTube link is exact from the start.

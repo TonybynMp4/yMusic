@@ -115,6 +115,13 @@ export function InteractionsProvider({
   );
 }
 
+/** Opens the "New playlist" dialog for an empty playlist, or null while signed out. */
+export function useNewPlaylist(): (() => void) | null {
+  const x = useInteractions();
+  if (!x.signedIn) return null;
+  return () => x.createPlaylist(() => Promise.resolve([]));
+}
+
 function useInteractions(): Context {
   const value = useContext(InteractionsContext);
   if (value === null) throw new Error("interactions used outside InteractionsProvider");
@@ -549,12 +556,10 @@ function NewPlaylistDialog({
     setError(null);
     try {
       const name = title.trim();
-      const id = await engine.createPlaylist(
-        { title: name, description: description.trim(), privacy },
-        await songs(),
-      );
+      const ids = await songs();
+      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
       x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
-      x.notify(`Created ${name}`);
+      x.notify(ids.length > 0 ? `Saved to ${name}` : `Created ${name}`);
       onClose();
       reset();
       // A new playlist opens, so you land on it. Adding songs to one later does not.

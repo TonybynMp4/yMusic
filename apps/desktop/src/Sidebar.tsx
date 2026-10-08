@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
+import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 
 interface Props {
   collapsed: boolean;
@@ -43,8 +44,6 @@ interface Props {
   /** Fetches the playlists again and rescans the folders. */
   onRefresh: () => void;
 }
-
-const LIKED_MUSIC = "LM";
 
 /**
  * One library, whatever the source: YouTube Music playlists and local folders

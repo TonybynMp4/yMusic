@@ -173,7 +173,7 @@ export function App(props: { settings: Settings }) {
             folders={library.folders}
             localCount={library.all.length}
             report={library.report}
-            loading={library.loading}
+            loading={library.loading || playlists.loading}
             onAddFolder={() => void library.addFolder()}
             onRemoveFolder={(path) => void library.removeFolder(path)}
             onRefresh={() => {

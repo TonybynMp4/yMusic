@@ -17,7 +17,7 @@ export interface LibraryPlaylistsState {
   created: (card: BrowseCard) => void;
 }
 
-const LIKED_MUSIC = "LM";
+export const LIKED_MUSIC = "LM";
 
 /**
  * The signed-in account's YouTube Music playlists, Liked Music first. Keyed
@@ -77,12 +77,12 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
   );
   // New playlists go where YouTube Music puts them: first, after Liked Music.
   const playlists = useMemo(() => {
-    if (pending.account !== accountKey) return state.playlists;
+    if (pending.account !== accountKey || state.error !== null) return state.playlists;
     const shown = pending.cards.filter((card) => !state.playlists.some((p) => p.id === card.id));
     if (shown.length === 0) return state.playlists;
     const liked = state.playlists.filter((p) => p.id === LIKED_MUSIC);
     const rest = state.playlists.filter((p) => p.id !== LIKED_MUSIC);
     return [...liked, ...shown, ...rest];
-  }, [pending, accountKey, state.playlists]);
+  }, [pending, accountKey, state.playlists, state.error]);
   return { ...state, playlists, reload, created };
 }

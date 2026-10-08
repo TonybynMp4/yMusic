@@ -8,6 +8,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLoader2,
   IconPlaylist,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconX,
@@ -20,7 +21,7 @@ import { IconButton } from "@/components/IconButton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { InteractionArea, type Subject } from "./Interactions.tsx";
+import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
 
@@ -51,6 +52,7 @@ const LIKED_MUSIC = "LM";
  */
 export function Sidebar(props: Props) {
   const { collapsed } = props;
+  const newPlaylist = useNewPlaylist();
   const entries: Entry[] = [
     ...props.playlists
       .filter((p) => p.id === LIKED_MUSIC)
@@ -109,17 +111,27 @@ export function Sidebar(props: Props) {
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Library
           </h2>
-          <IconButton
-            label="Rescan local folders"
-            onClick={props.onRescan}
-            disabled={props.loading || props.folders.length === 0}
-          >
-            {props.loading ? (
-              <IconLoader2 size={15} className="animate-spin" />
-            ) : (
-              <IconRefresh size={15} />
+          <div className="flex items-center">
+            <IconButton label="Add music folder" onClick={props.onAddFolder}>
+              <IconFolderPlus size={15} />
+            </IconButton>
+            {newPlaylist && (
+              <IconButton label="New playlist" onClick={newPlaylist}>
+                <IconPlus size={15} />
+              </IconButton>
             )}
-          </IconButton>
+            <IconButton
+              label="Rescan local folders"
+              onClick={props.onRescan}
+              disabled={props.loading || props.folders.length === 0}
+            >
+              {props.loading ? (
+                <IconLoader2 size={15} className="animate-spin" />
+              ) : (
+                <IconRefresh size={15} />
+              )}
+            </IconButton>
+          </div>
         </div>
       )}
 
@@ -157,17 +169,6 @@ export function Sidebar(props: Props) {
       </ScrollArea>
 
       {props.report && !collapsed && <ScanSummary report={props.report} />}
-
-      <div className={cn("p-2", collapsed && "flex justify-center")}>
-        <Item
-          collapsed={collapsed}
-          active={false}
-          onClick={props.onAddFolder}
-          title="Add music folder"
-          art={<IconFolderPlus size={18} stroke={1.75} />}
-          plain
-        />
-      </div>
     </aside>
   );
 }

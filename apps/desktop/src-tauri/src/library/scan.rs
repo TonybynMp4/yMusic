@@ -25,6 +25,9 @@ const AUDIO_EXTENSIONS: &[&str] = &[
 /// on the stem, in any case, with any of `COVER_EXTENSIONS`.
 const COVER_NAMES: &[&str] = &["cover", "folder", "front", "album"];
 const COVER_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+/// Starts the file name of a folder cover's copy in the art cache, which is
+/// how a rescan tells it from a song's embedded art.
+const FOLDER_ART_PREFIX: &str = "folder_";
 
 /// A cover art file in the art cache: (path, width, height).
 type Art = (String, u32, u32);
@@ -112,23 +115,34 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         seen.push(id.clone());
 
         let mtime = mtime_of(path);
-        let known: Option<(i64, Option<String>)> = library.with_conn(|conn| {
+        let known: Option<(i64, Option<Art>)> = library.with_conn(|conn| {
             Ok(conn
                 .query_row(
-                    "SELECT mtime, art_path FROM tracks WHERE id = ?1",
+                    "SELECT mtime, art_path, art_width, art_height FROM tracks WHERE id = ?1",
                     [&id],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
+                    |row| {
+                        let art = match row.get::<_, Option<String>>(1)? {
+                            Some(path) => Some((
+                                path,
+                                row.get::<_, Option<u32>>(2)?.unwrap_or(0),
+                                row.get::<_, Option<u32>>(3)?.unwrap_or(0),
+                            )),
+                            None => None,
+                        };
+                        Ok((row.get(0)?, art))
+                    },
                 )
                 .ok())
         })?;
 
-        if let Some((known_mtime, art_path)) = &known {
+        if let Some((known_mtime, stored)) = &known {
             if *known_mtime == mtime {
                 // A song without art of its own follows the folder's cover as
                 // it is now: added, replaced or removed since the last scan.
-                if art_path.as_deref().is_none_or(is_folder_cover) {
+                // Written only when it changed, so an idle rescan only reads.
+                if stored.as_ref().is_none_or(|art| is_folder_cover(&art.0)) {
                     let art = folder_cover(library, &mut covers, path);
-                    if art.is_some() || art_path.is_some() {
+                    if art != *stored {
                         set_art(library, &id, art.as_ref())?;
                     }
                 }
@@ -324,12 +338,12 @@ fn is_folder_cover(art_path: &str) -> bool {
     Path::new(art_path)
         .file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("folder_"))
+        .is_some_and(|name| name.starts_with(FOLDER_ART_PREFIX))
 }
 
 fn copy_cover(library: &Library, dir: &Path) -> Result<Option<Art>> {
     // Named after the directory, so every song in it shares one copy.
-    let hash = track_id_for(dir).replace("local:", "folder_");
+    let hash = track_id_for(dir).replace("local:", FOLDER_ART_PREFIX);
     let found = cover_in(dir);
     // A cover replaced by one of another type, or removed, leaves no stale copy.
     for extension in COVER_EXTENSIONS {
@@ -342,7 +356,9 @@ fn copy_cover(library: &Library, dir: &Path) -> Result<Option<Art>> {
     };
     let data = std::fs::read(&image)?;
     let out = library.art_dir().join(format!("{hash}.{extension}"));
-    std::fs::write(&out, &data)?;
+    if std::fs::read(&out).ok().as_deref() != Some(&data[..]) {
+        std::fs::write(&out, &data)?;
+    }
     let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
 }

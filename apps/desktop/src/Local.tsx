@@ -59,8 +59,9 @@ function commonArt(tracks: readonly LocalTrack[]): Thumbnail[] {
   for (const track of tracks) {
     const url = track.thumbnails[0]?.url;
     if (!url) continue;
-    // Embedded art is cached per song, so an album groups by its name, not its art's URL.
-    const key = track.album ?? url;
+    // Embedded art is cached per song, so an album groups by its name and
+    // album artist (two artists can each have a "Greatest Hits"), not its art's URL.
+    const key = track.album === null ? url : `${track.albumArtist ?? ""}\n${track.album}`;
     const entry = counts.get(key) ?? { thumbnails: track.thumbnails, count: 0 };
     entry.count += 1;
     counts.set(key, entry);

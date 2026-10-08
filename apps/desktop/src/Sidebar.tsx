@@ -8,7 +8,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLoader2,
   IconPlaylist,
-  IconPlus,
+  IconPlaylistAdd,
   IconRefresh,
   IconSearch,
   IconX,
@@ -117,7 +117,7 @@ export function Sidebar(props: Props) {
             </IconButton>
             {newPlaylist && (
               <IconButton label="New playlist" onClick={newPlaylist}>
-                <IconPlus size={15} />
+                <IconPlaylistAdd size={15} />
               </IconButton>
             )}
             <IconButton

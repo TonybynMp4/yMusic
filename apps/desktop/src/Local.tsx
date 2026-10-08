@@ -53,15 +53,17 @@ export function LocalView(props: {
   );
 }
 
-/** A folder's art: the cover most of its songs share, so a stray single does not stand for an album. */
+/** A folder's art: the cover of the album most of its songs are from, so a stray single does not stand for it. */
 function commonArt(tracks: readonly LocalTrack[]): Thumbnail[] {
   const counts = new Map<string, { thumbnails: Thumbnail[]; count: number }>();
   for (const track of tracks) {
     const url = track.thumbnails[0]?.url;
     if (!url) continue;
-    const entry = counts.get(url) ?? { thumbnails: track.thumbnails, count: 0 };
+    // Embedded art is cached per song, so an album groups by its name, not its art's URL.
+    const key = track.album ?? url;
+    const entry = counts.get(key) ?? { thumbnails: track.thumbnails, count: 0 };
     entry.count += 1;
-    counts.set(url, entry);
+    counts.set(key, entry);
   }
   let best: { thumbnails: Thumbnail[]; count: number } | undefined;
   for (const entry of counts.values()) if (!best || entry.count > best.count) best = entry;

@@ -112,23 +112,24 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         seen.push(id.clone());
 
         let mtime = mtime_of(path);
-        let known: Option<(i64, bool)> = library.with_conn(|conn| {
+        let known: Option<(i64, Option<String>)> = library.with_conn(|conn| {
             Ok(conn
                 .query_row(
-                    "SELECT mtime, art_path IS NULL FROM tracks WHERE id = ?1",
+                    "SELECT mtime, art_path FROM tracks WHERE id = ?1",
                     [&id],
                     |row| Ok((row.get(0)?, row.get(1)?)),
                 )
                 .ok())
         })?;
 
-        if let Some((known_mtime, no_art)) = known {
-            if known_mtime == mtime {
-                // A cover image added to the folder since the last scan still
-                // reaches the songs with no art of their own.
-                if no_art {
-                    if let Some(art) = folder_cover(library, &mut covers, path) {
-                        set_art(library, &id, &art)?;
+        if let Some((known_mtime, art_path)) = &known {
+            if *known_mtime == mtime {
+                // A song without art of its own follows the folder's cover as
+                // it is now: added, replaced or removed since the last scan.
+                if art_path.as_deref().is_none_or(is_folder_cover) {
+                    let art = folder_cover(library, &mut covers, path);
+                    if art.is_some() || art_path.is_some() {
+                        set_art(library, &id, art.as_ref())?;
                     }
                 }
                 report.unchanged += 1;
@@ -294,11 +295,11 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<Ar
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
 }
 
-fn set_art(library: &Library, id: &str, art: &Art) -> Result<()> {
+fn set_art(library: &Library, id: &str, art: Option<&Art>) -> Result<()> {
     library.with_conn(|conn| {
         conn.execute(
             "UPDATE tracks SET art_path = ?2, art_width = ?3, art_height = ?4 WHERE id = ?1",
-            params![id, art.0, art.1, art.2],
+            params![id, art.map(|a| &a.0), art.map(|a| a.1), art.map(|a| a.2)],
         )?;
         Ok(())
     })
@@ -318,26 +319,37 @@ fn folder_cover(
         .clone()
 }
 
+/// Whether an art path is a folder cover's copy rather than embedded art.
+fn is_folder_cover(art_path: &str) -> bool {
+    Path::new(art_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("folder_"))
+}
+
 fn copy_cover(library: &Library, dir: &Path) -> Result<Option<Art>> {
-    let Some(image) = cover_in(dir) else {
+    // Named after the directory, so every song in it shares one copy.
+    let hash = track_id_for(dir).replace("local:", "folder_");
+    let found = cover_in(dir);
+    // A cover replaced by one of another type, or removed, leaves no stale copy.
+    for extension in COVER_EXTENSIONS {
+        if found.as_ref().is_none_or(|(_, kept)| kept != extension) {
+            let _ = std::fs::remove_file(library.art_dir().join(format!("{hash}.{extension}")));
+        }
+    }
+    let Some((image, extension)) = found else {
         return Ok(None);
     };
     let data = std::fs::read(&image)?;
-    let extension = image
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("bin")
-        .to_ascii_lowercase();
-    // Named after the directory, so every song in it shares one copy.
-    let hash = track_id_for(dir).replace("local:", "folder_");
     let out = library.art_dir().join(format!("{hash}.{extension}"));
     std::fs::write(&out, &data)?;
     let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
 }
 
-/// The best-named cover image directly in `dir`, if any.
-fn cover_in(dir: &Path) -> Option<PathBuf> {
+/// The best-named cover image directly in `dir`, if any, with its extension
+/// in lower case.
+fn cover_in(dir: &Path) -> Option<(PathBuf, String)> {
     std::fs::read_dir(dir)
         .ok()?
         .filter_map(|entry| entry.ok())
@@ -349,10 +361,10 @@ fn cover_in(dir: &Path) -> Option<PathBuf> {
                 return None;
             }
             let rank = COVER_NAMES.iter().position(|name| *name == stem)?;
-            Some((rank, path))
+            Some((rank, path, extension))
         })
         .min()
-        .map(|(_, path)| path)
+        .map(|(_, path, extension)| (path, extension))
 }
 
 /// Minimal PNG/JPEG header reads. Avoids pulling in a full image crate for two
@@ -415,9 +427,15 @@ mod tests {
         for name in ["scan.jpg", "Folder.JPG", "notes.txt"] {
             std::fs::write(dir.join(name), b"x").unwrap();
         }
-        assert_eq!(cover_in(&dir), Some(dir.join("Folder.JPG")));
+        assert_eq!(
+            cover_in(&dir),
+            Some((dir.join("Folder.JPG"), "jpg".to_string()))
+        );
         std::fs::write(dir.join("cover.png"), b"x").unwrap();
-        assert_eq!(cover_in(&dir), Some(dir.join("cover.png")));
+        assert_eq!(
+            cover_in(&dir),
+            Some((dir.join("cover.png"), "png".to_string()))
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

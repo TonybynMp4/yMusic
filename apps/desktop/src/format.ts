@@ -11,7 +11,7 @@ export function formatDuration(ms: number | null): string {
 
 /** A page's total length as YouTube Music writes it: `48 minutes`, `1 hour, 5 minutes`. */
 export function formatTotal(ms: number): string {
-  const minutes = Math.round(ms / 60_000);
+  const minutes = Math.max(1, Math.round(ms / 60_000));
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;

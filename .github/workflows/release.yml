@@ -92,7 +92,8 @@ jobs:
           YMUSIC_INSTALL_FLAVOR: deb
       # With the tray-icon feature on, tauri adds libayatana-appindicator3-1
       # to Depends, with no option to turn it off. The app runs without it
-      # (no tray), so move it back to the Recommends in tauri.conf.json.
+      # (no tray), so drop it from Depends and leave it in the Recommends
+      # that tauri.conf.json sets.
       - name: Recommend the tray library instead of depending on it
         working-directory: apps/desktop/src-tauri/target/release/bundle/deb
         shell: bash
@@ -104,6 +105,10 @@ jobs:
           rm -r pkg
           if dpkg-deb -f "$deb" Depends | grep -q appindicator; then
             echo "::error::$deb still depends on appindicator"
+            exit 1
+          fi
+          if ! dpkg-deb -f "$deb" Recommends | grep -q libayatana-appindicator3-1; then
+            echo "::error::$deb no longer recommends libayatana-appindicator3-1"
             exit 1
           fi
       - name: Write checksums

@@ -379,6 +379,11 @@ impl Player {
     pub fn set_stable_volume(&self, mode: StableVolume) -> Result<(), String> {
         {
             let mut loudness = self.state.loudness.lock().expect("loudness mutex");
+            // Every settings change lands here. Appending again would throw
+            // away what mpv has prefetched. Off matches mpv's own defaults.
+            if loudness.stable == mode {
+                return Ok(());
+            }
             loudness.stable = mode;
             let replaygain = if mode == StableVolume::Off {
                 "no"

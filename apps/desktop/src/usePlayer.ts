@@ -136,10 +136,15 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
    */
   const wantsPaused = useRef(false);
   /**
-   * What mpv has appended after the playing track, as `current>next`. Loading
+   * What mpv has appended after the playing track, as `current>next>quality`. Loading
    * a track replaces mpv's playlist, so every load clears it.
    */
   const queued = useRef<string | null>(null);
+  /**
+   * The track mpv has, set once its load completes or mpv goes on to it.
+   * `loadedId` moves as soon as a load starts, before mpv knows about it.
+   */
+  const inMpv = useRef<TrackId | null>(null);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -179,6 +184,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       // is both pointless and, outside the Tauri webview, an error.
       if (loadedId.current !== null) {
         loadedId.current = null;
+        inMpv.current = null;
         void engine.stop().catch(logPlaybackFailure);
       }
       return;
@@ -205,6 +211,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       const paused = wantsPaused.current;
       queued.current = null;
       await load(lease, paused);
+      inMpv.current = trackId;
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
@@ -233,7 +240,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     ratings.ratingOf(upcomingVideo) === "dislike";
   const joinable = upcomingId !== null && upcomingId !== trackId && !upcomingSkipped;
   useEffect(() => {
-    if (!playing || trackId === null) return;
+    // Until mpv has the track, Rust would ignore a next meant to follow it.
+    if (!playing || trackId === null || inMpv.current !== trackId) return;
     if (!joinable || upcomingId === null) {
       if (queued.current === null) return;
       queued.current = null;
@@ -279,6 +287,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
           const paused = wantsPaused.current;
           queued.current = null;
           await load(lease, paused);
+          inMpv.current = failed;
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
@@ -311,6 +320,10 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     () =>
       engine.subscribe((event) => {
         if (event.type !== "advanced") return;
+        // The user picked another song while mpv was finishing this one. Its
+        // load replaces what mpv started, so the queue stays on it.
+        if (inMpv.current !== currentId.current) return;
+        inMpv.current = event.trackId;
         loadedId.current = event.trackId;
         retried.current = null;
         queued.current = null;

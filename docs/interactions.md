@@ -7,6 +7,7 @@ YouTube Music's own buttons name what to call:
 - *Start mix* on an album or playlist plays the radio playlist `RDAMPL` + its playlist id. An album's playlist id (`OLAK5uy_…`) is the one on its header's play button. An artist's mix is the header's own `RDEM…` playlist.
 - *Save to library* likes the playlist id, the album's `OLAK5uy_…` one included. The header's bookmark toggle says whether it is saved. Your own playlists have no toggle, so they get no item.
 - *Save to playlist* lists the playlists `playlist/get_add_to_playlist` offers, which are the ones you can edit.
+- *New playlist*, at the end of that list, creates the playlist with the song in it and opens its page. YouTube's library can take a while to list a new playlist, so the sidebar shows it from the id `playlist/create` returns until a fetch has it. The sidebar's refresh button fetches the playlists again and rescans the music folders.
 - Signed out, anything that writes to the account is hidden.
 
 Local files have their own items. A folder's menu opens it in the file manager, and a local song's shows its file there, selected (the `FileManager1` D-Bus interface on Linux, Explorer on Windows). The Rust commands take a library folder or a track id, never a raw path, so the webview cannot open arbitrary files.

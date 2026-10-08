@@ -150,6 +150,7 @@ export function App(props: { settings: Settings }) {
     open: go,
     notify: notice.show,
     libraryChanged: playlists.reload,
+    playlistCreated: playlists.created,
     ratingOf: player.ratingOf,
     rate,
   };
@@ -175,7 +176,10 @@ export function App(props: { settings: Settings }) {
             loading={library.loading}
             onAddFolder={() => void library.addFolder()}
             onRemoveFolder={(path) => void library.removeFolder(path)}
-            onRescan={() => void library.rescan()}
+            onRefresh={() => {
+              playlists.reload();
+              if (library.folders.length > 0) void library.rescan();
+            }}
           />
 
           <div className="relative flex min-w-0 flex-1">

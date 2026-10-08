@@ -25,7 +25,7 @@ import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
 import {
   sourceOf,
   videoIdFromTrackId,
-  type Artist, type Track, type TrackId, type VideoId } from "@ymusic/core";
+  type Artist, type BrowseCard, type Track, type TrackId, type VideoId } from "@ymusic/core";
 import type { NewPlaylist, PlaylistTarget, Rating } from "@ymusic/youtube/host";
 import {
   cloneElement,
@@ -79,6 +79,8 @@ export interface Interactions {
   notify: (message: string) => void;
   /** The library's playlists changed, so the sidebar should refetch them. */
   libraryChanged: () => void;
+  /** A playlist was just created, so the sidebar shows it before YouTube lists it. */
+  playlistCreated: (card: BrowseCard) => void;
   /** A song's rating as last seen; null while signed out. */
   ratingOf: (videoId: VideoId) => Rating | null;
   rate: (videoId: VideoId, rating: Rating) => void;
@@ -547,11 +549,16 @@ function NewPlaylistDialog({
     setError(null);
     try {
       const name = title.trim();
-      await engine.createPlaylist({ title: name, description: description.trim(), privacy }, await songs());
-      x.libraryChanged();
-      x.notify(`Saved to ${name}`);
+      const id = await engine.createPlaylist(
+        { title: name, description: description.trim(), privacy },
+        await songs(),
+      );
+      x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
+      x.notify(`Created ${name}`);
       onClose();
       reset();
+      // A new playlist opens, so you land on it. Adding songs to one later does not.
+      x.open({ kind: "playlist", id });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

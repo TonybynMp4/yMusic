@@ -39,7 +39,8 @@ interface Props {
   loading: boolean;
   onAddFolder: () => void;
   onRemoveFolder: (path: string) => void;
-  onRescan: () => void;
+  /** Fetches the playlists again and rescans the folders. */
+  onRefresh: () => void;
 }
 
 const LIKED_MUSIC = "LM";
@@ -109,11 +110,7 @@ export function Sidebar(props: Props) {
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Library
           </h2>
-          <IconButton
-            label="Rescan local folders"
-            onClick={props.onRescan}
-            disabled={props.loading || props.folders.length === 0}
-          >
+          <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>
             {props.loading ? (
               <IconLoader2 size={15} className="animate-spin" />
             ) : (

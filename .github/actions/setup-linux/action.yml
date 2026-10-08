@@ -24,7 +24,7 @@ runs:
         apt-get install -y --no-install-recommends \
           build-essential ca-certificates curl file git pkg-config \
           libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-          libssl-dev librsvg2-dev
+          libssl-dev librsvg2-dev libayatana-appindicator3-dev
 
     # Installs pnpm (the version in packageManager), Node (the version in
     # devEngines.runtime), and the dependencies from the lockfile, with the

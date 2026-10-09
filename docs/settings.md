@@ -44,7 +44,15 @@ The meters start again with each song and whenever the setting or stable volume 
 
 **Pause watch history** stops `useWatchHistory` starting new plays, so nothing new is reported. A play already underway still sends its final report.
 
-**Pause search history** sends searches through a second browsing client with no cookie, so they never reach the account's search history. YouTube's own pause is an account setting the app can't reach. The trade-off is that results aren't personalised while it's on, and the setting says so.
+**Search history** picks where searches are remembered. The recent ones show under the search box while it is focused and empty, each with a button to remove it.
+
+- *YouTube*, the default. Searches go out signed in, so YouTube records them on the account, and the list is the account's own: YouTube Music returns it from the search suggestions request with an empty query (see [Search history](engine.md#search-history)).
+- *On this device*. Searches go through a second browsing client with no cookie, so they never reach the account, and the list is kept in the webview's `localStorage`, newest first, at most 20. A search is added when you press Enter, pick a past search, or play or open a result, rather than at each pause in typing.
+- *Off*. Searches go out without the cookie and nothing is kept. A list already on this device is left alone and hidden.
+
+YouTube's own pause is an account setting the app can't reach, which is why the other two use the cookieless client. The trade-off is that results aren't personalised, and the setting says so. Signed out there is no account to record on: *YouTube* is disabled in the menu and a saved *YouTube* behaves as *On this device*.
+
+Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins.
 
 **Library** lists the music folders with add, remove and rescan, using the same `useLibrary` actions as the sidebar.
 

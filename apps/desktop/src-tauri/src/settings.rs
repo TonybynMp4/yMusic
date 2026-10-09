@@ -31,6 +31,19 @@ pub enum StableVolume {
     LoudOnly,
 }
 
+/// Where searches are remembered.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchHistory {
+    /// On the account, as YouTube Music records them.
+    #[default]
+    Youtube,
+    /// In a list on this device, with searches kept off the account.
+    Device,
+    /// Nowhere.
+    Off,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -42,7 +55,7 @@ pub struct Settings {
     pub audio_device: String,
     pub skip_disliked: bool,
     pub pause_watch_history: bool,
-    pub pause_search_history: bool,
+    pub search_history: SearchHistory,
     /// Closing the window hides it to the tray and playback carries on.
     pub close_to_tray: bool,
     pub check_for_updates: bool,
@@ -60,7 +73,7 @@ impl Default for Settings {
             audio_device: "auto".into(),
             skip_disliked: false,
             pause_watch_history: false,
-            pause_search_history: false,
+            search_history: SearchHistory::Youtube,
             close_to_tray: false,
             check_for_updates: true,
             include_prereleases: false,
@@ -96,7 +109,7 @@ pub struct SettingsStore {
 impl SettingsStore {
     pub fn open(path: PathBuf) -> Self {
         let current = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+            Ok(bytes) => read(&bytes).unwrap_or_else(|error| {
                 log::error!(
                     "ignoring unreadable settings in {}: {error}",
                     path.display()
@@ -138,6 +151,24 @@ impl SettingsStore {
         *current = next.clone();
         Ok(next)
     }
+}
+
+/// Parses a saved file, moving settings an older build wrote under another
+/// name to where this one reads them.
+fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
+    if let Some(fields) = value.as_object_mut() {
+        // The search history switch was once a pause, on or off. Paused meant
+        // nothing recorded anywhere, which is Off now.
+        let paused = fields.remove("pauseSearchHistory");
+        if let (Some(serde_json::Value::Bool(paused)), false) =
+            (paused, fields.contains_key("searchHistory"))
+        {
+            let history = if paused { "off" } else { "youtube" };
+            fields.insert("searchHistory".into(), history.into());
+        }
+    }
+    serde_json::from_value(value)
 }
 
 fn save(path: &PathBuf, settings: &Settings) -> Result<(), String> {
@@ -196,6 +227,25 @@ mod tests {
         let settings = SettingsStore::open(path).get();
         assert_eq!(settings.stable_volume, StableVolume::On);
         assert!(settings.autoplay);
+    }
+
+    #[test]
+    fn a_saved_pause_on_search_history_becomes_off() {
+        let read = |json: &str| read(json.as_bytes()).unwrap().search_history;
+        assert_eq!(
+            read(r#"{ "pauseSearchHistory": true }"#),
+            SearchHistory::Off
+        );
+        assert_eq!(
+            read(r#"{ "pauseSearchHistory": false }"#),
+            SearchHistory::Youtube
+        );
+        assert_eq!(read("{}"), SearchHistory::Youtube);
+        assert_eq!(
+            read(r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#),
+            SearchHistory::Device,
+            "a choice already made wins over the old switch"
+        );
     }
 
     #[test]

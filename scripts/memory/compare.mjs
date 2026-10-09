@@ -11,7 +11,7 @@
 // `summary.json` (the same numbers, for later comparisons).
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -37,7 +37,7 @@ if (!beforeLabel || !outArg) {
 }
 const single = afterLabel === undefined;
 const title = option("--title") ?? (single ? beforeLabel : `${beforeLabel} vs ${afterLabel}`);
-const out = join(ROOT, outArg);
+const out = resolve(ROOT, outArg);
 
 const before = load(beforeLabel);
 const after = single ? before : load(afterLabel);

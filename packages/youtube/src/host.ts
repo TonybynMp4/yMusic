@@ -15,6 +15,7 @@ import type { EngineHost, EngineWorkerApi } from "./rpc.ts";
 
 export type { BotGuardVm, BotGuardChallenge } from "./po-token.ts";
 export type { NewPlaylist, PlaylistTarget } from "./browse.ts";
+export type { PlaylistDetails, PlaylistItem } from "./edit.ts";
 export type { WatchReport } from "./history.ts";
 export type { Rating } from "./rating.ts";
 

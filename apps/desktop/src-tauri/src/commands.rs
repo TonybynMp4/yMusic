@@ -291,11 +291,18 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
 /// Where the memory harness's scripted scenario has got to. The runner reads
 /// these lines from stdout to mark phases on its samples, and `done` ends the
 /// run. Only in builds with the `memory-scenario` feature.
+///
+/// Returns false when the runner opened the app only to sign in
+/// (`YMUSIC_MEMORY_SIGN_IN`), and the scenario then stays out of the way.
 #[cfg(feature = "memory-scenario")]
 #[tauri::command]
-pub fn memory_mark<R: Runtime>(app: tauri::AppHandle<R>, phase: String) {
+pub fn memory_mark<R: Runtime>(app: tauri::AppHandle<R>, phase: String) -> bool {
+    if std::env::var_os("YMUSIC_MEMORY_SIGN_IN").is_some() {
+        return false;
+    }
     println!("ymemory-mark {phase}");
     if phase == "done" {
         app.exit(0);
     }
+    true
 }

@@ -40,6 +40,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Import tested on Windows
 - [x] Account menu with the profile picture
 - [x] An expired session signs the app out and asks to sign in again
+- [ ] The session kept alive: returned cookies saved, `__Secure-1PSIDTS` rotated
 - [x] Album, artist and playlist pages
 - [x] Library playlists in the sidebar, Liked Music first
 - [x] Long playlists load progressively, with virtualized lists

@@ -360,7 +360,7 @@ pub async fn queue_save(
 }
 
 #[tauri::command]
-pub fn queue_save_position(
+pub async fn queue_save_position(
     store: State<'_, QueueStore>,
     position: QueuePosition,
 ) -> Result<(), String> {

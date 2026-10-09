@@ -4,6 +4,7 @@ import {
   IconFolder,
   IconFolderPlus,
   IconHeart,
+  IconLibrary,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconLoader2,
@@ -25,6 +26,8 @@ import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.ts
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
 import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
+
+const LIBRARY: View = { kind: "library", id: "" };
 
 interface Props {
   collapsed: boolean;
@@ -49,7 +52,8 @@ interface Props {
 
 /**
  * One library, whatever the source: YouTube Music playlists and local folders
- * in a single list, told apart by a subtitle rather than split into tabs.
+ * in a single list, told apart by a subtitle rather than split into tabs. The
+ * quick list: the Library page above it has everything, with chips and sorts.
  * Collapses to a rail of artwork and icons.
  */
 export function Sidebar(props: Props) {
@@ -112,6 +116,14 @@ export function Sidebar(props: Props) {
           onClick={props.onSearch}
           title="Search"
           art={<IconSearch size={18} stroke={1.75} />}
+          plain
+        />
+        <Item
+          collapsed={collapsed}
+          active={props.current === viewKey(LIBRARY)}
+          onClick={() => props.onNavigate(LIBRARY)}
+          title="Library"
+          art={<IconLibrary size={18} stroke={1.75} />}
           plain
         />
       </div>
@@ -294,7 +306,7 @@ export function ScanSummary({ report }: { report: ScanReport }) {
 
 /** A folder opens in the file manager; "Local files" is every folder, so has no menu. */
 function subjectOf(view: View): Subject | null {
-  if (view.kind === "settings") return null;
+  if (view.kind === "settings" || view.kind === "library") return null;
   if (view.kind !== "local") return { kind: "collection", route: view };
   return view.id ? { kind: "folder", path: view.id } : null;
 }

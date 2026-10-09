@@ -9,9 +9,14 @@ export type Route =
 
 /**
  * Anything the main area can show besides search: a YouTube Music page, local
- * files (`id` is a folder path, or empty for all of them), or the settings.
+ * files (`id` is a folder path, or empty for all of them), the library page,
+ * or the settings.
  */
-export type View = Route | { kind: "local"; id: string } | { kind: "settings"; id: "" };
+export type View =
+  | Route
+  | { kind: "local"; id: string }
+  | { kind: "library"; id: "" }
+  | { kind: "settings"; id: "" };
 
 export function viewKey(view: View): string {
   return `${view.kind}:${view.id}`;

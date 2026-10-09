@@ -279,21 +279,33 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(S
 /// cover inside an album's subfolder belongs to that album, not the folder.
 /// Songs never take it, they keep the art embedded in their own tags.
 pub(super) fn folder_cover(library: &Library, folder: &Path) -> Result<Option<CoverArt>> {
-    // Named after the folder, so each folder keeps one copy.
-    let name = track_id_for(folder).replace("local:", "folder_");
-    let found = cover_in(folder);
-    // A cover replaced by one of another type, or removed, leaves no stale copy.
-    for extension in COVER_EXTENSIONS {
-        if found.as_ref().is_none_or(|(_, kept)| kept != extension) {
-            let _ = std::fs::remove_file(library.art_dir().join(format!("{name}.{extension}")));
+    // Named after the folder and the image's bytes: a replaced cover gets a
+    // new name, so a new asset URL, and the webview cannot keep the old one.
+    let prefix = format!("{}_", track_id_for(folder).replace("local:", "folder_"));
+    let found = match cover_in(folder) {
+        Some((image, extension)) => {
+            let data = std::fs::read(&image)?;
+            let hex: String = Sha256::digest(&data)[..6]
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            Some((data, format!("{prefix}{hex}.{extension}")))
+        }
+        None => None,
+    };
+    // A cover replaced or removed leaves no stale copy.
+    for entry in std::fs::read_dir(library.art_dir())?.filter_map(|entry| entry.ok()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let kept = found.as_ref().is_some_and(|(_, file)| *file == name);
+        if name.starts_with(&prefix) && !kept {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
-    let Some((image, extension)) = found else {
+    let Some((data, file)) = found else {
         return Ok(None);
     };
-    let data = std::fs::read(&image)?;
-    let out = library.art_dir().join(format!("{name}.{extension}"));
-    if std::fs::read(&out).ok().as_deref() != Some(&data[..]) {
+    let out = library.art_dir().join(file);
+    if !out.exists() {
         std::fs::write(&out, &data)?;
     }
     let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
@@ -394,5 +406,32 @@ mod tests {
             Some((dir.join("cover.png"), "png".to_string()))
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_replaced_folder_cover_gets_a_new_copy_and_the_old_one_goes() {
+        let root = std::env::temp_dir().join(format!("ymusic-folder-cover-{}", std::process::id()));
+        let (folder, art) = (root.join("music"), root.join("art"));
+        std::fs::create_dir_all(&folder).unwrap();
+        let library = Library::open_in_memory(art.clone()).unwrap();
+        let copy = || folder_cover(&library, &folder).unwrap().map(|art| art.path);
+
+        std::fs::write(folder.join("cover.jpg"), b"first").unwrap();
+        let first = copy().expect("a copy of the cover");
+        assert_eq!(
+            copy().as_ref(),
+            Some(&first),
+            "unchanged bytes keep the copy"
+        );
+
+        std::fs::write(folder.join("cover.jpg"), b"second").unwrap();
+        let second = copy().expect("a copy of the new cover");
+        assert_ne!(second, first, "a new image gets a new URL");
+        assert!(!Path::new(&first).exists(), "the old copy is removed");
+
+        std::fs::remove_file(folder.join("cover.jpg")).unwrap();
+        assert_eq!(copy(), None);
+        assert!(!Path::new(&second).exists());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

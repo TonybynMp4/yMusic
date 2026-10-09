@@ -52,16 +52,18 @@ export function useLibrary(query: string) {
     try {
       // A blank search is everything, matching the Rust side.
       const [all, folders] = await Promise.all([librarySearch(""), libraryFolders()]);
+      setState((s) => ({ ...s, all, folders, loading: false, error: null }));
       // Looked up on every reload, which follows each scan, so a cover added,
-      // replaced or removed since shows. A failed lookup only costs the art.
+      // replaced or removed since shows. After the songs, so art never holds
+      // them up, and a failed lookup only costs the art.
       const found = await Promise.all(
-        folders.map((folder) => libraryFolderCover(folder).catch((): Thumbnail[] => [])),
+        folders.map(async (folder) => {
+          const thumbnails = await libraryFolderCover(folder).catch((): Thumbnail[] => []);
+          return [folder, thumbnails] as const;
+        }),
       );
-      const covers: Record<string, Thumbnail[]> = {};
-      folders.forEach((folder, i) => {
-        if (found[i]!.length > 0) covers[folder] = found[i]!;
-      });
-      setState((s) => ({ ...s, all, folders, covers, loading: false, error: null }));
+      const covers = Object.fromEntries(found.filter(([, thumbnails]) => thumbnails.length > 0));
+      setState((s) => ({ ...s, covers }));
     } catch (error) {
       setState((s) => ({ ...s, loading: false, error: String(error) }));
     }

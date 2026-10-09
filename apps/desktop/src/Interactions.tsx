@@ -557,7 +557,10 @@ function NewPlaylistDialog({
     try {
       const name = title.trim();
       const ids = await songs();
-      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
+      const created = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
+      // YouTube answers with the bare id; the library lists playlists by their
+      // browse id, so the sidebar entry is replaced, not doubled, once it lists it.
+      const id = `VL${created}`;
       x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
       x.notify(ids.length > 0 ? `Saved to ${name}` : `Created ${name}`);
       onClose();

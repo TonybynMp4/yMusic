@@ -871,7 +871,12 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
         p.kind === "playlist"
           ? {
               ...p,
-              page: { ...p.page, title: name, description: text || null, privacy },
+              page: {
+                ...p.page,
+                title: name,
+                description: text || null,
+                privacy: details.privacy ?? p.page.privacy,
+              },
             }
           : p,
       );

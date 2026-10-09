@@ -286,7 +286,6 @@ function Artist({
   );
 }
 
-
 /** Two lines until clicked, then the whole thing; clicking again folds it. */
 function Description({ text }: { text: string }) {
   const [open, setOpen] = useState(false);

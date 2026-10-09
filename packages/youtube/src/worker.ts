@@ -31,12 +31,13 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     createMinter: (integrityToken) => connected().botguardCreateMinter(integrityToken),
     mint: (binding) => connected().botguardMint(binding),
   };
-  let engine = new YouTubeEngine(fetch);
+  const sessionExpired = () => void connected().sessionExpired();
+  let engine = new YouTubeEngine(fetch, undefined, sessionExpired);
 
   const api: EngineWorkerApi = {
     connect(remote, hasBotGuard) {
       host = remote;
-      if (hasBotGuard) engine = new YouTubeEngine(fetch, botguard);
+      if (hasBotGuard) engine = new YouTubeEngine(fetch, botguard, sessionExpired);
     },
     setCookie: (cookie) => engine.setCookie(cookie),
     account: () => engine.account(),

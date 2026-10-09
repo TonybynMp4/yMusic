@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -18,6 +18,9 @@ export interface LibraryPlaylistsState {
 }
 
 export const LIKED_MUSIC = "LM";
+
+/** How many times the list is fetched again while a new playlist is missing from it. */
+const LIST_RETRIES = 5;
 
 /**
  * The signed-in account's YouTube Music playlists, Liked Music first. Keyed
@@ -64,9 +67,26 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     };
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- generation reloads the list after a change
   }, [accountKey, generation]);
+  // A new playlist reaches YouTube's library list a while after it exists, so
+  // the list is fetched again, further apart each time, until it has it. Its
+  // entry then swaps the placeholder for YouTube's, with its art.
+  const retries = useRef(0);
+  const waiting = pending.account === accountKey && pending.cards.length > 0;
+  useEffect(() => {
+    if (!waiting || state.loading || retries.current >= LIST_RETRIES) return;
+    const timer = setTimeout(
+      () => {
+        retries.current += 1;
+        setGeneration((g) => g + 1);
+      },
+      (retries.current + 1) * 2000,
+    );
+    return () => clearTimeout(timer);
+  }, [waiting, state.loading]);
   const reload = useCallback(() => setGeneration((g) => g + 1), []);
   const created = useCallback(
     (card: BrowseCard) => {
+      retries.current = 0;
       setPending(({ account, cards }) => ({
         account: accountKey,
         cards: [card, ...(account === accountKey ? cards.filter((c) => c.id !== card.id) : [])],

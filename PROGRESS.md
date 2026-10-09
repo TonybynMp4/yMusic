@@ -131,6 +131,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Library page with chips, sort and grid or list (the Albums and Artists chips are the item below)
 - [ ] Playlist details and editing: rename, description, privacy, reorder, remove, delete
 - [ ] The queue saved across restarts
+- [ ] The volume saved across restarts
 - [ ] Search history, local or the account's
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library

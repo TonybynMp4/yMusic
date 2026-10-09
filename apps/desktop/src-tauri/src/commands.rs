@@ -11,6 +11,7 @@ use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player, Position};
 use crate::queue::{QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsStore};
+use crate::volume::{SavedVolume, VolumeStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
@@ -94,6 +95,12 @@ pub fn player_position(player: State<'_, Player>) -> Option<Position> {
 #[tauri::command]
 pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), String> {
     player.set_volume(volume)
+}
+
+/// The volume the last run left off at, which the player bar starts from.
+#[tauri::command]
+pub fn player_saved_volume(store: State<'_, VolumeStore>) -> SavedVolume {
+    store.get()
 }
 
 #[tauri::command]

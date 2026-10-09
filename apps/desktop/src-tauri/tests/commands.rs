@@ -22,6 +22,7 @@ use ymusic_lib::{
     playback::{EventSink, PlaybackEvent, Player},
     queue::QueueStore,
     settings::SettingsStore,
+    volume::VolumeStore,
     ymusic_commands,
 };
 
@@ -62,6 +63,7 @@ fn every_command_is_reachable_over_ipc() {
     let loaded = LoadedFlag::default();
     player.subscribe(loaded.clone());
     app.manage(player);
+    app.manage(VolumeStore::in_memory());
 
     // Default rather than `attach`: no OS session is registered, which is also
     // the path a desktop without a session bus takes.
@@ -97,6 +99,15 @@ fn every_command_is_reachable_over_ipc() {
             "missing `{field}` in {summary}"
         );
     }
+
+    let volume = get_ipc_response(
+        &webview,
+        request("player_saved_volume", serde_json::json!({})),
+    )
+    .expect("player_saved_volume should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("volume json");
+    assert_eq!(volume, serde_json::json!({ "volume": 1.0, "unmuted": 1.0 }));
 
     // player_load carries the one non-trivial payload: the lease, headers and
     // all. It goes first because mpv rejects a seek with nothing loaded, which

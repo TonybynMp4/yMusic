@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { IconDeviceDesktop, IconFolder } from "@tabler/icons-react";
 import type { Thumbnail } from "@ymusic/core";
-import type { LocalTrack } from "@ymusic/ipc";
+import { libraryFolderCover, type LocalTrack } from "@ymusic/ipc";
 
 import { Header, type BrowseActions } from "./Browse.tsx";
 import { formatTotal } from "./format.ts";
@@ -18,10 +19,11 @@ export function LocalView(props: {
   const count = `${tracks.length} song${tracks.length === 1 ? "" : "s"}`;
   const length = tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
   const details = length > 0 ? `${count} • ${formatTotal(length)}` : count;
+  const cover = useFolderCover(folder, props.all);
   return (
     <>
       <Header
-        thumbnails={folder ? commonArt(tracks) : []}
+        thumbnails={folder ? (cover ?? commonArt(tracks)) : []}
         fallback={
           folder ? (
             <IconFolder size={64} stroke={1.25} />
@@ -53,7 +55,30 @@ export function LocalView(props: {
   );
 }
 
-/** A folder's art: the cover of the album most of its songs are from, so a stray single does not stand for it. */
+/**
+ * The cover image at the top of a folder, looked up again after each rescan
+ * (`all` changes) so a cover added, replaced or removed since shows. Null when
+ * the folder has none, or for "Local files".
+ */
+function useFolderCover(folder: string, all: readonly LocalTrack[]): Thumbnail[] | null {
+  const [cover, setCover] = useState<{ folder: string; thumbnails: Thumbnail[] } | null>(null);
+  useEffect(() => {
+    if (!folder) return;
+    let cancelled = false;
+    libraryFolderCover(folder).then(
+      (thumbnails) => !cancelled && setCover({ folder, thumbnails }),
+      () => !cancelled && setCover({ folder, thumbnails: [] }),
+    );
+    return () => {
+      cancelled = true;
+    };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- all changes after a rescan
+  }, [folder, all]);
+  // A previous folder's cover never shows while this one's loads.
+  return cover?.folder === folder && cover.thumbnails.length > 0 ? cover.thumbnails : null;
+}
+
+/** Without a cover image, a folder's art is the cover of the album most of its songs are from, so a stray single does not stand for it. */
 function commonArt(tracks: readonly LocalTrack[]): Thumbnail[] {
   const counts = new Map<string, { thumbnails: Thumbnail[]; count: number }>();
   for (const track of tracks) {

@@ -233,6 +233,16 @@ impl Library {
         scan::scan_folder(self, folder)
     }
 
+    /// The cover image at the top of a folder in the library, if it has one.
+    /// Only folders the user added: the webview names the path, and should
+    /// not be able to copy images out of arbitrary directories.
+    pub fn folder_cover(&self, path: &str) -> Result<Option<CoverArt>> {
+        if !self.folders()?.iter().any(|folder| folder == path) {
+            return Ok(None);
+        }
+        scan::folder_cover(self, Path::new(path))
+    }
+
     pub(crate) fn art_dir(&self) -> &Path {
         &self.art_dir
     }

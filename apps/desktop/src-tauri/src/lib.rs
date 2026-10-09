@@ -41,6 +41,7 @@ macro_rules! ymusic_commands {
             $crate::commands::media_set_track,
             $crate::commands::media_set_volume,
             $crate::commands::library_folders,
+            $crate::commands::library_folder_cover,
             $crate::commands::library_add_folder,
             $crate::commands::library_remove_folder,
             $crate::commands::library_scan,

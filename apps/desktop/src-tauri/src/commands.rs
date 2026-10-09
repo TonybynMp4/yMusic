@@ -125,11 +125,19 @@ pub fn media_set_volume(media: State<'_, MediaSession>, volume: f64) {
 
 // -- Local library -----------------------------------------------------------
 
-use crate::library::{Library, LocalLease, LocalTrack, ScanReport};
+use crate::library::{CoverArt, Library, LocalLease, LocalTrack, ScanReport};
 
 #[tauri::command]
 pub fn library_folders(library: State<'_, Library>) -> Result<Vec<String>, String> {
     library.folders().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_folder_cover(
+    library: State<'_, Library>,
+    path: String,
+) -> Result<Option<CoverArt>, String> {
+    library.folder_cover(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

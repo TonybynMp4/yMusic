@@ -4,8 +4,8 @@ Folders are scanned into SQLite (`library/scan.rs`). A song's id is a hash of it
 
 ## Cover art
 
-A song's art is the first picture embedded in its tags. A song with none takes the folder's cover image: a file directly beside it named `cover`, `folder`, `front` or `album` (in that order of preference, any case) with a `jpg`, `jpeg`, `png` or `webp` extension.
+A song's art is the first picture embedded in its tags (an ID3 `APIC` frame, a FLAC `PICTURE` block and so on), copied into the art cache once per song because the webview's asset protocol only reaches that directory. A song without one has no art. It never borrows a cover image from its folder.
 
-Both are copied into the art cache, because the webview's asset protocol only reaches that directory. Embedded art is saved once per song, folder covers once per directory, shared by its songs. On a rescan, unchanged songs without embedded art follow the folder's cover as it is now, whether it was added, replaced or removed, and a replaced or removed cover leaves no copy behind.
+A folder's page uses the folder's own cover image: a file at its top level named `cover`, `folder`, `front` or `album` (in that order of preference, any case) with a `jpg`, `jpeg`, `png` or `webp` extension. Images in subfolders belong to their albums and are ignored. The page asks for it when it opens and again after each rescan, through `library_folder_cover`, which copies the image into the cache only when its bytes changed, removes the copy when the image is gone, and only answers for folders the user added.
 
-A folder's page uses the cover of the album most of its songs are from (songs with no album tag count by their art), so one stray single does not stand for the album. Under the title it shows the song count, the total length and the folder's path.
+A folder with no cover image uses the art of the album most of its songs are from (songs with no album tag count by their art), so one stray single does not stand for it. Under the title the page shows the song count, the total length and the folder's path.

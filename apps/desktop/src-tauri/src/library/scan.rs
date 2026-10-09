@@ -1,6 +1,5 @@
 //! Filesystem walk and tag extraction.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use super::{Library, Result};
+use super::{CoverArt, Library, Result};
 
 /// Extensions mpv can decode and lofty can read tags from. Checked before
 /// opening anything, so a folder of JPEGs costs one string compare each.
@@ -25,12 +24,6 @@ const AUDIO_EXTENSIONS: &[&str] = &[
 /// on the stem, in any case, with any of `COVER_EXTENSIONS`.
 const COVER_NAMES: &[&str] = &["cover", "folder", "front", "album"];
 const COVER_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp"];
-/// Starts the file name of a folder cover's copy in the art cache, which is
-/// how a rescan tells it from a song's embedded art.
-const FOLDER_ART_PREFIX: &str = "folder_";
-
-/// A cover art file in the art cache: (path, width, height).
-type Art = (String, u32, u32);
 
 pub fn is_supported_audio(path: &Path) -> bool {
     path.extension()
@@ -99,8 +92,6 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
     let folder_key = folder.to_string_lossy().to_string();
     let mut report = ScanReport::default();
     let mut seen: Vec<String> = Vec::new();
-    // Each directory's cover image, looked up once per scan.
-    let mut covers: HashMap<PathBuf, Option<Art>> = HashMap::new();
 
     for entry in WalkDir::new(folder)
         .follow_links(false)
@@ -115,44 +106,21 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         seen.push(id.clone());
 
         let mtime = mtime_of(path);
-        let known: Option<(i64, Option<Art>)> = library.with_conn(|conn| {
+        let known_mtime: Option<i64> = library.with_conn(|conn| {
             Ok(conn
-                .query_row(
-                    "SELECT mtime, art_path, art_width, art_height FROM tracks WHERE id = ?1",
-                    [&id],
-                    |row| {
-                        let art = match row.get::<_, Option<String>>(1)? {
-                            Some(path) => Some((
-                                path,
-                                row.get::<_, Option<u32>>(2)?.unwrap_or(0),
-                                row.get::<_, Option<u32>>(3)?.unwrap_or(0),
-                            )),
-                            None => None,
-                        };
-                        Ok((row.get(0)?, art))
-                    },
-                )
+                .query_row("SELECT mtime FROM tracks WHERE id = ?1", [&id], |row| {
+                    row.get(0)
+                })
                 .ok())
         })?;
 
-        if let Some((known_mtime, stored)) = &known {
-            if *known_mtime == mtime {
-                // A song without art of its own follows the folder's cover as
-                // it is now: added, replaced or removed since the last scan.
-                // Written only when it changed, so an idle rescan only reads.
-                if stored.as_ref().is_none_or(|art| is_folder_cover(&art.0)) {
-                    let art = folder_cover(library, &mut covers, path);
-                    if art != *stored {
-                        set_art(library, &id, art.as_ref())?;
-                    }
-                }
-                report.unchanged += 1;
-                continue;
-            }
+        if known_mtime == Some(mtime) {
+            report.unchanged += 1;
+            continue;
         }
-        let is_update = known.is_some();
+        let is_update = known_mtime.is_some();
 
-        match index_file(library, &folder_key, &id, path, mtime, &mut covers) {
+        match index_file(library, &folder_key, &id, path, mtime) {
             Ok(()) if is_update => report.updated += 1,
             Ok(()) => report.added += 1,
             Err(err) => report.failed.push(ScanFailure {
@@ -190,7 +158,6 @@ fn index_file(
     id: &str,
     path: &Path,
     mtime: i64,
-    covers: &mut HashMap<PathBuf, Option<Art>>,
 ) -> Result<()> {
     let tagged = Probe::open(path).map_err(to_io)?.read().map_err(to_io)?;
 
@@ -232,9 +199,7 @@ fn index_file(
     let disc_number = tag.and_then(|t| t.disk());
     let year = tag.and_then(|t| t.date().map(|date| u32::from(date.year)));
 
-    let art = tag
-        .and_then(|t| extract_cover_art(library, id, t).ok().flatten())
-        .or_else(|| folder_cover(library, covers, path));
+    let art = tag.and_then(|t| extract_cover_art(library, id, t).ok().flatten());
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -284,7 +249,7 @@ fn index_file(
 /// Writes the first embedded picture to the art cache and returns
 /// (path, width, height). Art is written once per track id and overwritten on
 /// rescan, so the cache cannot grow without bound.
-fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<Art>> {
+fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(String, u32, u32)>> {
     let Some(picture) = tag.pictures().first() else {
         return Ok(None);
     };
@@ -309,58 +274,34 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<Ar
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
 }
 
-fn set_art(library: &Library, id: &str, art: Option<&Art>) -> Result<()> {
-    library.with_conn(|conn| {
-        conn.execute(
-            "UPDATE tracks SET art_path = ?2, art_width = ?3, art_height = ?4 WHERE id = ?1",
-            params![id, art.map(|a| &a.0), art.map(|a| a.1), art.map(|a| a.2)],
-        )?;
-        Ok(())
-    })
-}
-
-/// The cover image saved beside a song, copied to the art cache, for songs
-/// with no embedded art. The webview can only load images from the cache.
-fn folder_cover(
-    library: &Library,
-    covers: &mut HashMap<PathBuf, Option<Art>>,
-    track: &Path,
-) -> Option<Art> {
-    let dir = track.parent()?;
-    covers
-        .entry(dir.to_path_buf())
-        .or_insert_with(|| copy_cover(library, dir).ok().flatten())
-        .clone()
-}
-
-/// Whether an art path is a folder cover's copy rather than embedded art.
-fn is_folder_cover(art_path: &str) -> bool {
-    Path::new(art_path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with(FOLDER_ART_PREFIX))
-}
-
-fn copy_cover(library: &Library, dir: &Path) -> Result<Option<Art>> {
-    // Named after the directory, so every song in it shares one copy.
-    let hash = track_id_for(dir).replace("local:", FOLDER_ART_PREFIX);
-    let found = cover_in(dir);
+/// A folder's own cover image, copied to the art cache because the webview
+/// can only load images from there. Only the folder's top level counts: a
+/// cover inside an album's subfolder belongs to that album, not the folder.
+/// Songs never take it, they keep the art embedded in their own tags.
+pub(super) fn folder_cover(library: &Library, folder: &Path) -> Result<Option<CoverArt>> {
+    // Named after the folder, so each folder keeps one copy.
+    let name = track_id_for(folder).replace("local:", "folder_");
+    let found = cover_in(folder);
     // A cover replaced by one of another type, or removed, leaves no stale copy.
     for extension in COVER_EXTENSIONS {
         if found.as_ref().is_none_or(|(_, kept)| kept != extension) {
-            let _ = std::fs::remove_file(library.art_dir().join(format!("{hash}.{extension}")));
+            let _ = std::fs::remove_file(library.art_dir().join(format!("{name}.{extension}")));
         }
     }
     let Some((image, extension)) = found else {
         return Ok(None);
     };
     let data = std::fs::read(&image)?;
-    let out = library.art_dir().join(format!("{hash}.{extension}"));
+    let out = library.art_dir().join(format!("{name}.{extension}"));
     if std::fs::read(&out).ok().as_deref() != Some(&data[..]) {
         std::fs::write(&out, &data)?;
     }
     let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
-    Ok(Some((out.to_string_lossy().to_string(), width, height)))
+    Ok(Some(CoverArt {
+        path: out.to_string_lossy().to_string(),
+        width,
+        height,
+    }))
 }
 
 /// The best-named cover image directly in `dir`, if any, with its extension

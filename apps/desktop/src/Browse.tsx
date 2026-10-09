@@ -403,7 +403,7 @@ export function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route
       <button
         type="button"
         onClick={() => onOpen(route)}
-        className="flex w-full flex-col gap-2 text-left outline-none"
+        className="group/open flex w-full flex-col gap-2 text-left outline-none"
       >
         <Art
           thumbnails={card.thumbnails}
@@ -415,7 +415,7 @@ export function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route
           fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
         />
         <span className={cn("min-w-0", round && "text-center")}>
-          <span className="line-clamp-2 text-sm group-focus-visible:underline">{card.title}</span>
+          <span className="line-clamp-2 text-sm group-focus-visible/open:underline">{card.title}</span>
           {card.subtitle && (
             <span className="block truncate text-xs text-muted-foreground">{card.subtitle}</span>
           )}

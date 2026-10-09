@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { newCpn, playbackPing, trackingFrom, watchtimePing, type Play } from "./history.ts";
+import {
+  fetchSignatureTimestamp,
+  newCpn,
+  playbackPing,
+  playerIdFrom,
+  signatureTimestampFrom,
+  trackingFrom,
+  watchtimePing,
+  type Play,
+} from "./history.ts";
 
 const play: Play = {
   tracking: {
@@ -95,5 +104,34 @@ describe("reports", () => {
 describe("newCpn", () => {
   it("is sixteen URL-safe characters", () => {
     expect(newCpn()).toMatch(/^[A-Za-z0-9_-]{16}$/);
+  });
+});
+
+describe("fetchSignatureTimestamp", () => {
+  it("finds the player script through iframe_api and reads its timestamp", async () => {
+    const asked: string[] = [];
+    const fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      asked.push(url);
+      const body = url.endsWith("/iframe_api")
+        ? String.raw`var scriptUrl = 'https:\/\/www.youtube.com\/s\/player\/6c5cb4f4\/www-widgetapi.vflset\/www-widgetapi.js';`
+        : "var a={signatureTimestamp:20732,foo:1};";
+      return new Response(body);
+    };
+    expect(await fetchSignatureTimestamp(fetch)).toBe(20732);
+    expect(asked[1]).toBe(
+      "https://www.youtube.com/s/player/6c5cb4f4/player_es6.vflset/en_US/base.js",
+    );
+  });
+
+  it("fails rather than guessing when the script has no timestamp", async () => {
+    const fetch = async (input: RequestInfo | URL) =>
+      new Response(String(input).endsWith("/iframe_api") ? String.raw`player\/abc\/` : "nothing");
+    await expect(fetchSignatureTimestamp(fetch)).rejects.toThrow("no signature timestamp");
+  });
+
+  it("accepts the short sts spelling and rejects ids it cannot find", () => {
+    expect(signatureTimestampFrom("{sts: 19876}")).toBe(19876);
+    expect(playerIdFrom("no player here")).toBeNull();
   });
 });

@@ -25,8 +25,7 @@ export interface YouTubeOptions {
  *
  * `retrieve_player: false` skips downloading and interpreting YouTube's player
  * JavaScript. Search does not need it, and it is the slowest and most brittle
- * part of startup, so nothing that only reads metadata should pay for it. Stream
- * resolution will need a client that does.
+ * part of startup, so nothing that only reads metadata should pay for it.
  */
 export async function createYouTube(options: YouTubeOptions): Promise<Innertube> {
   return Innertube.create({
@@ -61,12 +60,15 @@ export async function createYouTube(options: YouTubeOptions): Promise<Innertube>
  * mpv actually makes, which is why it is here and why swapping it for a
  * plausible-looking alternative will quietly break playback rather than fail.
  *
- * `retrieve_player: true` unlike the search client: the signature has to be
- * deciphered before a URL is playable.
+ * `retrieve_player: false`, like the search client. `VISIONOS` URLs carry no
+ * cipher and no `n` to transform, so youtubei.js hands them over unchanged
+ * either way, and interpreting the player script costs the engine worker
+ * about 200 MB it keeps (docs/memory.md). The play reports need one number
+ * from that script; `fetchSignatureTimestamp` reads it without interpreting.
  */
 export async function createPlayer(options: YouTubeOptions): Promise<Innertube> {
   return Innertube.create({
-    retrieve_player: true,
+    retrieve_player: false,
     client_type: ClientType.VISIONOS,
     fetch: options.fetch,
   });

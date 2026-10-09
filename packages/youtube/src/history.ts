@@ -1,6 +1,8 @@
 import type { VideoId } from "@ymusic/core";
 import type { Innertube } from "youtubei.js";
 
+import type { FetchLike } from "./client.ts";
+
 /**
  * Where YouTube Music's web player reports a song as it plays: once when it
  * starts, which puts it in the account's history, and then every so often
@@ -54,6 +56,36 @@ export async function getPlaybackTracking(
     playbackContext: { contentPlaybackContext: { signatureTimestamp } },
   });
   return trackingFrom(response.data as RawPlayer);
+}
+
+/**
+ * The signature timestamp of YouTube's current player script, which
+ * `getPlaybackTracking` has to send. Read from the script's text with a
+ * pattern, as yt-dlp does, rather than by having youtubei.js interpret the
+ * whole script, which costs far more memory than one number is worth.
+ */
+export async function fetchSignatureTimestamp(fetch: FetchLike): Promise<number> {
+  const api = await fetch("https://www.youtube.com/iframe_api");
+  if (!api.ok) throw new Error(`could not find the player script: ${api.status}`);
+  const id = playerIdFrom(await api.text());
+  if (id === null) throw new Error("could not find the player script's id");
+  const script = await fetch(
+    `https://www.youtube.com/s/player/${id}/player_es6.vflset/en_US/base.js`,
+  );
+  if (!script.ok) throw new Error(`could not fetch the player script: ${script.status}`);
+  const timestamp = signatureTimestampFrom(await script.text());
+  if (timestamp === null) throw new Error("the player script has no signature timestamp");
+  return timestamp;
+}
+
+/** The player script's id, from `iframe_api`, where its path is written `player\/<id>\/`. */
+export function playerIdFrom(iframeApi: string): string | null {
+  return /player\\\/([\w-]+)\\\//.exec(iframeApi)?.[1] ?? null;
+}
+
+export function signatureTimestampFrom(script: string): number | null {
+  const match = /(?:signatureTimestamp|sts)\s*:\s*(\d{5})/.exec(script);
+  return match ? Number(match[1]) : null;
 }
 
 export function trackingFrom(data: RawPlayer): PlaybackTracking | null {

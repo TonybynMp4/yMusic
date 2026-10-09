@@ -68,14 +68,15 @@ impl ScanReport {
 /// file does create a new id -- that is the tradeoff for not having to
 /// content-hash every file on every scan.
 fn track_id_for(path: &Path) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(path.to_string_lossy().as_bytes());
-    let hex: String = hasher
-        .finalize()
+    format!("local:{}", short_hash(path.to_string_lossy().as_bytes()))
+}
+
+/// The first 16 hex characters of the bytes' SHA-256.
+fn short_hash(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)[..8]
         .iter()
         .map(|b| format!("{b:02x}"))
-        .collect();
-    format!("local:{hex}")[..22].to_string()
+        .collect()
 }
 
 /// SQLite has no unsigned integer type, so times are carried as i64.
@@ -285,11 +286,8 @@ pub(super) fn folder_cover(library: &Library, folder: &Path) -> Result<Option<Co
     let found = match cover_in(folder) {
         Some((image, extension)) => {
             let data = std::fs::read(&image)?;
-            let hex: String = Sha256::digest(&data)[..6]
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
-            Some((data, format!("{prefix}{hex}.{extension}")))
+            let file = format!("{prefix}{}.{extension}", short_hash(&data));
+            Some((data, file))
         }
         None => None,
     };

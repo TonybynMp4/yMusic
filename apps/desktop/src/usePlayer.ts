@@ -55,6 +55,15 @@ function radioSeed(queue: QueueState): TrackId | null {
   return null;
 }
 
+/** Stores a lease, dropping the expired ones: a long session resolves hundreds. */
+function keepLease(leases: Map<TrackId, StreamLease>, id: TrackId, lease: StreamLease): void {
+  const now = Date.now();
+  for (const [other, old] of leases) {
+    if (!isLeaseUsable(old, now)) leases.delete(other);
+  }
+  leases.set(id, lease);
+}
+
 /**
  * Joins the pure queue reducer to the real player: whenever the queue's current
  * track changes, resolve it to a lease and hand that to mpv.
@@ -191,7 +200,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       .then((lease) => {
         // Not cached if the quality changed while it resolved; a load already
         // waiting on it still gets it.
-        if (quality.current === requested) leases.current.set(id, lease);
+        if (quality.current === requested) keepLease(leases.current, id, lease);
         return lease;
       })
       .finally(() => {
@@ -305,7 +314,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         void (async () => {
           const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
-          leases.current.set(failed, lease);
+          keepLease(leases.current, failed, lease);
           // A song paused by the user, or cued by a resumed queue, stays
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;

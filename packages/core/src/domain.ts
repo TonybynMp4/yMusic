@@ -99,14 +99,36 @@ export const AlbumPage = z.object({
 });
 export type AlbumPage = z.infer<typeof AlbumPage>;
 
+/** Who can see a playlist, in YouTube's own words. */
+export const PlaylistPrivacy = z.enum(["PUBLIC", "UNLISTED", "PRIVATE"]);
+export type PlaylistPrivacy = z.infer<typeof PlaylistPrivacy>;
+
 export const PlaylistPage = z.object({
   id: z.string().min(1),
   title: z.string(),
+  /** YouTube's summary line under the title: "Playlist • 2024". */
   subtitle: z.string().nullable(),
   thumbnails: z.array(Thumbnail),
   tracks: z.array(Track),
+  /**
+   * Each row's own id within the playlist (YouTube's `setVideoId`), in step
+   * with `tracks`. Removing or moving a row names it by this, since the same
+   * song can be in a playlist twice. Null where YouTube gave none.
+   */
+  itemIds: z.array(z.string().nullable()).default([]),
   /** Whether it is in the library. Null for your own playlists, which cannot be saved. */
   saved: z.boolean().nullable().default(null),
+  /** Who made it. `channelId` is null when the name links nowhere. */
+  owner: Artist.nullable().default(null),
+  description: z.string().nullable().default(null),
+  /** Known only for your own playlists: YouTube says it on the edit form alone. */
+  privacy: PlaylistPrivacy.nullable().default(null),
+  /** How many songs YouTube says it holds, before every row has loaded. */
+  trackCount: z.number().int().nonnegative().nullable().default(null),
+  /** Its total length as YouTube writes it ("1 hour, 5 minutes"), for the same reason. */
+  length: z.string().nullable().default(null),
+  /** Yours to rename, reorder and delete. */
+  editable: z.boolean().default(false),
 });
 export type PlaylistPage = z.infer<typeof PlaylistPage>;
 

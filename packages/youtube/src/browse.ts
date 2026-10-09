@@ -4,6 +4,7 @@ import {
   type Artist,
   BrowseCard,
   PlaylistPage,
+  PlaylistPrivacy,
   type Thumbnail,
   type Track,
 } from "@ymusic/core";
@@ -42,7 +43,8 @@ interface RawHeader {
   subtitle?: RawText | null;
   second_subtitle?: RawText | null;
   strapline_text_one?: RawText | null;
-  description?: RawText | null;
+  /** Text on an artist's header; a shelf holding the text on a playlist's. */
+  description?: RawText | { description?: RawText | null } | null;
   thumbnail?: { contents?: readonly RawThumbnail[] | null } | null;
   thumbnails?: readonly RawThumbnail[] | null;
   /** The round picture on a `MusicVisualHeader`, when YouTube sends one. */
@@ -124,7 +126,11 @@ export function albumFrom(
 }
 
 /** The rest of a long playlist, a page of rows at a time. */
-export type PlaylistMore = () => Promise<{ tracks: Track[]; more: PlaylistMore | null }>;
+export type PlaylistMore = () => Promise<{
+  tracks: Track[];
+  itemIds: (string | null)[];
+  more: PlaylistMore | null;
+}>;
 
 /**
  * The header and the first page of rows, with a way to fetch the rest.
@@ -139,8 +145,13 @@ export async function openPlaylist(
 ): Promise<{ page: PlaylistPage; more: PlaylistMore | null }> {
   const playlistId = playlistIdFromBrowseId(id);
   const first = (await youtube.music.getPlaylist(playlistId)) as unknown as RawPlaylist;
+  // Your own playlist's header wraps the usual one with an edit form, which
+  // youtubei.js leaves out of `header`. The form is what says it is yours.
+  const edit = first.page?.contents_memo?.getType(YTNodes.MusicPlaylistEditHeader)[0] as
+    | RawEditHeader
+    | undefined;
   return {
-    page: playlistFrom(playlistId, first.header ?? {}, first.items ?? []),
+    page: playlistFrom(playlistId, first.header ?? {}, first.items ?? [], edit ?? null),
     more: continuing(first, 1),
   };
 }
@@ -149,15 +160,21 @@ type RawPlaylist = {
   header?: RawHeader | null;
   items?: readonly unknown[] | null;
   has_continuation?: boolean;
+  page?: { contents_memo?: { getType(type: unknown): readonly unknown[] } | null } | null;
   getContinuation(): Promise<RawPlaylist>;
 };
+
+/** The edit form on your own playlist's header. */
+interface RawEditHeader {
+  privacy?: unknown;
+}
 
 /** Bounded, so a runaway continuation cannot keep fetching forever. */
 function continuing(page: RawPlaylist, pages: number): PlaylistMore | null {
   if (!page.has_continuation || pages >= MAX_PLAYLIST_PAGES) return null;
   return async () => {
     const next = await page.getContinuation();
-    return { tracks: tracksFrom(next.items ?? []), more: continuing(next, pages + 1) };
+    return { ...rowsFrom(next.items ?? []), more: continuing(next, pages + 1) };
   };
 }
 
@@ -165,38 +182,100 @@ function continuing(page: RawPlaylist, pages: number): PlaylistMore | null {
 export async function getPlaylist(youtube: Innertube, id: string): Promise<PlaylistPage> {
   const { page, more } = await openPlaylist(youtube, id);
   const tracks = [...page.tracks];
+  const itemIds = [...page.itemIds];
   for (let next = more; next; ) {
     const chunk = await next();
     tracks.push(...chunk.tracks);
+    itemIds.push(...chunk.itemIds);
     next = chunk.more;
   }
-  return { ...page, tracks };
+  return { ...page, tracks, itemIds };
 }
 
 const MAX_PLAYLIST_PAGES = 100;
 
-function tracksFrom(rows: readonly unknown[]): Track[] {
+/** The rows that are songs, each with its id within the playlist. */
+function rowsFrom(rows: readonly unknown[]): { tracks: Track[]; itemIds: (string | null)[] } {
   const tracks: Track[] = [];
+  const itemIds: (string | null)[] = [];
   for (const row of rows) {
     const track = toTrack(row as RawSong);
-    if (track !== null) tracks.push(track);
+    if (track === null) continue;
+    tracks.push(track);
+    itemIds.push(itemIdOf(row as RawRow));
   }
-  return tracks;
+  return { tracks, itemIds };
+}
+
+interface RawRow {
+  menu?: {
+    items?: readonly {
+      endpoint?: { payload?: { actions?: readonly RawEditAction[] | null } | null } | null;
+    }[] | null;
+  } | null;
+}
+
+interface RawEditAction {
+  action?: unknown;
+  setVideoId?: unknown;
+}
+
+/**
+ * A row's `setVideoId`. youtubei.js reads it off the row and drops it, but the
+ * row's "Remove from playlist" item, there only on your own playlists, names
+ * it in the edit it sends. ytmusicapi reads it from the same place.
+ */
+export function itemIdOf(row: RawRow): string | null {
+  for (const item of row.menu?.items ?? []) {
+    for (const action of item?.endpoint?.payload?.actions ?? []) {
+      const id = action?.setVideoId;
+      if (action?.action === "ACTION_REMOVE_VIDEO" && typeof id === "string" && id.length > 0) {
+        return id;
+      }
+    }
+  }
+  return null;
 }
 
 export function playlistFrom(
   id: string,
   header: RawHeader,
   rows: readonly unknown[],
+  edit: RawEditHeader | null = null,
 ): PlaylistPage {
+  const privacy = PlaylistPrivacy.safeParse(edit?.privacy);
+  const counts = countsFrom(text(header.second_subtitle));
   return PlaylistPage.parse({
     id,
     title: text(header.title) ?? "",
-    subtitle: joinSubtitles(header),
+    subtitle: text(header.subtitle),
     thumbnails: headerThumbnails(header),
-    tracks: tracksFrom(rows),
+    ...rowsFrom(rows),
     saved: savedIn(header),
+    owner: artistsFromRuns(header.strapline_text_one)[0] ?? null,
+    description: descriptionOf(header),
+    privacy: privacy.success ? privacy.data : null,
+    trackCount: counts.tracks,
+    length: counts.length,
+    editable: edit !== null,
   });
+}
+
+/**
+ * A playlist header's second line, "1.2K views • 120 tracks • 7+ hours", read
+ * for the count and the length. The views, on someone else's playlist, are
+ * left out.
+ */
+export function countsFrom(line: string | null): { tracks: number | null; length: string | null } {
+  let tracks: number | null = null;
+  let length: string | null = null;
+  for (const part of line?.split("•") ?? []) {
+    const value = part.trim();
+    const count = /^([\d,]+)\s+(?:tracks?|songs?|episodes?)$/i.exec(value);
+    if (count) tracks = Number(count[1]!.replaceAll(",", ""));
+    else if (/\b(?:hours?|minutes?|seconds?)$/i.test(value)) length = value;
+  }
+  return { tracks, length };
 }
 
 export async function getArtist(youtube: Innertube, id: string): Promise<ArtistPage> {
@@ -239,7 +318,7 @@ export function artistFrom(
   return ArtistPage.parse({
     id,
     name: text(header.title) ?? "",
-    description: text(header.description),
+    description: descriptionOf(header),
     thumbnails,
     avatar: foreground.length > 0 ? foreground : squareCrop(thumbnails),
     topSongs,
@@ -426,6 +505,12 @@ function mixOf(raw: RawButton | null | undefined): ArtistPage["mix"] {
   if (playlistId === null) return null;
   const videoId = raw?.endpoint?.payload?.videoId;
   return { playlistId, videoId: typeof videoId === "string" ? videoId : null };
+}
+
+function descriptionOf(header: RawHeader): string | null {
+  const raw = header.description;
+  if (raw && "description" in raw) return text(raw.description);
+  return text(raw as RawText | null | undefined);
 }
 
 function headerThumbnails(header: RawHeader): Thumbnail[] {

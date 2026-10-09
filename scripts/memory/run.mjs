@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // Builds the memory harness's app, runs its scripted scenario and samples it.
 //
-//   node scripts/memory/run.mjs <label> [--runs 3] [--variant fallback] [--skip-build]
+//   node scripts/memory/run.mjs <label> [--runs 3] [--variant fallback|signed-in] [--skip-build]
+//   node scripts/memory/run.mjs --sign-in
 //
 // Each run starts from a clean data directory under the harness's own
 // identifier, `dev.tony.ymusic.memory`, so it runs beside an installed yMusic
-// and never touches its library, settings or session. Results go to
+// and never touches its library, settings or session. `--sign-in` opens the
+// app to sign in once and keeps the saved session in `.memory/account.bin`;
+// `--variant signed-in` puts it back before each run. Results go to
 // `.memory/runs/<label>/<variant>-<n>.json`; `compare.mjs` reads them.
 // See docs/memory.md.
 
@@ -27,16 +30,35 @@ const RUN_LIMIT_MS = 40 * 60_000;
 const SETTLE_MS = 10_000;
 
 const args = process.argv.slice(2);
+const signIn = args.includes("--sign-in");
 const label = args.find((a) => !a.startsWith("--") && !isValue(a));
 const runs = Number(option("--runs") ?? 3);
 const variant = option("--variant") ?? "normal";
-if (!label || !["normal", "fallback"].includes(variant) || !(runs > 0)) {
-  console.error("usage: run.mjs <label> [--runs 3] [--variant normal|fallback] [--skip-build]");
+if (
+  (!label && !signIn) ||
+  !["normal", "fallback", "signed-in"].includes(variant) ||
+  !(runs > 0)
+) {
+  console.error(
+    "usage: run.mjs <label> [--runs 3] [--variant normal|fallback|signed-in] [--skip-build]\n" +
+      "       run.mjs --sign-in",
+  );
   process.exit(2);
 }
 
-const binary = join(ROOT, ".memory/bin", variant, "ymusic");
+/** The signed-in runs use the normal build; only what is in its folders differs. */
+const buildVariant = variant === "fallback" ? "fallback" : "normal";
+const binary = join(ROOT, ".memory/bin", buildVariant, "ymusic");
+const savedAccount = join(ROOT, ".memory/account.bin");
 if (!args.includes("--skip-build")) build();
+if (signIn) {
+  await captureSession();
+  process.exit(0);
+}
+if (variant === "signed-in" && !existsSync(savedAccount)) {
+  console.error("no saved session: run `node scripts/memory/run.mjs --sign-in` first");
+  process.exit(2);
+}
 
 const out = join(ROOT, ".memory/runs", label);
 mkdirSync(out, { recursive: true });
@@ -55,7 +77,7 @@ for (let n = 1; n <= runs; n++) {
 }
 
 function build() {
-  console.log(`building the ${variant} scenario build`);
+  console.log(`building the ${buildVariant} scenario build`);
   execFileSync(
     "pnpm",
     [
@@ -74,7 +96,7 @@ function build() {
       stdio: "inherit",
       env: {
         ...process.env,
-        VITE_MEMORY_SCENARIO: variant === "fallback" ? "fallback" : "on",
+        VITE_MEMORY_SCENARIO: buildVariant === "fallback" ? "fallback" : "on",
         // Its own target directory, so the feature does not invalidate the
         // usual release build's artifacts and the other way round.
         CARGO_TARGET_DIR: join(ROOT, ".memory/target"),
@@ -87,6 +109,10 @@ function build() {
 
 async function runOnce() {
   for (const dir of dataDirs()) rmSync(dir, { recursive: true, force: true });
+  if (variant === "signed-in") {
+    mkdirSync(dataDirs()[0], { recursive: true });
+    copyFileSync(savedAccount, join(dataDirs()[0], "account.bin"));
+  }
   const meta = {
     label,
     variant,
@@ -130,6 +156,32 @@ async function runOnce() {
     warnings: warnings(),
     samples,
   };
+}
+
+/**
+ * Opens the app from clean folders and waits for a sign-in, then keeps the
+ * session the app saved. Its key stays in the keyring under the harness's own
+ * entry, `ymusic-memory`, so the copy only opens for this build.
+ */
+async function captureSession() {
+  for (const dir of dataDirs()) rmSync(dir, { recursive: true, force: true });
+  const saved = join(dataDirs()[0], "account.bin");
+  console.log("sign in from the app's Sign in button; it closes once the session is saved");
+  const child = spawn(binary, [], { stdio: "ignore" });
+  const exited = new Promise((resolve) => child.on("exit", resolve));
+  while (child.exitCode === null && !existsSync(saved)) await sleep(1_000);
+  if (child.exitCode !== null) {
+    console.error("the app closed before a session was saved");
+    process.exit(1);
+  }
+  // The file is renamed into place whole, but the app may still be writing
+  // the library it fetched after signing in; none of that is kept.
+  await sleep(3_000);
+  mkdirSync(dirname(savedAccount), { recursive: true });
+  copyFileSync(saved, savedAccount);
+  child.kill("SIGTERM");
+  await exited;
+  console.log(`saved the session to ${savedAccount}`);
 }
 
 /** The app's own warnings and errors from the run, such as a stream mpv refused. */

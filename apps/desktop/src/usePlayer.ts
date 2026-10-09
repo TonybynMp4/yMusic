@@ -50,6 +50,13 @@ function radioSeed(queue: QueueState): TrackId | null {
 }
 
 /**
+ * The memory harness's build (docs/memory.md) plays test songs on whatever
+ * account it was signed in with, so it neither reports plays to the account's
+ * history nor replaces its queue.
+ */
+const OFF_THE_RECORD = Boolean(import.meta.env.VITE_MEMORY_SCENARIO);
+
+/**
  * Joins the pure queue reducer to the real player: whenever the queue's current
  * track changes, resolve it to a lease and hand that to mpv.
  *
@@ -117,7 +124,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
   };
-  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory || OFF_THE_RECORD);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -432,7 +439,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const shared = useRef<TrackId | null>(null);
   const { learn, now } = ratings;
   useEffect(() => {
-    if (!playing || trackId === null || shared.current === trackId) return;
+    if (!playing || trackId === null || shared.current === trackId || OFF_THE_RECORD) return;
     const videoId = videoIdFromTrackId(trackId);
     if (videoId === null) return;
     shared.current = trackId;

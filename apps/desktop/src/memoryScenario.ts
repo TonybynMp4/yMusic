@@ -24,6 +24,7 @@ export interface ScenarioControls {
   trackId: string | null;
   status: string;
   durationMs: number | null;
+  signedIn: boolean;
 }
 
 /** Ten artists, one album of each and each one's songs list. */
@@ -100,6 +101,9 @@ async function session(controls: () => ScenarioControls): Promise<void> {
 
   await mark("idle");
   await sleep(IDLE_START_MS);
+  // Checked once the session has had time to load, so a signed-in run whose
+  // saved session no longer works shows in the report.
+  await mark(controls().signedIn ? "account signed-in" : "account signed-out");
 
   await mark("browse");
   const pages: View[] = [

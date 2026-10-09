@@ -287,11 +287,7 @@ impl Player {
         };
 
         self.set_property("pause", request.start_paused)?;
-        let mut options = format!("af={}", quote_option(&filter));
-        if let Some(start_ms) = request.start_ms.filter(|&ms| ms > 0) {
-            options.push_str(&format!(",start={}", start_ms as f64 / 1000.0));
-        }
-        self.loadfile_with(&request.url, "replace", &options)
+        self.loadfile(&request.url, "replace", &filter, request.start_ms)
     }
 
     /// The track mpv has and how far into it playback is, or None with
@@ -352,7 +348,7 @@ impl Player {
             .lock()
             .expect("loudness mutex")
             .filter(next.loudness_db);
-        self.loadfile(&next.url, "append", &filter)
+        self.loadfile(&next.url, "append", &filter, None)
     }
 
     /// Appends the next track again, so a change to stable volume or the
@@ -370,15 +366,21 @@ impl Player {
     /// global `af` back when a file with its own ends, so every file gets
     /// one, or a song loaded over an appended one would play with whatever
     /// that put back.
-    fn loadfile(&self, url: &str, flags: &str, filter: &str) -> Result<(), String> {
-        self.loadfile_with(url, flags, &format!("af={}", quote_option(filter)))
-    }
-
-    fn loadfile_with(&self, url: &str, flags: &str, options: &str) -> Result<(), String> {
+    fn loadfile(
+        &self,
+        url: &str,
+        flags: &str,
+        filter: &str,
+        start_ms: Option<u64>,
+    ) -> Result<(), String> {
+        let mut options = format!("af={}", quote_option(filter));
+        if let Some(start_ms) = start_ms.filter(|&ms| ms > 0) {
+            options.push_str(&format!(",start={}", start_ms as f64 / 1000.0));
+        }
         if self.loadfile_index {
-            self.command("loadfile", &[url, flags, "-1", options])
+            self.command("loadfile", &[url, flags, "-1", &options])
         } else {
-            self.command("loadfile", &[url, flags, options])
+            self.command("loadfile", &[url, flags, &options])
         }
     }
 

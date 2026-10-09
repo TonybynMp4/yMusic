@@ -78,31 +78,32 @@ async function load(route: Route, set: (state: BrowseState) => void): Promise<vo
         loadingMore: false,
       });
       return;
-    case "playlist": {
-      const first = await engine.playlist(route.id);
-      let page = first.page;
-      set({
-        status: "ready",
-        page: { kind: "playlist", page },
-        loadingMore: first.more !== null,
-      });
-      for (let more = first.more; more !== null;) {
-        try {
-          const next = await engine.playlistMore(more);
-          page = { ...page, tracks: [...page.tracks, ...next.tracks] };
-          more = next.more;
-        } catch (error) {
-          // What arrived stays; the rest is simply missing until next launch.
-          console.error("could not load the rest of the playlist", error);
-          more = null;
-        }
-        set({
-          status: "ready",
-          page: { kind: "playlist", page },
-          loadingMore: more !== null,
-        });
-      }
+    case "playlist":
+      await follow(await engine.playlist(route.id), set);
+  }
+}
+
+/**
+ * Shows a playlist's first page, then the rest a page of rows at a time, so a
+ * long playlist is browsable at once and complete in the end.
+ */
+async function follow(
+  first: Awaited<ReturnType<typeof engine.playlist>>,
+  set: (state: BrowseState) => void,
+): Promise<void> {
+  let page = first.page;
+  set({ status: "ready", page: { kind: "playlist", page }, loadingMore: first.more !== null });
+  for (let more = first.more; more !== null; ) {
+    try {
+      const next = await engine.playlistMore(more);
+      page = { ...page, tracks: [...page.tracks, ...next.tracks] };
+      more = next.more;
+    } catch (error) {
+      // What arrived stays; the rest is simply missing until next launch.
+      console.error("could not load the rest of the playlist", error);
+      more = null;
     }
+    set({ status: "ready", page: { kind: "playlist", page }, loadingMore: more !== null });
   }
 }
 
@@ -120,12 +121,11 @@ export function newPlaylistRoute(id: string, tracks: number): Route {
   entries.delete(viewKey(route));
   entryFor(route, async (_, set) => {
     for (let attempt = 1; ; attempt++) {
-      const { page } = await engine.playlist(id);
-      const ready = page.title !== "" && page.tracks.length >= tracks;
-      if (ready || attempt === NEW_PLAYLIST_TRIES) {
-        set({ status: "ready", page: { kind: "playlist", page }, loadingMore: false });
-        return;
-      }
+      const first = await engine.playlist(id);
+      // A first page with more to come is full, so the songs are all there.
+      const served =
+        first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
+      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(first, set);
       await new Promise((resolve) => setTimeout(resolve, attempt * 500));
     }
   });

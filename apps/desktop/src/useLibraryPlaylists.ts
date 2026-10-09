@@ -38,29 +38,36 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     account: null,
     cards: [],
   });
+  // Whose list `state.playlists` is.
+  const listed = useRef<string | null>(null);
   useEffect(() => {
     if (accountKey === null) {
       setState({ playlists: [], loading: false, error: null });
       return;
     }
     let cancelled = false;
-    setState((s) => ({ ...s, loading: true }));
+    // Another account's list never stays up while this one's loads.
+    const same = listed.current === accountKey;
+    setState((s) => ({ ...s, playlists: same ? s.playlists : [], loading: true }));
     engine.libraryPlaylists().then(
       (playlists) => {
         if (cancelled) return;
+        listed.current = accountKey;
         setState({ playlists, loading: false, error: null });
         setPending(({ account, cards }) => ({
           account,
           cards: cards.filter((card) => !playlists.some((p) => p.id === card.id)),
         }));
       },
+      // The last good list stays, so a failed refetch (a retry for a new
+      // playlist, say) does not blank the sidebar.
       (error: unknown) =>
         !cancelled &&
-        setState({
-          playlists: [],
+        setState((s) => ({
+          ...s,
           loading: false,
           error: error instanceof Error ? error.message : String(error),
-        }),
+        })),
     );
     return () => {
       cancelled = true;
@@ -97,12 +104,12 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
   );
   // New playlists go where YouTube Music puts them: first, after Liked Music.
   const playlists = useMemo(() => {
-    if (pending.account !== accountKey || state.error !== null) return state.playlists;
+    if (pending.account !== accountKey) return state.playlists;
     const shown = pending.cards.filter((card) => !state.playlists.some((p) => p.id === card.id));
     if (shown.length === 0) return state.playlists;
     const liked = state.playlists.filter((p) => p.id === LIKED_MUSIC);
     const rest = state.playlists.filter((p) => p.id !== LIKED_MUSIC);
     return [...liked, ...shown, ...rest];
-  }, [pending, accountKey, state.playlists, state.error]);
+  }, [pending, accountKey, state.playlists]);
   return { ...state, playlists, reload, created };
 }

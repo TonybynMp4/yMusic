@@ -18,6 +18,8 @@ export interface RawSong {
   duration?: { seconds?: unknown } | null;
   album?: { id?: unknown; name?: unknown } | null;
   artists?: readonly { name?: unknown; channel_id?: unknown }[] | null;
+  /** A video row's channels, which youtubei.js keeps apart from a song's artists. */
+  authors?: readonly { name?: unknown; channel_id?: unknown }[] | null;
   thumbnails?: readonly RawThumbnail[] | null;
   badges?: readonly { icon_type?: unknown }[] | null;
   /** The release year, as text, when the row carries one. */
@@ -50,10 +52,13 @@ export function toTrack(raw: RawSong): Track | null {
   const durationMs = typeof seconds === "number" && seconds > 0 ? Math.round(seconds * 1000) : null;
 
   const album = toAlbum(raw);
+  const artists = toArtists(raw.artists);
   const candidate = {
     id: trackIdForVideo(videoId as VideoId),
     title,
-    artists: toArtists(raw.artists),
+    // A music video in a playlist has no artists, only the channel that posted
+    // it, which YouTube Music shows in the artist's place.
+    artists: artists.length > 0 ? artists : toArtists(raw.authors),
     album: album.name,
     albumId: album.id,
     durationMs,

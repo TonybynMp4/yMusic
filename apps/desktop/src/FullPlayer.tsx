@@ -1,9 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
 import type { QueueState, Track, TrackId } from "@ymusic/core";
 
 import { Art } from "@/components/Art";
-import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Queue } from "./Queue.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
@@ -68,7 +66,8 @@ export function FullPlayer({
   const year = useSongYear(track);
 
   // Escape collapses, because a view that covers everything needs a way out
-  // that is not hunting for the one small chevron.
+  // from the keyboard. Back in the top bar and the player bar's arrow are the
+  // ones for the mouse, as in YouTube Music.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onCollapse();
@@ -81,13 +80,7 @@ export function FullPlayer({
 
   return (
     <section className="absolute inset-0 z-10 flex flex-col bg-background">
-      <div className="px-3 py-2">
-        <IconButton label="Collapse player" onClick={onCollapse}>
-          <IconChevronDown size={18} stroke={1.75} />
-        </IconButton>
-      </div>
-
-      <div className="flex min-h-0 flex-1 gap-8 px-8 pb-8">
+      <div className="flex min-h-0 flex-1 gap-8 p-8">
         <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
           <div className="relative w-full max-w-md">
             {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}

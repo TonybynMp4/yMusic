@@ -277,7 +277,10 @@ pub fn queue_load(store: State<'_, QueueStore>) -> SavedQueue {
 
 /// Replaces the saved queue. Null clears it.
 #[tauri::command]
-pub fn queue_save(store: State<'_, QueueStore>, queue: serde_json::Value) -> Result<(), String> {
+pub async fn queue_save(
+    store: State<'_, QueueStore>,
+    queue: serde_json::Value,
+) -> Result<(), String> {
     store.save_queue(&queue)
 }
 

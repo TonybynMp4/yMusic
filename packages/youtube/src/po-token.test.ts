@@ -65,5 +65,9 @@ live("the PO-token fallback", () => {
     // And the token is what did it: the same URL without one is refused.
     url.searchParams.delete("pot");
     expect(await status(url)).toBe(403);
+
+    // A second track goes through the decipher code compiled for the first.
+    const second = await engine.resolve("lYBUbBu4W08" as VideoId, { fallback: true });
+    expect(await status(new URL(second.url))).toBe(206);
   });
 });

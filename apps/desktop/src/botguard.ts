@@ -9,10 +9,16 @@ import type { BotGuardVm } from "@ymusic/youtube/host";
  * `src-tauri/src/botguard.rs`). This page's CSP stays as strict as it was; all
  * that crosses between the two is a MessagePort carrying the challenge in and
  * tokens out. Created on first use: most sessions never need a PO token.
+ * Removed again after a while unused, since BotGuard's VM and the challenge
+ * it ran stay in memory for as long as the frame does. The minter goes with
+ * it, and `PoTokenMinter` builds a new one on the next call.
  */
 
 /** Generous: the frame bounds each BotGuard stage itself, at five seconds. */
 const CALL_TIMEOUT_MS = 20_000;
+
+/** A fallback session mints a few tokens at its start, then none for hours. */
+const IDLE_CLOSE_MS = 5 * 60 * 1000;
 
 type Method = "load" | "createMinter" | "mint";
 
@@ -22,11 +28,17 @@ interface Reply {
   error?: string;
 }
 
-let port: Promise<MessagePort> | null = null;
+interface Frame {
+  iframe: HTMLIFrameElement;
+  port: MessagePort;
+}
+
+let frame: Promise<Frame> | null = null;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
 let nextId = 0;
 const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
 
-function openFrame(): Promise<MessagePort> {
+function openFrame(): Promise<Frame> {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
@@ -58,7 +70,7 @@ function openFrame(): Promise<MessagePort> {
         else waiting.resolve(data.result);
       };
       iframe.contentWindow!.postMessage(null, event.origin, [channel.port2]);
-      resolve(channel.port1);
+      resolve({ iframe, port: channel.port1 });
     }
 
     window.addEventListener("message", onReady);
@@ -67,14 +79,30 @@ function openFrame(): Promise<MessagePort> {
   });
 }
 
+function closeFrame(): void {
+  const closing = frame;
+  frame = null;
+  void closing?.then(({ iframe, port }) => {
+    port.close();
+    iframe.remove();
+  });
+}
+
+/** Restarts the countdown to closing the frame, once nothing is waiting on it. */
+function closeWhenIdle(): void {
+  clearTimeout(idleTimer);
+  if (pending.size === 0) idleTimer = setTimeout(closeFrame, IDLE_CLOSE_MS);
+}
+
 async function call<T>(method: Method, args: object): Promise<T> {
-  port ??= openFrame().catch((error: unknown) => {
-    port = null;
+  clearTimeout(idleTimer);
+  frame ??= openFrame().catch((error: unknown) => {
+    frame = null;
     throw error;
   });
-  const connected = await port;
+  const { port } = await frame;
   const id = nextId++;
-  return new Promise<T>((resolve, reject) => {
+  const result = new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error(`BotGuard ${method} timed out`));
@@ -89,8 +117,9 @@ async function call<T>(method: Method, args: object): Promise<T> {
         reject(error);
       },
     });
-    connected.postMessage({ id, method, args });
+    port.postMessage({ id, method, args });
   });
+  return result.finally(closeWhenIdle);
 }
 
 export const botguard: BotGuardVm = {

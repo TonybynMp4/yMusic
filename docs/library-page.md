@@ -12,7 +12,7 @@
 
 Signed out, only Local files is left, and the chip row is hidden. The chip chosen last comes back when signing in again.
 
-Songs, Albums and Artists load when their chip is first opened and are kept for the run, per account (`useSavedLibrary.ts`). Saving or removing anything, and Refresh, drops them so the next look fetches again. A failed load is forgotten when its chip is left, so opening it again retries.
+Songs, Albums and Artists load when their chip is first opened and are kept for the run, per account (`useSavedLibrary.ts`). Saving or removing anything, and Refresh, drops them so the next look fetches again; liking or unliking a song drops only Songs. A list on screen stays until its reload has every page. A failed load is forgotten when its chip is left, so opening it again retries.
 
 ## Sort and layout
 

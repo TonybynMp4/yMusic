@@ -22,30 +22,48 @@ interface Entry {
 }
 
 const entries = new Map<string, Entry>();
+/** What a dropped list held, shown again while its reload runs. */
+const previous = new Map<string, (BrowseCard | Track)[]>();
 
 function entryFor(account: string, kind: SavedKind): Entry {
   const key = `${account}\n${kind}`;
   let entry = entries.get(key);
   if (!entry) {
-    const created: Entry = { state: { status: "loading" }, listeners: new Set() };
+    const seed = previous.get(key);
+    previous.delete(key);
+    const created: Entry = {
+      state: seed ? { status: "ready", items: seed, loadingMore: false } : { status: "loading" },
+      listeners: new Set(),
+    };
     const set = (state: Entry["state"]) => {
       created.state = state;
       for (const listener of created.listeners) listener();
     };
     entries.set(key, created);
-    void load(kind, set, () => entries.get(key) !== created).catch((error: unknown) =>
-      set({ status: "error", error: error instanceof Error ? error.message : String(error) }),
+    void load(kind, set, () => entries.get(key) !== created, seed !== undefined).catch(
+      (error: unknown) => {
+        // A failed reload keeps the list it was refreshing.
+        if (seed) console.error("could not reload the library", error);
+        else {
+          set({ status: "error", error: error instanceof Error ? error.message : String(error) });
+        }
+      },
     );
     entry = created;
   }
   return entry;
 }
 
-/** `dropped` turns true once `forgetSaved` lets go of the entry, which stops the paging. */
+/**
+ * `dropped` turns true once `forgetSaved` lets go of the entry, which stops the
+ * paging. A `quiet` reload keeps the old list until every page is in, rather
+ * than shrinking it to the first page.
+ */
 async function load(
   kind: SavedKind,
   set: (state: Entry["state"]) => void,
   dropped: () => boolean,
+  quiet: boolean,
 ): Promise<void> {
   if (kind === "albums") {
     set({ status: "ready", items: await engine.libraryAlbums(), loadingMore: false });
@@ -58,7 +76,7 @@ async function load(
   // Songs arrive like a long playlist: the first page shows at once.
   const first = await engine.librarySongs();
   let tracks = first.tracks;
-  set({ status: "ready", items: tracks, loadingMore: first.more !== null });
+  if (!quiet) set({ status: "ready", items: tracks, loadingMore: first.more !== null });
   for (let more = first.more; more !== null && !dropped(); ) {
     try {
       const next = await engine.playlistMore(more);
@@ -68,13 +86,22 @@ async function load(
       console.error("could not load the rest of the library's songs", error);
       more = null;
     }
-    set({ status: "ready", items: tracks, loadingMore: more !== null });
+    if (!quiet) set({ status: "ready", items: tracks, loadingMore: more !== null });
   }
+  if (quiet && !dropped()) set({ status: "ready", items: tracks, loadingMore: false });
 }
 
-/** Drops every list, so the next look fetches them again: after a save, a removal, or Refresh. */
-export function forgetSaved(): void {
-  entries.clear();
+/**
+ * Drops the lists of `kind`, or every list, so the next look fetches them
+ * again: after a save, a removal, a like, or Refresh. A list on screen stays
+ * there until its reload comes back.
+ */
+export function forgetSaved(kind?: SavedKind): void {
+  for (const [key, entry] of entries) {
+    if (kind !== undefined && !key.endsWith(`\n${kind}`)) continue;
+    entries.delete(key);
+    if (entry.state.status === "ready") previous.set(key, entry.state.items);
+  }
   generation += 1;
   for (const listener of forgotten) listener();
 }

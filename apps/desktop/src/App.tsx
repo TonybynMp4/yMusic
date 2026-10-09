@@ -132,7 +132,7 @@ export function App(props: { settings: Settings }) {
         if (value === "like") notice.show("Saved to Liked Music");
         else if (before === "like") notice.show("Removed from Liked Music");
         // A liked song is a saved one, so the library's Songs chip changes too.
-        if (value === "like" || before === "like") forgetSaved();
+        if (value === "like" || before === "like") forgetSaved("songs");
       })
       .catch((error: unknown) =>
         notice.show(error instanceof Error ? error.message : String(error)),

@@ -23,4 +23,11 @@ The log records each join (`went on to <id> with no gap`).
 
 Volume is perceptual. mpv's `volume` property already applies a cubic taper, so the UI sends the slider position as a linear fraction and never applies the curve again.
 
+The volume carries over between launches. Rust saves two numbers in `volume.json` beside the settings file: the volume, and the last one above zero, which is the level Unmute goes back to. Both are slider fractions.
+
+- Rust observes mpv's `volume` and saves it once it has stayed put for half a second, not at every step of a drag. Watching mpv rather than the slider also catches the GNOME and KDE media widgets, which set the volume over MPRIS. Windows has no equivalent: SMTC leaves volume to the system, so its flyout never reaches mpv.
+- The last level above zero comes from those settled values only, as the player bar's own unmute level does. mpv sees every step of a drag, so a drag down to zero would otherwise save a near-silent step as the level to unmute to.
+- At launch Rust sets mpv's volume before anything loads, and the frontend reads the saved pair (`player_saved_volume`) before its first render, alongside the settings. The player bar starts from the saved volume, with the last level above zero as the level to unmute to. Quitting while muted comes back muted, and Unmute restores the level from before.
+- A change made in the last half second before quitting can be lost: there is nothing to flush on exit.
+
 The queue, in the full player's Up next tab, keeps the playing song in view. Opening it centres that row before the first paint. When the song changes and the new row is out of view, the list scrolls to it, unless the old row was out of view too: then you had scrolled away to read the list, and it stays where you left it. While the playing row is hidden, a "Now playing" button at the top or bottom edge, on the side where the row is, scrolls back to it. The button is hidden during a drag, which scrolls the list from those same edges, and a drag that moves rows around the playing one does not count as the song changing. Rows are a fixed 48 px, so the row's offset is its position times that, with no measuring.

@@ -6,7 +6,12 @@
 //! all is logged and replaced by the defaults: losing a preference is a much
 //! better outcome than a player that refuses to start.
 
-use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
+use std::{
+    fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -133,23 +138,23 @@ impl SettingsStore {
         let mut current = self.current.lock().expect("settings mutex");
         let next = current.merge(patch)?;
         if let Some(path) = &self.path {
-            save(path, &next)?;
+            write_json(path, &next).map_err(|error| format!("could not save settings: {error}"))?;
         }
         *current = next.clone();
         Ok(next)
     }
 }
 
-fn save(path: &PathBuf, settings: &Settings) -> Result<(), String> {
-    let json = serde_json::to_vec_pretty(settings).expect("settings serialize");
+/// Writes `value` as JSON to `path`, aside first and renamed over, so a crash
+/// mid-write leaves the old file.
+pub fn write_json(path: &Path, value: &impl Serialize) -> std::io::Result<()> {
+    let json = serde_json::to_vec_pretty(value).expect("json serialize");
     if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).map_err(|error| format!("could not save settings: {error}"))?;
+        fs::create_dir_all(dir)?;
     }
-    // Written aside and renamed over, so a crash mid-write leaves the old file.
     let partial = path.with_extension("json.partial");
-    fs::write(&partial, json)
-        .and_then(|()| fs::rename(&partial, path))
-        .map_err(|error| format!("could not save settings: {error}"))
+    fs::write(&partial, json)?;
+    fs::rename(&partial, path)
 }
 
 #[cfg(test)]

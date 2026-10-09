@@ -7,7 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ymusic_lib::playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player};
+use ymusic_lib::{
+    playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player},
+    volume::{VolumeStore, SETTLE},
+};
 
 #[derive(Clone, Default)]
 struct Recorder(Arc<Mutex<Vec<PlaybackEvent>>>);
@@ -384,5 +387,39 @@ fn streams_https_audio_with_custom_headers() {
         recorder.errors().is_empty(),
         "unexpected errors: {:?}",
         recorder.errors()
+    );
+}
+
+/// The saved volume is mpv's, so it starts the next run where this one left
+/// off, and only the settled end of a drag down to mute becomes the level to
+/// unmute to.
+#[test]
+fn the_volume_is_saved_once_it_settles() {
+    let (player, _events) = player();
+    let path = std::env::temp_dir()
+        .join(format!("ymusic-saved-volume-{}", std::process::id()))
+        .join("volume.json");
+    let _ = std::fs::remove_file(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, r#"{ "volume": 0.6, "unmuted": 0.6 }"#).unwrap();
+
+    let store = VolumeStore::open(path.clone());
+    player
+        .remember_volume(store.clone())
+        .expect("remember volume");
+
+    for step in [50, 30, 10, 2, 0] {
+        player.set_volume(step as f64 / 100.0).expect("set volume");
+    }
+    let deadline = Instant::now() + SETTLE * 4;
+    while store.get().volume != 0.0 {
+        assert!(Instant::now() < deadline, "the volume was never saved");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let saved = VolumeStore::open(path).get();
+    assert_eq!(saved.volume, 0.0);
+    assert_eq!(
+        saved.unmuted, 0.6,
+        "no step of the drag is the unmute level"
     );
 }

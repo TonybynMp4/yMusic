@@ -38,6 +38,8 @@ interface Props {
   onSeek: (positionMs: number) => void;
   /** A slider position in 0..1, not an amplitude. See `@ymusic/core`. */
   volume: number;
+  /** The saved level to unmute to, for a launch that starts muted. */
+  unmutedVolume: number;
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
   onShuffle: (shuffle: boolean) => void;
@@ -94,7 +96,7 @@ export function NowPlaying(props: Props) {
    * zero. It is held while the slider is dragged, so a drag down to zero
    * restores the level from before the drag, not the last step on the way.
    */
-  const unmuted = useRef(1);
+  const unmuted = useRef(props.unmutedVolume);
   const draggingVolume = useRef(false);
   if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
 

@@ -21,6 +21,14 @@ export interface SearchHistoryState {
 }
 
 /**
+ * Where searches are kept. Signed out there is no account to keep them on,
+ * so "youtube" means the list on this device.
+ */
+export function searchHistoryIn(setting: SearchHistory, signedIn: boolean): SearchHistory {
+  return setting === "youtube" && !signedIn ? "device" : setting;
+}
+
+/**
  * Recent searches, from wherever the setting keeps them. Signed out there is
  * no account to read, so "youtube" uses the list on this device. The
  * account's list is fetched each time `open` turns true, so a search made
@@ -31,18 +39,27 @@ export function useSearchHistory(
   signedIn: boolean,
   open: boolean,
 ): SearchHistoryState {
-  const where = setting === "youtube" && !signedIn ? "device" : setting;
+  const where = searchHistoryIn(setting, signedIn);
   const [local, setLocal] = useState<string[]>(readLocal);
   const [account, setAccount] = useState<{ query: string; feedbackToken: string | null }[]>([]);
 
   useEffect(() => {
-    if (where !== "youtube" || !open) return;
+    // Dropped when the account's list stops applying, so signing in as
+    // someone else never shows the last account's searches.
+    if (where !== "youtube") {
+      setAccount([]);
+      return;
+    }
+    if (!open) return;
     let cancelled = false;
     engine.searchHistory().then(
       (entries) => {
         if (!cancelled) setAccount(entries);
       },
-      (error: unknown) => console.error("could not read the search history", error),
+      (error: unknown) => {
+        if (!cancelled) setAccount([]);
+        console.error("could not read the search history", error);
+      },
     );
     return () => {
       cancelled = true;

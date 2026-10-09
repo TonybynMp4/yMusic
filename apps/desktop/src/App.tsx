@@ -154,6 +154,7 @@ export function App(props: { settings: Settings }) {
     open: go,
     notify: notice.show,
     libraryChanged: playlists.reload,
+    playlistCreated: playlists.created,
     ratingOf: player.ratingOf,
     rate,
   };
@@ -176,10 +177,13 @@ export function App(props: { settings: Settings }) {
             folders={library.folders}
             localCount={library.all.length}
             report={library.report}
-            loading={library.loading}
+            loading={library.loading || playlists.loading}
             onAddFolder={() => void library.addFolder()}
             onRemoveFolder={(path) => void library.removeFolder(path)}
-            onRescan={() => void library.rescan()}
+            onRefresh={() => {
+              playlists.reload();
+              if (library.folders.length > 0) void library.rescan();
+            }}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">

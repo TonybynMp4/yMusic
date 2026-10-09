@@ -41,7 +41,7 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 
-function entryFor(route: Route): Entry {
+function entryFor(route: Route, loader: typeof load = load): Entry {
   const key = `${route.kind}:${route.id}`;
   let entry = entries.get(key);
   if (!entry) {
@@ -54,7 +54,7 @@ function entryFor(route: Route): Entry {
       for (const listener of created.listeners) listener();
     };
     entries.set(key, created);
-    void load(route, set).catch((error: unknown) =>
+    void loader(route, set).catch((error: unknown) =>
       set({ status: "error", error: message(error) }),
     );
     entry = created;
@@ -78,32 +78,58 @@ async function load(route: Route, set: (state: BrowseState) => void): Promise<vo
         loadingMore: false,
       });
       return;
-    case "playlist": {
-      const first = await engine.playlist(route.id);
-      let page = first.page;
-      set({
-        status: "ready",
-        page: { kind: "playlist", page },
-        loadingMore: first.more !== null,
-      });
-      for (let more = first.more; more !== null;) {
-        try {
-          const next = await engine.playlistMore(more);
-          page = { ...page, tracks: [...page.tracks, ...next.tracks] };
-          more = next.more;
-        } catch (error) {
-          // What arrived stays; the rest is simply missing until next launch.
-          console.error("could not load the rest of the playlist", error);
-          more = null;
-        }
-        set({
-          status: "ready",
-          page: { kind: "playlist", page },
-          loadingMore: more !== null,
-        });
-      }
-    }
+    case "playlist":
+      await follow(await engine.playlist(route.id), set);
   }
+}
+
+/**
+ * Shows a playlist's first page, then the rest a page of rows at a time, so a
+ * long playlist is browsable at once and complete in the end.
+ */
+async function follow(
+  first: Awaited<ReturnType<typeof engine.playlist>>,
+  set: (state: BrowseState) => void,
+): Promise<void> {
+  let page = first.page;
+  set({ status: "ready", page: { kind: "playlist", page }, loadingMore: first.more !== null });
+  for (let more = first.more; more !== null; ) {
+    try {
+      const next = await engine.playlistMore(more);
+      page = { ...page, tracks: [...page.tracks, ...next.tracks] };
+      more = next.more;
+    } catch (error) {
+      // What arrived stays; the rest is simply missing until next launch.
+      console.error("could not load the rest of the playlist", error);
+      more = null;
+    }
+    set({ status: "ready", page: { kind: "playlist", page }, loadingMore: more !== null });
+  }
+}
+
+/** How many times a new playlist is fetched before its page shows whatever came back. */
+const NEW_PLAYLIST_TRIES = 5;
+
+/**
+ * The route to a playlist just created with `tracks` songs, fetched afresh.
+ * YouTube can take a few seconds to serve a new playlist, answering with an
+ * empty page meanwhile, so the fetch is retried until the page has its title
+ * and songs. Without this the empty page would be kept for the rest of the run.
+ */
+export function newPlaylistRoute(id: string, tracks: number): Route {
+  const route: Route = { kind: "playlist", id };
+  entries.delete(viewKey(route));
+  entryFor(route, async (_, set) => {
+    for (let attempt = 1; ; attempt++) {
+      const first = await engine.playlist(id);
+      // A first page with more to come is full, so the songs are all there.
+      const served =
+        first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
+      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(first, set);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  });
+  return route;
 }
 
 function message(error: unknown): string {

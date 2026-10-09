@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLibrary.ts";
+import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 
 interface Props {
   collapsed: boolean;
@@ -40,10 +41,9 @@ interface Props {
   loading: boolean;
   onAddFolder: () => void;
   onRemoveFolder: (path: string) => void;
-  onRescan: () => void;
+  /** Fetches the playlists again and rescans the folders. */
+  onRefresh: () => void;
 }
-
-const LIKED_MUSIC = "LM";
 
 /**
  * One library, whatever the source: YouTube Music playlists and local folders
@@ -120,11 +120,7 @@ export function Sidebar(props: Props) {
                 <IconPlaylistAdd size={15} />
               </IconButton>
             )}
-            <IconButton
-              label="Rescan local folders"
-              onClick={props.onRescan}
-              disabled={props.loading || props.folders.length === 0}
-            >
+            <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>
               {props.loading ? (
                 <IconLoader2 size={15} className="animate-spin" />
               ) : (

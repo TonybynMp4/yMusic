@@ -32,6 +32,15 @@ export async function accountImport(id: string): Promise<string> {
   return invokeParsed("account_import", z.string(), { id });
 }
 
+/**
+ * Reads an imported session again from its browser, for when YouTube stops
+ * accepting ours. Null when the session was not imported, or the browser has
+ * nothing newer.
+ */
+export async function accountRefresh(): Promise<string | null> {
+  return invokeParsed("account_refresh", Cookie);
+}
+
 export async function accountSignOut(): Promise<void> {
   return invokeVoid("account_sign_out");
 }

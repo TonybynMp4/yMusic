@@ -1,6 +1,7 @@
 pub mod account;
 pub mod botguard;
 pub mod commands;
+pub mod files;
 pub mod http;
 pub mod images;
 pub mod library;

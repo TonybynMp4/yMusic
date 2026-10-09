@@ -60,7 +60,13 @@ export function clearBrowseCache(): void {
   }
 }
 
-function entryFor(route: Route, loader: typeof load = load): Entry {
+type Loader = (
+  route: Route,
+  set: (state: BrowseState) => void,
+  get: () => BrowseState,
+) => Promise<void>;
+
+function entryFor(route: Route, loader: Loader = load): Entry {
   const key = `${route.kind}:${route.id}`;
   let entry = entries.get(key);
   if (entry) {
@@ -77,7 +83,7 @@ function entryFor(route: Route, loader: typeof load = load): Entry {
       for (const listener of created.listeners) listener();
     };
     entries.set(key, created);
-    void loader(route, set).catch((error: unknown) =>
+    void loader(route, set, () => created.state).catch((error: unknown) =>
       set({ status: "error", error: message(error) }),
     );
     entry = created;
@@ -99,7 +105,11 @@ function evict(): void {
   }
 }
 
-async function load(route: Route, set: (state: BrowseState) => void): Promise<void> {
+async function load(
+  route: Route,
+  set: (state: BrowseState) => void,
+  get: () => BrowseState,
+): Promise<void> {
   switch (route.kind) {
     case "album":
       set({
@@ -116,7 +126,7 @@ async function load(route: Route, set: (state: BrowseState) => void): Promise<vo
       });
       return;
     case "playlist":
-      await follow(route.id, await firstPage(route.id), set);
+      await follow(route.id, await firstPage(route.id), set, get);
   }
 }
 
@@ -147,7 +157,9 @@ const PUBLISH_EVERY_MS = 250;
 
 /**
  * Shows a playlist's first page, then the rest as it arrives, so a long
- * playlist is browsable at once and complete in the end.
+ * playlist is browsable at once and complete in the end. Each showing keeps
+ * the page as it stands apart from its rows, so an edit made meanwhile (a
+ * rename, say) is kept.
  *
  * When a later page fails, the rows so far stay and the state carries a
  * `resume` that fetches the rest from where it stopped. `held`, when
@@ -158,21 +170,30 @@ async function follow(
   id: string,
   first: FirstPage,
   set: (state: BrowseState) => void,
-  held: readonly Track[] = [],
+  get: () => BrowseState,
+  held: Rows = { tracks: [], itemIds: [] },
 ): Promise<void> {
   const header = first.page;
   const tracks = [...header.tracks];
+  const itemIds = [...header.itemIds];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = -Infinity;
 
   // The rows to show: the reload's own once it has caught up.
-  const visible = () => (tracks.length < held.length ? held : tracks);
+  const visible = (): Rows => (tracks.length < held.tracks.length ? held : { tracks, itemIds });
 
   const publish = (loadingMore: boolean, resume?: () => void) => {
     clearTimeout(timer);
     timer = undefined;
     last = Date.now();
-    const page: Page = { kind: "playlist", page: { ...header, tracks: [...visible()] } };
+    const current = get();
+    const base =
+      current.status === "ready" && current.page.kind === "playlist" ? current.page.page : header;
+    const rows = visible();
+    const page: Page = {
+      kind: "playlist",
+      page: { ...base, tracks: [...rows.tracks], itemIds: [...rows.itemIds] },
+    };
     set(
       resume
         ? { status: "ready", page, loadingMore, resume }
@@ -181,7 +202,7 @@ async function follow(
   };
   // Shows what has arrived now, or when the current interval is up.
   const progress = () => {
-    if (tracks.length < held.length || timer !== undefined) return;
+    if (tracks.length < held.tracks.length || timer !== undefined) return;
     const wait = last + PUBLISH_EVERY_MS - Date.now();
     if (wait <= 0) publish(true);
     else timer = setTimeout(() => publish(true), wait);
@@ -189,7 +210,7 @@ async function follow(
 
   const reload = async () => {
     try {
-      await follow(id, await engine.playlist(id), set, [...visible()]);
+      await follow(id, await engine.playlist(id), set, get, visible());
     } catch (error) {
       console.error("could not reload the playlist", error);
       publish(false, () => {
@@ -207,6 +228,7 @@ async function follow(
       try {
         const next = await engine.playlistMore(handle);
         tracks.push(...next.tracks);
+        itemIds.push(...next.itemIds);
         more = next.more;
       } catch (error) {
         if (resuming && expired(error)) return reload();
@@ -221,14 +243,20 @@ async function follow(
       if (more !== null) progress();
     }
     // Complete: the playlist may have shrunk since the rows held were shown.
-    held = [];
+    held = { tracks: [], itemIds: [] };
     publish(false);
   };
 
   // A playlist of one page is shown once, by `run`, as complete.
-  if (first.more !== null && tracks.length >= held.length) publish(true);
+  if (first.more !== null && tracks.length >= held.tracks.length) publish(true);
   else last = Date.now();
   await run(first.more, false);
+}
+
+/** A playlist's rows: its tracks, and each one's id within the playlist. */
+interface Rows {
+  tracks: readonly Track[];
+  itemIds: readonly (string | null)[];
 }
 
 /** The engine's answer for a continuation it no longer holds (`playlistMore`). */
@@ -248,13 +276,13 @@ const NEW_PLAYLIST_TRIES = 5;
 export function newPlaylistRoute(id: string, tracks: number): Route {
   const route: Route = { kind: "playlist", id };
   entries.delete(viewKey(route));
-  entryFor(route, async (_, set) => {
+  entryFor(route, async (_, set, get) => {
     for (let attempt = 1; ; attempt++) {
       const first = await engine.playlist(id);
       // A first page with more to come is full, so the songs are all there.
       const served =
         first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
-      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(id, first, set);
+      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(id, first, set, get);
       await new Promise((resolve) => setTimeout(resolve, attempt * 500));
     }
   });
@@ -287,7 +315,12 @@ export function useBrowse(route: Route): BrowseState {
     },
     [entry],
   );
-  return useSyncExternalStore(subscribe, () => entry.state);
+  // Read through the cache rather than `entry`, so a page refreshed in place
+  // shows the new copy. A page forgotten keeps its last copy, not refetched.
+  return useSyncExternalStore(
+    subscribe,
+    () => (entries.get(`${route.kind}:${route.id}`) ?? entry).state,
+  );
 }
 
 /**
@@ -344,4 +377,21 @@ export function patchPage(route: Route, patch: (page: Page) => Page): void {
   if (entry?.state.status !== "ready") return;
   entry.state = { ...entry.state, page: patch(entry.state.page) };
   for (const listener of entry.listeners) listener();
+}
+
+/**
+ * Fetches a page afresh, for when an edit YouTube refused has left the copy
+ * here out of step. Whatever shows the old copy moves to the new one.
+ */
+export function refreshPage(route: Route): void {
+  const key = `${route.kind}:${route.id}`;
+  const old = entries.get(key);
+  entries.delete(key);
+  entryFor(route);
+  for (const listener of old?.listeners ?? []) listener();
+}
+
+/** Drops a page that no longer exists, such as a playlist just deleted. */
+export function forgetPage(route: Route): void {
+  entries.delete(`${route.kind}:${route.id}`);
 }

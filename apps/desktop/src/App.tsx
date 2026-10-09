@@ -22,7 +22,7 @@ import { TitleBar } from "./TitleBar.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { UpdateNotice } from "./UpdateNotice.tsx";
 import { useAccount } from "./useAccount.ts";
-import { viewKey, type View } from "./useBrowse.ts";
+import { forgetPage, viewKey, type View } from "./useBrowse.ts";
 import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
@@ -106,6 +106,29 @@ export function App(props: { settings: Settings }) {
     }
     setHistory((entries) => (entries.length > 1 ? entries.slice(0, -1) : entries));
   }, [expanded]);
+  /**
+   * Takes a deleted playlist out of history, so Back never lands on it, and
+   * leaves its page if that is where you are.
+   */
+  const playlistDeleted = (id: string, title: string) => {
+    const gone = (entry: View | null) => entry?.kind === "playlist" && entry.id === id;
+    const kept: (View | null)[] = [];
+    const offsets: number[] = [];
+    history.forEach((entry, i) => {
+      if (gone(entry)) return;
+      // Two visits to the same page, once apart, become one.
+      const last = kept.at(-1);
+      const same = last === entry || (last && entry && viewKey(last) === viewKey(entry));
+      if (kept.length > 0 && same) return;
+      kept.push(entry);
+      offsets.push(scrolls.current[i] ?? 0);
+    });
+    scrolls.current = offsets;
+    setHistory(kept.length > 0 ? kept : [null]);
+    playlists.deleted(id);
+    forgetPage({ kind: "playlist", id });
+    notice.show(`Deleted ${title}`);
+  };
   const showSearch = () => {
     go(null);
     searchInput.current?.focus();
@@ -223,6 +246,7 @@ export function App(props: { settings: Settings }) {
     notify: notice.show,
     libraryChanged: playlists.reload,
     playlistCreated: playlists.created,
+    playlistDeleted,
     ratingOf: player.ratingOf,
     rate,
   };

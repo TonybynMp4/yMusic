@@ -34,6 +34,8 @@ const LocalTrackRow = z.object({
   codec: AudioCodec,
   bitrate: z.number().int().positive().nullable(),
   coverArt: CoverArt.nullable(),
+  /** When the file was first scanned, in seconds since the Unix epoch. */
+  addedAt: z.number().int(),
 });
 type LocalTrackRow = z.infer<typeof LocalTrackRow>;
 
@@ -43,6 +45,8 @@ export interface LocalTrack extends Track {
   albumArtist: string | null;
   trackNumber: number | null;
   discNumber: number | null;
+  /** When the file was first scanned, in milliseconds since the Unix epoch. */
+  addedAt: number;
 }
 
 export const ScanFailure = z.object({ path: z.string(), reason: z.string() });
@@ -108,6 +112,7 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
     trackNumber: row.trackNumber,
     discNumber: row.discNumber,
     year: row.year,
+    addedAt: row.addedAt * 1000,
   };
 }
 

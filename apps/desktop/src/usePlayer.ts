@@ -426,6 +426,12 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     [send],
   );
 
+  /** The playlist the queue was started from, if `trackId` came from it. */
+  const playlistOf = useCallback((id: TrackId): string | null => {
+    const from = source.current;
+    return from?.ids.has(id) ? from.playlistId : null;
+  }, []);
+
   // Once a YouTube song is playing, make it the account's queue, so YouTube
   // Music on other devices offers to resume it. Only once playing: a queue
   // resumed from elsewhere and still waiting here must not replace itself.
@@ -436,8 +442,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     const videoId = videoIdFromTrackId(trackId);
     if (videoId === null) return;
     shared.current = trackId;
-    const from = source.current;
-    const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
+    const playlistId = playlistOf(trackId);
     const asked = now();
     void youtube
       .shareQueue(videoId, playlistId)
@@ -452,7 +457,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         }
       })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId, learn, now]);
+  }, [playing, trackId, learn, now, playlistOf]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.
@@ -571,6 +576,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     volume,
     playTrack,
     cue,
+    playlistOf,
     play,
     pause,
     toggle,

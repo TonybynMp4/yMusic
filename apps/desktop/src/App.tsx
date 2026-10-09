@@ -175,6 +175,7 @@ export function App(props: { settings: Settings }) {
             onNavigate={go}
             playlists={playlists.playlists}
             folders={library.folders}
+            covers={library.covers}
             localCount={library.all.length}
             report={library.report}
             loading={library.loading || playlists.loading}
@@ -242,7 +243,12 @@ export function App(props: { settings: Settings }) {
                           account={account}
                         />
                       ) : view?.kind === "local" ? (
-                        <LocalView folder={view.id} all={library.all} actions={browse} />
+                        <LocalView
+                          folder={view.id}
+                          all={library.all}
+                          cover={library.covers[view.id]}
+                          actions={browse}
+                        />
                       ) : view ? (
                         <BrowseView route={view} actions={browse} />
                       ) : (

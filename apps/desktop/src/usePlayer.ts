@@ -592,6 +592,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     },
     [engine],
   );
+  /** The track mpv has, which `position` belongs to once it is not null. */
+  const loadedTrack = useCallback(() => inMpv.current, []);
   const setRepeat = useCallback(
     (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }),
     [],
@@ -610,6 +612,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     track,
     playback: state,
     position,
+    loadedTrack,
     volume,
     playTrack,
     cue,

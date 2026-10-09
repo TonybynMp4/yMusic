@@ -83,8 +83,8 @@ impl QueueStore {
         let Some(dir) = &self.dir else {
             return Ok(());
         };
-        let _writing = self.writing.lock().expect("queue store mutex");
         let json = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+        let _writing = self.writing.lock().expect("queue store mutex");
         crate::files::write_atomically(&dir.join(name), &json)
             .map_err(|error| format!("could not save the queue: {error}"))
     }

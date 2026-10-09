@@ -167,7 +167,10 @@ async function captureSession() {
   for (const dir of dataDirs()) rmSync(dir, { recursive: true, force: true });
   const saved = join(dataDirs()[0], "account.bin");
   console.log("sign in from the app's Sign in button; it closes once the session is saved");
-  const child = spawn(binary, [], { stdio: "ignore" });
+  const child = spawn(binary, [], {
+    stdio: "ignore",
+    env: { ...process.env, YMUSIC_MEMORY_SIGN_IN: "1" },
+  });
   const exited = new Promise((resolve) => child.on("exit", resolve));
   while (child.exitCode === null && !existsSync(saved)) await sleep(1_000);
   if (child.exitCode !== null) {

@@ -86,6 +86,7 @@ export async function runMemoryScenario(controls: () => ScenarioControls): Promi
   // StrictMode mounts twice in development; one session is the point.
   if (started) return;
   started = true;
+  if (!(await mark("start"))) return;
   try {
     await session(controls);
   } catch (error) {
@@ -156,8 +157,9 @@ async function session(controls: () => ScenarioControls): Promise<void> {
   await sleep(IDLE_END_MS);
 }
 
-function mark(phase: string): Promise<void> {
-  return invoke("memory_mark", { phase });
+/** False when the app was opened only to sign in, with no scenario to run. */
+function mark(phase: string): Promise<boolean> {
+  return invoke<boolean>("memory_mark", { phase });
 }
 
 function sleep(ms: number): Promise<void> {

@@ -20,6 +20,7 @@ use ymusic_lib::{
     library::Library,
     platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
+    queue::QueueStore,
     settings::SettingsStore,
     ymusic_commands,
 };
@@ -72,6 +73,7 @@ fn every_command_is_reachable_over_ipc() {
         .join(format!("ymusic-ipc-account-{}", std::process::id()))
         .join("account.bin");
     app.manage(Account::open(account_path, MemoryKeys::default()));
+    app.manage(QueueStore::in_memory());
 
     let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
@@ -106,7 +108,8 @@ fn every_command_is_reachable_over_ipc() {
             // A comma in a header value would corrupt a comma-joined header
             // list, so this pins the one-at-a-time change-list path.
             "headers": { "User-Agent": "YMUSIC/0.1", "Cookie": "a=1, b=2" },
-            "startPaused": false
+            "startPaused": false,
+            "startMs": 500
         }
     });
     get_ipc_response(&webview, request("player_load", load)).expect("player_load should succeed");
@@ -156,6 +159,15 @@ fn every_command_is_reachable_over_ipc() {
         ),
         ("media_set_track", serde_json::json!({ "track": null })),
         ("media_set_volume", serde_json::json!({ "volume": 0.5 })),
+        (
+            "queue_save",
+            serde_json::json!({ "queue": { "items": [], "cursor": null } }),
+        ),
+        (
+            "queue_save_position",
+            serde_json::json!({ "position": { "trackId": "yt:abc", "positionMs": 1500 } }),
+        ),
+        ("queue_load", serde_json::json!({})),
         // `account_sign_in` opens a real Google page, so it stays out of here.
         ("account_sign_out", serde_json::json!({})),
     ];

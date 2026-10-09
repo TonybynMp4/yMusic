@@ -8,6 +8,7 @@ use crate::account::{import, sign_in, Account};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
+use crate::queue::{QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 
@@ -266,6 +267,26 @@ pub fn settings_set<R: Runtime>(
     }
     crate::tray::sync(&app, next.close_to_tray);
     Ok(next)
+}
+
+/// The queue saved by the last run, and the playing song's position in it.
+#[tauri::command]
+pub fn queue_load(store: State<'_, QueueStore>) -> SavedQueue {
+    store.load()
+}
+
+/// Replaces the saved queue. Null clears it.
+#[tauri::command]
+pub fn queue_save(store: State<'_, QueueStore>, queue: serde_json::Value) -> Result<(), String> {
+    store.save_queue(&queue)
+}
+
+#[tauri::command]
+pub fn queue_save_position(
+    store: State<'_, QueueStore>,
+    position: QueuePosition,
+) -> Result<(), String> {
+    store.save_position(&position)
 }
 
 /// A release newer than this build, if there is one. Prereleases count when

@@ -17,6 +17,8 @@ export type { BotGuardVm, BotGuardChallenge } from "./po-token.ts";
 export type { NewPlaylist, PlaylistTarget } from "./browse.ts";
 export type { WatchReport } from "./history.ts";
 export type { Rating } from "./rating.ts";
+export type { ServerQueue } from "./resume.ts";
+export { isSharedQueue, type SharedQueue } from "./shared-queue.ts";
 
 export type EngineClient = Remote<Omit<EngineWorkerApi, "connect">>;
 

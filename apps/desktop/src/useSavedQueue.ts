@@ -18,7 +18,7 @@ function logSaveFailure(error: unknown): void {
  * is once the launch has decided what to bring back.
  */
 export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boolean): void {
-  const { queue, shared, sourcePlaylist, position, track } = player;
+  const { queue, shared, sourcePlaylist, position, loadedTrack, track } = player;
   const { items, order, cursor, repeat, shuffle } = queue;
 
   useEffect(() => {
@@ -39,6 +39,8 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
   useEffect(() => {
     if (!enabled || trackId === null) return;
     const save = () => {
+      // Until mpv has the song, the position and status are still the last one's.
+      if (loadedTrack() !== trackId) return;
       const positionMs = Math.round(position.get());
       // Nothing worth keeping, and before a restored song has loaded, its
       // saved position would be lost to the 0 the player starts from.
@@ -52,5 +54,5 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
     if (status !== "playing") return;
     const timer = setInterval(save, POSITION_EVERY_MS);
     return () => clearInterval(timer);
-  }, [enabled, trackId, status, position]);
+  }, [enabled, trackId, status, position, loadedTrack]);
 }

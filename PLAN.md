@@ -34,6 +34,24 @@ The t3code mirror (`/home/tony/code/t3code/mirror-fixes`) already does this in p
 
 Sign release assets with the updater's minisign key so the download is verified before dpkg sees it.
 
+## Next
+
+- **Player tabs.** The full player's side panel gets YouTube Music's tabs (Up next, Lyrics, Related, Comments) and one of the app's own, Details, which comes first and is open by default. Up next is the queue as it is today. Each tab loads when first opened, and stays loaded for the song.
+  - *Details* is a deliberate exception to following YouTube Music: YouTube Music has no such tab, and this one takes after the page Spotify scrolls to under its player. It is built from what YouTube has: the song's title, artists, album and year; the album's art, type, year and track count, which opens the album; each artist's picture, subscriber count and the start of their description, which opens the artist; and the song's credits when YouTube has them (the same data as the planned credits dialog). For a local song it shows the tags, the file's path, codec and bitrate.
+  - *Lyrics* are YouTube's own, from the `MPLY` browse id the `/next` response names, with timings when YouTube has them so the current line follows playback. A song with none says so. Timings need research: the web client (`WEB_REMIX`) seems to return plain text only, and ytmusicapi switches to the Android music client for timed lyrics, so that one call may need a different client from the rest of the engine. Other providers stay a plugin idea.
+  - *Related* is YouTube Music's tab: the shelves from the related browse id in `/next`, as cards that play or open like anywhere else.
+  - *Comments* are the comments on the song's video, which YouTube Music shows for songs with one. Read only at first: top comments, with replies collapsed. Hidden for local songs and songs without a video.
+- **Library page.** One page for everything saved, as YouTube Music's Library is: chips for Playlists, Songs, Albums, Artists and Local files, a sort (recently added, recently played, A to Z) and a grid or list toggle. Signed out, it shows the local files and folders. The sidebar stays the quick list; "Library" in it opens this page.
+- **Playlist art, details and editing.** A playlist's page shows its owner, privacy, song count, total length and description. The owner can rename it, change the description and privacy, remove songs, reorder them by dragging, and delete it, through InnerTube's `browse/edit_playlist` actions and `playlist/delete`, which is what YouTube Music's web player sends. A custom cover upload comes last: YouTube Music supports it, but the upload flow needs research.
+- **The queue across restarts.** The queue, the song in it and the position are saved locally whenever they change, and come back at launch, paused, the way a resumed queue does now. Along with it, the device saves what it last wrote to the account's server queue: the playlist or radio it named and the selected song. At launch it fetches the server queue. If that still matches what this device wrote, nothing has played elsewhere since, so the local copy comes back exactly, position included. If it differs, another device has moved on, and the server queue wins, as Resume does today. Signed in but offline, signed out, or when the server queue comes back empty (a free account may get nothing, see Resume in `docs/engine.md`), the local queue comes back unchecked.
+- **Volume across restarts.** Every launch starts at full volume today. Muting sets mpv's volume to 0, and the level to unmute to lives only in a React ref in the player bar, starting at 1. So Rust saves two numbers beside the settings file: the current volume, and the last one above zero. A new observer on mpv's `volume` (Rust only observes `time-pos`, `duration` and `pause` today) writes them once the value settles, rather than throughout a drag. That also catches the GNOME and KDE media widgets, which set the volume over MPRIS. Windows has no equivalent: SMTC leaves volume to the system, so the flyout never reaches mpv. The last level above zero comes from those settled values only, as the player bar's ref does: mpv sees every step of a drag, so dragging down to zero would otherwise save a near-silent step as the level to unmute to. At launch Rust sets mpv's volume before anything loads, and the player bar starts from the saved volume, with the last level above zero as the level to unmute to. Quitting while muted therefore comes back muted, and Unmute restores the level from before. Both values are linear slider fractions, as now (see Volume in `docs/playback.md`).
+- **Search history.** Recent searches show under the empty search box, each with a button to remove it. Signed-in searches already reach the account's history; the existing *Pause search history* setting keeps them out by searching through a cookieless client. That switch becomes one "Search history" choice with three options:
+  - *YouTube*, the default when signed in and today's behaviour: searches are recorded on the account, and the list is the account's own. YouTube Music returns it from the search suggestions request with an empty query, and removing one sends the entry's feedback token.
+  - *On this device*: a local list, with searches kept off the account through the cookieless client. Like the current pause, its description says results aren't personalised.
+  - *Off*: nothing recorded anywhere, the current pause.
+
+  A saved `pauseSearchHistory` of true becomes *Off*, and false becomes *YouTube*, so nobody's search changes on update. Signed out there is no account to record on, so the list is local and *YouTube* is unavailable.
+
 ## Later
 
 - **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.
@@ -72,7 +90,7 @@ Pear Desktop compiles its plugins into the app and runs them with full Electron 
 
 Plugin ideas:
 
-- **Lyrics**, synced where the provider has timings. `player.panel`.
+- **More lyrics providers**, for songs YouTube has no lyrics for, synced where the provider has timings. `player.panel`.
 - **Trivia** about the song and artist. `player.panel`, `artist.section`.
 - **Tour dates** from Bandsintown. `player.panel`, `artist.section`, `home.shelf`.
 - **Downloader.** A backend plugin that writes the video id into the file's tags, so the local-to-YouTube link is exact from the start.

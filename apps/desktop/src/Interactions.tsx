@@ -61,7 +61,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { engine } from "./engine.ts";
 import { toggled } from "./Rating.tsx";
-import { patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
+import { newPlaylistRoute, patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
 /**
@@ -563,7 +563,7 @@ function NewPlaylistDialog({
       onClose();
       reset();
       // A new playlist opens, so you land on it. Adding songs to one later does not.
-      x.open({ kind: "playlist", id });
+      x.open(newPlaylistRoute(id, ids.length));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

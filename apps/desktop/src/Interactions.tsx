@@ -672,11 +672,17 @@ function NewPlaylistItem({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
   );
 }
 
-const PRIVACY: { value: PlaylistPrivacy; label: string }[] = [
-  { value: "PRIVATE", label: "Private" },
-  { value: "UNLISTED", label: "Unlisted" },
-  { value: "PUBLIC", label: "Public" },
-];
+/** Who can see a playlist, as the header and the playlist dialogs name it. */
+export const PRIVACY_LABELS: Record<PlaylistPrivacy, string> = {
+  PRIVATE: "Private",
+  UNLISTED: "Unlisted",
+  PUBLIC: "Public",
+};
+
+const PRIVACY = (Object.keys(PRIVACY_LABELS) as PlaylistPrivacy[]).map((value) => ({
+  value,
+  label: PRIVACY_LABELS[value],
+}));
 
 /** YouTube Music's "New playlist" dialog: a title, a description and who can see it. */
 function NewPlaylistDialog({
@@ -840,7 +846,10 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   const x = useInteractions();
   const [title, setTitle] = useState(page.title);
   const [description, setDescription] = useState(page.description ?? "");
-  const [privacy, setPrivacy] = useState<PlaylistPrivacy>(page.privacy ?? "PRIVATE");
+  // YouTube names the privacy on your playlists, but should it not, the form
+  // starts at Private and sends it only if you pick another.
+  const startPrivacy = page.privacy ?? "PRIVATE";
+  const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -851,7 +860,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     const details = {
       ...(name !== page.title && { title: name }),
       ...(text !== (page.description ?? "") && { description: text }),
-      ...(privacy !== page.privacy && { privacy }),
+      ...(privacy !== startPrivacy && { privacy }),
     };
     if (Object.keys(details).length === 0) return onClose();
     setBusy(true);

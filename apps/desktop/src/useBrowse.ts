@@ -24,8 +24,11 @@ export type Page =
 
 export type BrowseState =
   | { status: "loading" }
-  /** `loadingMore`: a long playlist is still arriving, a page of rows at a time. */
-  | { status: "ready"; page: Page; loadingMore: boolean }
+  /**
+   * `loadingMore`: a long playlist is still arriving, a page of rows at a time.
+   * `complete`: every row arrived, false while loading or once loading stopped early.
+   */
+  | { status: "ready"; page: Page; loadingMore: boolean; complete: boolean }
   | { status: "error"; error: string };
 
 /**
@@ -79,6 +82,7 @@ async function load(
         status: "ready",
         page: { kind: "album", page: await engine.album(route.id) },
         loadingMore: false,
+        complete: true,
       });
       return;
     case "artist":
@@ -86,6 +90,7 @@ async function load(
         status: "ready",
         page: { kind: "artist", page: await engine.artist(route.id) },
         loadingMore: false,
+        complete: true,
       });
       return;
     case "playlist":
@@ -105,7 +110,9 @@ async function follow(
   get: () => BrowseState,
 ): Promise<void> {
   let page = first.page;
-  set({ status: "ready", page: { kind: "playlist", page }, loadingMore: first.more !== null });
+  const loading = first.more !== null;
+  set({ status: "ready", page: { kind: "playlist", page }, loadingMore: loading, complete: !loading });
+  let stopped = false;
   for (let more = first.more; more !== null; ) {
     try {
       const next = await engine.playlistMore(more);
@@ -121,8 +128,14 @@ async function follow(
       // What arrived stays; the rest is simply missing until next launch.
       console.error("could not load the rest of the playlist", error);
       more = null;
+      stopped = true;
     }
-    set({ status: "ready", page: { kind: "playlist", page }, loadingMore: more !== null });
+    set({
+      status: "ready",
+      page: { kind: "playlist", page },
+      loadingMore: more !== null,
+      complete: more === null && !stopped,
+    });
   }
 }
 

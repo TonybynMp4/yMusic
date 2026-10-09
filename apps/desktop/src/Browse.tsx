@@ -11,7 +11,6 @@ import type {
   ArtistPage,
   BrowseCard,
   PlaylistPage,
-  PlaylistPrivacy,
   Thumbnail,
   Track,
   TrackId,
@@ -27,6 +26,7 @@ import { formatTotal } from "./format.ts";
 import {
   InteractionArea,
   InteractionButton,
+  PRIVACY_LABELS,
   usePlaylistEditing,
   type Subject,
 } from "./Interactions.tsx";
@@ -74,6 +74,7 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
         <Playlist
           page={page.page}
           loadingMore={state.loadingMore}
+          complete={state.complete}
           actions={following}
           route={route}
         />
@@ -135,27 +136,29 @@ function Album({
 function Playlist({
   page,
   loadingMore,
+  complete,
   actions,
   route,
 }: {
   page: PlaylistPage;
   loadingMore: boolean;
+  complete: boolean;
   actions: BrowseActions;
   route: Route;
 }) {
   const editing = usePlaylistEditing(page);
   // YouTube's count and length until every row is in, then the rows' own,
-  // which follow your edits.
-  const count = loadingMore ? (page.trackCount ?? page.tracks.length) : page.tracks.length;
+  // which follow your edits. A playlist whose loading stopped early keeps YouTube's.
+  const count = complete ? page.tracks.length : (page.trackCount ?? page.tracks.length);
   const total = page.tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
-  const length = loadingMore ? page.length : total > 0 ? formatTotal(total) : null;
+  const length = complete ? (total > 0 ? formatTotal(total) : null) : page.length;
   return (
     <>
       <Header
         thumbnails={page.thumbnails}
         title={page.title}
         byline={page.owner?.name}
-        subtitle={[page.subtitle, page.privacy && PRIVACY[page.privacy]]
+        subtitle={[page.subtitle, page.privacy && PRIVACY_LABELS[page.privacy]]
           .filter(Boolean)
           .join(" • ")}
         details={[`${count} ${count === 1 ? "song" : "songs"}`, length].filter(Boolean).join(" • ")}
@@ -180,9 +183,10 @@ function Playlist({
         onPlay={(id) => actions.onPlay(page.tracks, id)}
         onOpen={actions.onOpen}
         // Rows move and go only once all are in: the queue follows a loading
-        // playlist by how many rows it has.
+        // playlist by how many rows it has, and a move past the last row
+        // loaded would land after rows that never arrived.
         editing={
-          editing && !loadingMore ? { onRemove: editing.remove, onMove: editing.move } : undefined
+          editing && complete ? { onRemove: editing.remove, onMove: editing.move } : undefined
         }
       />
       {loadingMore && (
@@ -282,11 +286,6 @@ function Artist({
   );
 }
 
-const PRIVACY: Record<PlaylistPrivacy, string> = {
-  PUBLIC: "Public",
-  UNLISTED: "Unlisted",
-  PRIVATE: "Private",
-};
 
 /** Two lines until clicked, then the whole thing; clicking again folds it. */
 function Description({ text }: { text: string }) {

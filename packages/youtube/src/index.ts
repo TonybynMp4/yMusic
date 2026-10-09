@@ -4,6 +4,7 @@ export * from "./engine.ts";
 export * from "./parse.ts";
 export * from "./po-token.ts";
 export * from "./search.ts";
+export * from "./search-history.ts";
 export * from "./stream.ts";
 export * from "./thumbnails.ts";
 export * from "./radio.ts";

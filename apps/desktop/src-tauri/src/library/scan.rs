@@ -1,6 +1,6 @@
 //! Filesystem walk and tag extraction.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use lofty::file::{AudioFile, FileType, TaggedFileExt};
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use super::{Library, Result};
+use super::{CoverArt, Library, Result};
 
 /// Extensions mpv can decode and lofty can read tags from. Checked before
 /// opening anything, so a folder of JPEGs costs one string compare each.
@@ -19,6 +19,11 @@ const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "m4a", "m4b", "aac", "ogg", "oga", "opus", "wav", "wv", "aiff", "aif", "ape",
     "mpc", "alac",
 ];
+
+/// Image files a folder's cover art is commonly saved as, best first. Matched
+/// on the stem, in any case, with any of `COVER_EXTENSIONS`.
+const COVER_NAMES: &[&str] = &["cover", "folder", "front", "album"];
+const COVER_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp"];
 
 pub fn is_supported_audio(path: &Path) -> bool {
     path.extension()
@@ -63,14 +68,15 @@ impl ScanReport {
 /// file does create a new id -- that is the tradeoff for not having to
 /// content-hash every file on every scan.
 fn track_id_for(path: &Path) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(path.to_string_lossy().as_bytes());
-    let hex: String = hasher
-        .finalize()
+    format!("local:{}", short_hash(path.to_string_lossy().as_bytes()))
+}
+
+/// The first 16 hex characters of the bytes' SHA-256.
+fn short_hash(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)[..8]
         .iter()
         .map(|b| format!("{b:02x}"))
-        .collect();
-    format!("local:{hex}")[..22].to_string()
+        .collect()
 }
 
 /// SQLite has no unsigned integer type, so times are carried as i64.
@@ -269,6 +275,68 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(S
     Ok(Some((out.to_string_lossy().to_string(), width, height)))
 }
 
+/// A folder's own cover image, copied to the art cache because the webview
+/// can only load images from there. Only the folder's top level counts: a
+/// cover inside an album's subfolder belongs to that album, not the folder.
+/// Songs never take it, they keep the art embedded in their own tags.
+pub(super) fn folder_cover(library: &Library, folder: &Path) -> Result<Option<CoverArt>> {
+    // Named after the folder and the image's bytes: a replaced cover gets a
+    // new name, so a new asset URL, and the webview cannot keep the old one.
+    let prefix = format!(
+        "folder_{}_",
+        short_hash(folder.to_string_lossy().as_bytes())
+    );
+    let found = match cover_in(folder) {
+        Some((image, extension)) => {
+            let data = std::fs::read(&image)?;
+            let file = format!("{prefix}{}.{extension}", short_hash(&data));
+            Some((data, file))
+        }
+        None => None,
+    };
+    // A cover replaced or removed leaves no stale copy.
+    for entry in std::fs::read_dir(library.art_dir())?.filter_map(|entry| entry.ok()) {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let kept = found.as_ref().is_some_and(|(_, file)| *file == name);
+        if name.starts_with(&prefix) && !kept {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    let Some((data, file)) = found else {
+        return Ok(None);
+    };
+    let out = library.art_dir().join(file);
+    if !out.exists() {
+        std::fs::write(&out, &data)?;
+    }
+    let (width, height) = image_dimensions(&data).unwrap_or((0, 0));
+    Ok(Some(CoverArt {
+        path: out.to_string_lossy().to_string(),
+        width,
+        height,
+    }))
+}
+
+/// The best-named cover image directly in `dir`, if any, with its extension
+/// in lower case.
+fn cover_in(dir: &Path) -> Option<(PathBuf, String)> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            let stem = path.file_stem()?.to_str()?.to_ascii_lowercase();
+            let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+            if !COVER_EXTENSIONS.contains(&extension.as_str()) || !path.is_file() {
+                return None;
+            }
+            let rank = COVER_NAMES.iter().position(|name| *name == stem)?;
+            Some((rank, path, extension))
+        })
+        .min()
+        .map(|(_, path, extension)| (path, extension))
+}
+
 /// Minimal PNG/JPEG header reads. Avoids pulling in a full image crate for two
 /// numbers that only affect layout.
 fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
@@ -316,4 +384,55 @@ fn codec_name(file_type: FileType) -> String {
 
 fn to_io(err: lofty::error::FileParseError) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cover_in_prefers_cover_over_folder_and_ignores_other_images() {
+        let dir = std::env::temp_dir().join(format!("ymusic-cover-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["scan.jpg", "Folder.JPG", "notes.txt"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        assert_eq!(
+            cover_in(&dir),
+            Some((dir.join("Folder.JPG"), "jpg".to_string()))
+        );
+        std::fs::write(dir.join("cover.png"), b"x").unwrap();
+        assert_eq!(
+            cover_in(&dir),
+            Some((dir.join("cover.png"), "png".to_string()))
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_replaced_folder_cover_gets_a_new_copy_and_the_old_one_goes() {
+        let root = std::env::temp_dir().join(format!("ymusic-folder-cover-{}", std::process::id()));
+        let (folder, art) = (root.join("music"), root.join("art"));
+        std::fs::create_dir_all(&folder).unwrap();
+        let library = Library::open_in_memory(art.clone()).unwrap();
+        let copy = || folder_cover(&library, &folder).unwrap().map(|art| art.path);
+
+        std::fs::write(folder.join("cover.jpg"), b"first").unwrap();
+        let first = copy().expect("a copy of the cover");
+        assert_eq!(
+            copy().as_ref(),
+            Some(&first),
+            "unchanged bytes keep the copy"
+        );
+
+        std::fs::write(folder.join("cover.jpg"), b"second").unwrap();
+        let second = copy().expect("a copy of the new cover");
+        assert_ne!(second, first, "a new image gets a new URL");
+        assert!(!Path::new(&first).exists(), "the old copy is removed");
+
+        std::fs::remove_file(folder.join("cover.jpg")).unwrap();
+        assert_eq!(copy(), None);
+        assert!(!Path::new(&second).exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

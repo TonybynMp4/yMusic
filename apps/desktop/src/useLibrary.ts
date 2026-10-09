@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Thumbnail } from "@ymusic/core";
 import {
   isTauri,
   libraryAddFolder,
+  libraryFolderCover,
   libraryFolders,
   libraryRemoveFolder,
   libraryScan,
@@ -17,6 +19,11 @@ export interface LibraryState {
   /** Local tracks matching the search, empty for a blank one. */
   matches: LocalTrack[];
   folders: string[];
+  /**
+   * Each folder's own cover image, by path, for its sidebar row and page. A
+   * folder without one has no key. Songs never use these.
+   */
+  covers: Record<string, Thumbnail[]>;
   loading: boolean;
   /** The last scan's result, shown so an unreadable file is not silent. */
   report: ScanReport | null;
@@ -30,6 +37,7 @@ export function useLibrary(query: string) {
     all: [],
     matches: [],
     folders: [],
+    covers: {},
     loading: isTauri,
     report: null,
     error: null,
@@ -45,6 +53,17 @@ export function useLibrary(query: string) {
       // A blank search is everything, matching the Rust side.
       const [all, folders] = await Promise.all([librarySearch(""), libraryFolders()]);
       setState((s) => ({ ...s, all, folders, loading: false, error: null }));
+      // Looked up on every reload, which follows each scan, so a cover added,
+      // replaced or removed since shows. After the songs, so art never holds
+      // them up, and a failed lookup only costs the art.
+      const found = await Promise.all(
+        folders.map(async (folder) => {
+          const thumbnails = await libraryFolderCover(folder).catch((): Thumbnail[] => []);
+          return [folder, thumbnails] as const;
+        }),
+      );
+      const covers = Object.fromEntries(found.filter(([, thumbnails]) => thumbnails.length > 0));
+      setState((s) => ({ ...s, covers }));
     } catch (error) {
       setState((s) => ({ ...s, loading: false, error: String(error) }));
     }

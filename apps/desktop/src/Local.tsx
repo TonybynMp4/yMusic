@@ -1,7 +1,9 @@
 import { IconDeviceDesktop, IconFolder } from "@tabler/icons-react";
+import type { Thumbnail } from "@ymusic/core";
 import type { LocalTrack } from "@ymusic/ipc";
 
 import { Header, type BrowseActions } from "./Browse.tsx";
+import { formatTotal } from "./format.ts";
 import { TrackList } from "./TrackList.tsx";
 import { folderName, tracksIn } from "./useLibrary.ts";
 
@@ -9,15 +11,19 @@ import { folderName, tracksIn } from "./useLibrary.ts";
 export function LocalView(props: {
   folder: string;
   all: readonly LocalTrack[];
+  /** The folder's own cover image, if it has one. */
+  cover?: Thumbnail[] | undefined;
   actions: BrowseActions;
 }) {
   const { folder, actions } = props;
   const tracks = folder ? tracksIn(props.all, folder) : [...props.all];
   const count = `${tracks.length} song${tracks.length === 1 ? "" : "s"}`;
+  const length = tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
+  const details = length > 0 ? `${count} • ${formatTotal(length)}` : count;
   return (
     <>
       <Header
-        thumbnails={[]}
+        thumbnails={folder ? (props.cover ?? commonArt(tracks)) : []}
         fallback={
           folder ? (
             <IconFolder size={64} stroke={1.25} />
@@ -26,7 +32,7 @@ export function LocalView(props: {
           )
         }
         title={folder ? folderName(folder) : "Local files"}
-        subtitle={folder ? `${count} • ${folder}` : count}
+        subtitle={folder ? `${details} • ${folder}` : details}
         tracks={tracks}
         actions={actions}
         subject={folder ? { kind: "folder", path: folder } : undefined}
@@ -47,4 +53,22 @@ export function LocalView(props: {
       )}
     </>
   );
+}
+
+/** Without a cover image, a folder's art is the cover of the album most of its songs are from, so a stray single does not stand for it. */
+function commonArt(tracks: readonly LocalTrack[]): Thumbnail[] {
+  const counts = new Map<string, { thumbnails: Thumbnail[]; count: number }>();
+  for (const track of tracks) {
+    const url = track.thumbnails[0]?.url;
+    if (!url) continue;
+    // Embedded art is cached per song, so an album groups by its name and
+    // album artist (two artists can each have a "Greatest Hits"), not its art's URL.
+    const key = track.album === null ? url : `${track.albumArtist ?? ""}\n${track.album}`;
+    const entry = counts.get(key) ?? { thumbnails: track.thumbnails, count: 0 };
+    entry.count += 1;
+    counts.set(key, entry);
+  }
+  let best: { thumbnails: Thumbnail[]; count: number } | undefined;
+  for (const entry of counts.values()) if (!best || entry.count > best.count) best = entry;
+  return best?.thumbnails ?? [];
 }

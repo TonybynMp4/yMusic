@@ -8,3 +8,13 @@ export function formatDuration(ms: number | null): string {
   const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
   return `${hours > 0 ? `${hours}:` : ""}${mm}:${String(seconds).padStart(2, "0")}`;
 }
+
+/** A page's total length as YouTube Music writes it: `48 minutes`, `1 hour, 5 minutes`. */
+export function formatTotal(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+  if (hours === 0) return plural(minutes, "minute");
+  return rest === 0 ? plural(hours, "hour") : `${plural(hours, "hour")}, ${plural(rest, "minute")}`;
+}

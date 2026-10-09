@@ -7,7 +7,7 @@
  * is the only place that knows local tracks have a filesystem path.
  */
 
-import { AudioCodec, StreamLease, type Track, TrackId } from "@ymusic/core";
+import { AudioCodec, StreamLease, type Thumbnail, type Track, TrackId } from "@ymusic/core";
 import { z } from "zod";
 
 import { invokeParsed, invokeVoid } from "./tauri.ts";
@@ -17,6 +17,7 @@ const CoverArt = z.object({
   width: z.number().int().nonnegative(),
   height: z.number().int().nonnegative(),
 });
+type CoverArt = z.infer<typeof CoverArt>;
 
 /** The raw row as Rust serialises it. Not exported: callers want `Track`. */
 const LocalTrackRow = z.object({
@@ -77,18 +78,21 @@ export function localPathFromArtUrl(url: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+async function toThumbnails(art: CoverArt | null): Promise<Thumbnail[]> {
+  if (!art) return [];
+  return [
+    {
+      url: await artUrl(art.path),
+      // Fall back to a square when the header could not be parsed; the
+      // numbers only drive layout, never decoding.
+      width: art.width || 300,
+      height: art.height || 300,
+    },
+  ];
+}
+
 async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
-  const thumbnails = row.coverArt
-    ? [
-        {
-          url: await artUrl(row.coverArt.path),
-          // Fall back to a square when the header could not be parsed; the
-          // numbers only drive layout, never decoding.
-          width: row.coverArt.width || 300,
-          height: row.coverArt.height || 300,
-        },
-      ]
-    : [];
+  const thumbnails = await toThumbnails(row.coverArt);
 
   return {
     id: row.id,
@@ -111,6 +115,11 @@ const LocalTrackRows = z.array(LocalTrackRow);
 
 export async function libraryFolders(): Promise<string[]> {
   return invokeParsed("library_folders", z.array(z.string()));
+}
+
+/** The cover image at the top of a library folder, or none. Songs never use it. */
+export async function libraryFolderCover(path: string): Promise<Thumbnail[]> {
+  return toThumbnails(await invokeParsed("library_folder_cover", CoverArt.nullable(), { path }));
 }
 
 /** Registers the folder and scans it in one step. */

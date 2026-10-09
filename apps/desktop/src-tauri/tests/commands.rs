@@ -351,6 +351,24 @@ fn library_commands_round_trip_over_ipc() {
         .expect("folders json");
     assert_eq!(folders.len(), 1);
 
+    let cover = get_ipc_response(
+        &webview,
+        request(
+            "library_folder_cover",
+            serde_json::json!({ "path": folders[0] }),
+        ),
+    )
+    .expect("library_folder_cover should succeed")
+    .deserialize::<serde_json::Value>()
+    .expect("cover json");
+    assert_eq!((&cover["width"], &cover["height"]), (&2.into(), &1.into()));
+    assert!(
+        tracks
+            .iter()
+            .all(|track| track["coverArt"]["path"] != cover["path"]),
+        "songs keep their own art and never take the folder's cover"
+    );
+
     get_ipc_response(
         &webview,
         request(

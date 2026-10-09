@@ -13,7 +13,7 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import type { BrowseCard } from "@ymusic/core";
+import type { BrowseCard, Thumbnail } from "@ymusic/core";
 import type { ScanReport } from "@ymusic/ipc";
 
 import { Art } from "@/components/Art";
@@ -36,6 +36,8 @@ interface Props {
   /** YouTube Music playlists, Liked Music first. Empty when signed out. */
   playlists: readonly BrowseCard[];
   folders: readonly string[];
+  /** Each folder's own cover image, by path. */
+  covers: Readonly<Record<string, Thumbnail[]>>;
   localCount: number;
   report: ScanReport | null;
   loading: boolean;
@@ -71,6 +73,14 @@ export function Sidebar(props: Props) {
         subtitle: "Folder",
         tooltip: path,
         icon: <IconFolder size={18} stroke={1.75} />,
+        art: props.covers[path] && (
+          <Art
+            thumbnails={props.covers[path]}
+            width={40}
+            className="size-10 rounded"
+            fallback={<IconFolder size={18} stroke={1.75} />}
+          />
+        ),
         onRemove: () => props.onRemoveFolder(path),
       }),
     ),

@@ -3,7 +3,7 @@ import type { VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
-import { getPlaybackTracking } from "./history.ts";
+import { fetchSignatureTimestamp, getPlaybackTracking } from "./history.ts";
 import { getRadio, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
 import { searchSongs } from "./search.ts";
@@ -205,14 +205,15 @@ live("browse pages against the real InnerTube", () => {
 
 live("playback reporting against the real InnerTube", () => {
   it("gets the tracking URLs history and watch time go to", { timeout: 60_000 }, async (context) => {
-    const [youtube, player] = await Promise.all([
+    const [youtube, player, signatureTimestamp] = await Promise.all([
       createYouTube({ fetch: globalThis.fetch }),
       createPlayer({ fetch: globalThis.fetch }),
+      fetchSignatureTimestamp(globalThis.fetch),
     ]);
     const tracking = await getPlaybackTracking(
       youtube,
       "lYBUbBu4W08" as VideoId,
-      player.session.player!.signature_timestamp,
+      signatureTimestamp,
     );
     // No tracking comes back from a bot check either. Resolving the same video
     // tells that apart from YouTube having moved the URLs.

@@ -287,3 +287,15 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
 }
+
+/// Where the memory harness's scripted scenario has got to. The runner reads
+/// these lines from stdout to mark phases on its samples, and `done` ends the
+/// run. Only in builds with the `memory-scenario` feature.
+#[cfg(feature = "memory-scenario")]
+#[tauri::command]
+pub fn memory_mark<R: Runtime>(app: tauri::AppHandle<R>, phase: String) {
+    println!("ymemory-mark {phase}");
+    if phase == "done" {
+        app.exit(0);
+    }
+}

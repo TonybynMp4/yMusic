@@ -4,7 +4,7 @@
 //! macros beside each function, and those collide with the crate root once the
 //! functions are public enough for `ymusic_commands!` to name them.
 
-use crate::account::{import, sign_in, Account};
+use crate::account::{import, sign_in, Account, Session};
 use crate::http::Http;
 use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
@@ -218,7 +218,10 @@ pub async fn account_sign_in<R: Runtime>(
 ) -> Result<Option<String>, String> {
     let cookie = sign_in::sign_in(&app).await?;
     if let Some(cookie) = &cookie {
-        account.save(cookie.clone());
+        account.save(Session {
+            cookie: cookie.clone(),
+            browser: None,
+        });
     }
     Ok(cookie)
 }
@@ -234,12 +237,43 @@ pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
 /// Takes the YouTube session from a browser profile listed by `account_browsers`.
 #[tauri::command]
 pub async fn account_import(account: State<'_, Account>, id: String) -> Result<String, String> {
-    // Reading the keyring can wait on an unlock prompt.
-    let cookie = tauri::async_runtime::spawn_blocking(move || import::import(&id))
-        .await
-        .map_err(|error| error.to_string())??;
-    account.save(cookie.clone());
+    let cookie = import_from(id.clone()).await?;
+    account.save(Session {
+        cookie: cookie.clone(),
+        browser: Some(id),
+    });
     Ok(cookie)
+}
+
+/// Reads an imported session again from its browser, once YouTube has stopped
+/// accepting ours: the browser rotates the session it shares with us, and its
+/// copy is the live one. None when the session was not imported, or the
+/// browser holds the same session we already have.
+#[tauri::command]
+pub async fn account_refresh(account: State<'_, Account>) -> Result<Option<String>, String> {
+    let Some(Session {
+        cookie: stale,
+        browser: Some(id),
+    }) = account.session()
+    else {
+        return Ok(None);
+    };
+    let cookie = import_from(id.clone()).await?;
+    if cookie == stale {
+        return Ok(None);
+    }
+    account.save(Session {
+        cookie: cookie.clone(),
+        browser: Some(id),
+    });
+    Ok(Some(cookie))
+}
+
+async fn import_from(id: String) -> Result<String, String> {
+    // Reading the keyring can wait on an unlock prompt.
+    tauri::async_runtime::spawn_blocking(move || import::import(&id))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

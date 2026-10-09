@@ -77,10 +77,14 @@ export function App(props: { settings: Settings }) {
       return [...entries, next].slice(-HISTORY_LIMIT);
     });
   };
+  // With the player open, Back closes it and stays on the page under it.
   const back = useCallback(() => {
-    setExpanded(false);
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
     setHistory((entries) => (entries.length > 1 ? entries.slice(0, -1) : entries));
-  }, []);
+  }, [expanded]);
   const showSearch = () => {
     go(null);
     searchInput.current?.focus();
@@ -182,93 +186,97 @@ export function App(props: { settings: Settings }) {
             }}
           />
 
-          <div className="relative flex min-w-0 flex-1">
-            <main className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center gap-3 px-4 py-3">
-                {depth > 0 && (
-                  <IconButton label="Back" size="icon" onClick={back}>
-                    <IconArrowLeft size={18} stroke={1.75} />
-                  </IconButton>
-                )}
-                <div className="relative min-w-0 flex-1">
-                  <IconSearch
-                    size={15}
-                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <Input
-                    ref={searchInput}
-                    type="search"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      // Typing is a new search, so it shows the results.
-                      go(null);
-                    }}
-                    placeholder="Search YouTube Music and your files"
-                    // A pill on a dark field, which is the shape YouTube Music uses.
-                    className="h-9 rounded-full bg-secondary pl-9"
-                  />
-                </div>
-                <AccountMenu
-                  state={account}
-                  onSettings={() => go({ kind: "settings", id: "" })}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {/* Above the area the expanded player covers, like the sidebar, so
+                search and settings stay reachable with the player open. */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              {(depth > 0 || expanded) && (
+                <IconButton label="Back" size="icon" onClick={back}>
+                  <IconArrowLeft size={18} stroke={1.75} />
+                </IconButton>
+              )}
+              <div className="relative min-w-0 flex-1">
+                <IconSearch
+                  size={15}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  ref={searchInput}
+                  type="search"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    // Typing is a new search, so it shows the results.
+                    go(null);
+                  }}
+                  placeholder="Search YouTube Music and your files"
+                  // A pill on a dark field, which is the shape YouTube Music uses.
+                  className="h-9 rounded-full bg-secondary pl-9"
                 />
               </div>
-
-              {/* Keyed by position in history, so each screen mounts fresh. */}
-              <ScrollArea
-                key={`${depth}:${view ? viewKey(view) : "search"}`}
-                viewportRef={setViewport}
-                onScrollCapture={(event) => {
-                  if (event.target === viewport) scrolls.current[depth] = viewport.scrollTop;
-                }}
-                className="min-h-0 flex-1"
-              >
-                <ScrollParent value={viewport}>
-                  <div className="px-2 pb-2">
-                    {view?.kind === "settings" ? (
-                      <SettingsView
-                        settings={settings}
-                        library={library}
-                        updates={updates}
-                        account={account}
-                      />
-                    ) : view?.kind === "local" ? (
-                      <LocalView folder={view.id} all={library.all} actions={browse} />
-                    ) : view ? (
-                      <BrowseView route={view} actions={browse} />
-                    ) : (
-                      <SearchResults
-                        query={query}
-                        local={library.matches}
-                        youtube={youtube}
-                        actions={browse}
-                      />
-                    )}
-                  </div>
-                </ScrollParent>
-              </ScrollArea>
-            </main>
-
-            {expanded && (
-              <FullPlayer
-                track={player.track}
-                queue={player.queue}
-                filling={player.filling}
-                autoplay={player.autoplay}
-                onAutoplay={player.setAutoplay}
-                onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
-                onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
-                onMove={(from, to) => player.dispatch({ type: "move", from, to })}
-                onClear={() => player.dispatch({ type: "clear" })}
-                onCollapse={() => setExpanded(false)}
-                rating={rating}
-                onOpen={go}
-                stats={settings.settings.statsForNerds}
-                onCloseStats={() => settings.update({ statsForNerds: false })}
+              <AccountMenu
+                state={account}
+                onSettings={() => go({ kind: "settings", id: "" })}
               />
-            )}
+            </div>
+
+            <div className="relative flex min-h-0 flex-1">
+              <main className="flex min-w-0 flex-1 flex-col">
+                {/* Keyed by position in history, so each screen mounts fresh. */}
+                <ScrollArea
+                  key={`${depth}:${view ? viewKey(view) : "search"}`}
+                  viewportRef={setViewport}
+                  onScrollCapture={(event) => {
+                    if (event.target === viewport) scrolls.current[depth] = viewport.scrollTop;
+                  }}
+                  className="min-h-0 flex-1"
+                >
+                  <ScrollParent value={viewport}>
+                    <div className="px-2 pb-2">
+                      {view?.kind === "settings" ? (
+                        <SettingsView
+                          settings={settings}
+                          library={library}
+                          updates={updates}
+                          account={account}
+                        />
+                      ) : view?.kind === "local" ? (
+                        <LocalView folder={view.id} all={library.all} actions={browse} />
+                      ) : view ? (
+                        <BrowseView route={view} actions={browse} />
+                      ) : (
+                        <SearchResults
+                          query={query}
+                          local={library.matches}
+                          youtube={youtube}
+                          actions={browse}
+                        />
+                      )}
+                    </div>
+                  </ScrollParent>
+                </ScrollArea>
+              </main>
+
+              {expanded && (
+                <FullPlayer
+                  track={player.track}
+                  queue={player.queue}
+                  filling={player.filling}
+                  autoplay={player.autoplay}
+                  onAutoplay={player.setAutoplay}
+                  onJump={(trackId) => player.dispatch({ type: "jumpTo", trackId })}
+                  onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
+                  onMove={(from, to) => player.dispatch({ type: "move", from, to })}
+                  onClear={() => player.dispatch({ type: "clear" })}
+                  onCollapse={() => setExpanded(false)}
+                  rating={rating}
+                  onOpen={go}
+                  stats={settings.settings.statsForNerds}
+                  onCloseStats={() => settings.update({ statsForNerds: false })}
+                />
+              )}
+            </div>
           </div>
         </div>
 

@@ -51,8 +51,23 @@ export class PoTokenMinter {
     this.#now = now;
   }
 
-  /** A token bound to `binding`: a visitor id for streams, a video id for the player request. */
+  /**
+   * A token bound to `binding`: a visitor id for streams, a video id for the
+   * player request. The app closes the VM when it sits unused, taking the
+   * minter with it, so a failed mint builds a new minter and tries once more.
+   */
   async mint(binding: string): Promise<string> {
+    const ready = this.#ready;
+    try {
+      return await this.#mintWith(binding);
+    } catch (error) {
+      if (ready === null) throw error;
+      if (this.#ready === ready) this.#ready = null;
+      return this.#mintWith(binding);
+    }
+  }
+
+  async #mintWith(binding: string): Promise<string> {
     let ready = this.#ready;
     if (ready === null || (await ready) <= this.#now()) {
       ready = this.#ready = this.#initialize().catch((error: unknown) => {

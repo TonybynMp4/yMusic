@@ -10,6 +10,7 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Browse pages and long lists](browse.md): album, artist and playlist pages, loading long playlists, and virtualized track lists.
 - [Interactions](interactions.md): the menus on songs, albums, playlists and artists, and liking songs.
 - [Artwork](artwork.md): the `img` scheme, WebP requests and the capped disk cache.
+- [Library page](library-page.md): the chips, sorts and layouts of the page for everything saved.
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.
 - [Memory](memory.md): where memory goes, and what has been cut.

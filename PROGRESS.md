@@ -134,7 +134,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
 - [ ] Metadata cache in SQLite for playlist, album and artist pages
 - [ ] Player tabs: Details (the default), Up next, Lyrics, Related, Comments
-- [ ] Library page with chips, sort and grid or list (the Albums and Artists chips are the item below)
+- [x] Library page with chips, sort and grid or list
 - [ ] Playlist details and editing: rename, description, privacy, reorder, remove, delete
 - [ ] React performance pass (see `docs/react-performance.md`)
 - [x] The queue saved across restarts
@@ -143,7 +143,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Playback errors shown in a better place than red text over the player bar (prototype the options first)
 - [ ] Song and video switch
 - [ ] Home and Explore pages
-- [ ] Saved albums and artists in the library
+- [x] Saved albums and artists in the library
 - [ ] Local playlists
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)

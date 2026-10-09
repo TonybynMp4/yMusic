@@ -142,6 +142,7 @@ export function App(props: { settings: Settings }) {
     trackId: player.track?.id ?? null,
     status: player.playback.status,
     durationMs: player.playback.durationMs,
+    signedIn: account.account !== null,
   };
   useEffect(() => {
     if (!import.meta.env.VITE_MEMORY_SCENARIO) return;

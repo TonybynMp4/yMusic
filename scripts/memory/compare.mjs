@@ -107,7 +107,13 @@ function runMetrics(run) {
     const at = run.samples.filter((s) => s.t <= until).at(-1);
     if (at && run.marks.some((m) => m.phase === phase)) phases[phase] = held(at, "all");
   }
-  const problems = run.marks.filter((m) => /^(error|stall|stuck)/.test(m.phase)).map((m) => m.phase);
+  const problems = run.marks
+    .filter(
+      (m) =>
+        /^(error|stall|stuck)/.test(m.phase) ||
+        (variant === "signed-in" && m.phase === "account signed-out"),
+    )
+    .map((m) => m.phase);
   const warnings = run.warnings?.length ?? 0;
   return { metrics, phases, problems, warnings, durationS: last.t, timedOut: run.timedOut };
 }
@@ -145,7 +151,9 @@ function describe(set) {
 function report(s) {
   const lines = [];
   lines.push(`### ${s.title}`, "");
-  const scenario = s.variant === "fallback" ? "Fallback (PO-token) scenario" : "Scenario";
+  const scenario =
+    { fallback: "Fallback (PO-token) scenario", "signed-in": "Signed-in scenario" }[s.variant] ??
+    "Scenario";
   const explained =
     "Medians, with the lowest and highest run in brackets. " +
     `"End" is the mean over the last ${END_WINDOW_S} s of idle; "held" is PSS plus swap.`;

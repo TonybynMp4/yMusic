@@ -193,6 +193,9 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 save_position(app);
+                if let Some(player) = app.try_state::<Player>() {
+                    player.flush_volume();
+                }
             }
         });
 }

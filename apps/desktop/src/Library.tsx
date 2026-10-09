@@ -414,7 +414,7 @@ function Tile({ item, onOpen }: { item: Item; onOpen: (view: View) => void }) {
       <button
         type="button"
         onClick={() => onOpen(item.view)}
-        className="flex w-full flex-col gap-2 text-left outline-none"
+        className="group/open flex w-full flex-col gap-2 text-left outline-none"
       >
         <Art
           thumbnails={item.thumbnails}
@@ -426,7 +426,9 @@ function Tile({ item, onOpen }: { item: Item; onOpen: (view: View) => void }) {
           fallback={item.icon}
         />
         <span className={cn("min-w-0", item.round && "text-center")}>
-          <span className="line-clamp-2 text-sm group-focus-visible:underline">{item.title}</span>
+          <span className="line-clamp-2 text-sm group-focus-visible/open:underline">
+            {item.title}
+          </span>
           {item.subtitle && (
             <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
           )}
@@ -477,14 +479,14 @@ function Row({ item, onOpen }: { item: Item; onOpen: (view: View) => void }) {
 function NewPlaylistItem({ layout, onClick }: { layout: Layout; onClick: () => void }) {
   const grid = layout === "grid";
   return (
-    <li className={cn(!grid && "group relative")}>
+    <li>
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          "w-full text-left outline-none",
+          "group w-full text-left outline-none",
           grid
-            ? "group flex flex-col gap-2"
+            ? "flex flex-col gap-2"
             : "flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent/60 focus-visible:bg-accent/60",
         )}
       >
@@ -510,6 +512,8 @@ function Songs(props: { tracks: Track[]; loadingMore: boolean; actions: BrowseAc
       <Button
         variant="outline"
         className="mb-2 rounded-full"
+        // Until every page is in, it would shuffle only the first ones.
+        disabled={props.loadingMore}
         onClick={() => actions.onPlay(tracks, null)}
       >
         <IconArrowsShuffle size={16} stroke={1.75} />

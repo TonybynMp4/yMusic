@@ -3,8 +3,13 @@ import { videoIdFromTrackId, type Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 
-/** Looked up once per song for the whole session: a year never changes. */
+/**
+ * Looked up once per song, since a year never changes. Capped so a session
+ * that runs for days does not keep every song it ever showed; the oldest
+ * lookups go first.
+ */
 const years = new Map<string, Promise<number | null>>();
+const MAX_YEARS = 500;
 
 /** Forgets the years looked up so far. */
 export function clearSongYears(): void {
@@ -29,6 +34,10 @@ export function useSongYear(track: Track | null): number | null {
         return null;
       });
       years.set(videoId, lookup);
+      for (const oldest of years.keys()) {
+        if (years.size <= MAX_YEARS) break;
+        years.delete(oldest);
+      }
     }
     let live = true;
     void lookup.then((year) => live && setFound({ videoId, year }));

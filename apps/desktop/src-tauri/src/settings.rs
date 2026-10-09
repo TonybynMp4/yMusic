@@ -147,7 +147,7 @@ impl SettingsStore {
 
 /// Writes `value` as JSON to `path`, aside first and renamed over, so a crash
 /// mid-write leaves the old file.
-pub fn write_json(path: &Path, value: &impl Serialize) -> std::io::Result<()> {
+pub(crate) fn write_json(path: &Path, value: &impl Serialize) -> std::io::Result<()> {
     let json = serde_json::to_vec_pretty(value).expect("json serialize");
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;

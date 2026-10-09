@@ -157,6 +157,7 @@ fn every_command_is_reachable_over_ipc() {
         ("media_set_track", serde_json::json!({ "track": null })),
         ("media_set_volume", serde_json::json!({ "volume": 0.5 })),
         // `account_sign_in` opens a real Google page, so it stays out of here.
+        ("account_refresh", serde_json::json!({})),
         ("account_sign_out", serde_json::json!({})),
     ];
     let cookie = get_ipc_response(&webview, request("account_cookie", serde_json::json!({})))

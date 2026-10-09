@@ -9,6 +9,10 @@
 //! that and grows whenever Google adds a cookie. The keyring holds a random key
 //! instead, and the cookie sits beside the app's other data, sealed with it.
 //! Deleting either one signs the user out, which is the right failure.
+//!
+//! A session imported from a browser remembers which one, so that when it goes
+//! stale (the browser rotated it) it can be read from there again. See
+//! `docs/sign-in.md`.
 
 pub mod import;
 pub mod sign_in;
@@ -82,7 +86,30 @@ impl KeyStore for MemoryKeys {
 pub struct Account {
     path: PathBuf,
     keys: Box<dyn KeyStore>,
-    cookie: Mutex<Option<String>>,
+    session: Mutex<Option<Session>>,
+}
+
+/// What is sealed on disk. `browser` is the id `import::browsers` gave the
+/// profile the session came from, and None for the sign-in window.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Session {
+    pub cookie: String,
+    pub browser: Option<String>,
+}
+
+impl Session {
+    /// Sessions saved before the browser was remembered are the bare cookie
+    /// header. A cookie header never starts with `{`, so the two cannot be
+    /// confused; an old one reads as not imported, so it is never re-imported.
+    fn decode(plaintext: String) -> Result<Self, String> {
+        if !plaintext.starts_with('{') {
+            return Ok(Self {
+                cookie: plaintext,
+                browser: None,
+            });
+        }
+        serde_json::from_str(&plaintext).map_err(|_| "the saved session is malformed".into())
+    }
 }
 
 impl Account {
@@ -93,31 +120,35 @@ impl Account {
         let account = Self {
             path,
             keys: Box::new(keys),
-            cookie: Mutex::new(None),
+            session: Mutex::new(None),
         };
         match account.load() {
-            Ok(cookie) => *account.cookie.lock().expect("cookie mutex") = cookie,
+            Ok(session) => *account.session.lock().expect("session mutex") = session,
             Err(error) => log::warn!("starting signed out: {error}"),
         }
         account
     }
 
     pub fn cookie(&self) -> Option<String> {
-        self.cookie.lock().expect("cookie mutex").clone()
+        self.session().map(|session| session.cookie)
+    }
+
+    pub fn session(&self) -> Option<Session> {
+        self.session.lock().expect("session mutex").clone()
     }
 
     /// Keeps the session for this run even if it cannot be persisted. A
     /// keyring that refuses is logged, and the user is simply asked to sign in
     /// again next launch instead of being refused now.
-    pub fn save(&self, cookie: String) {
-        if let Err(error) = self.persist(&cookie) {
+    pub fn save(&self, session: Session) {
+        if let Err(error) = self.persist(&session) {
             log::error!("signed in for this session only: {error}");
         }
-        *self.cookie.lock().expect("cookie mutex") = Some(cookie);
+        *self.session.lock().expect("session mutex") = Some(session);
     }
 
     pub fn clear(&self) -> Result<(), String> {
-        *self.cookie.lock().expect("cookie mutex") = None;
+        *self.session.lock().expect("session mutex") = None;
         match fs::remove_file(&self.path) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::NotFound => {}
@@ -126,7 +157,7 @@ impl Account {
         self.keys.delete()
     }
 
-    fn load(&self) -> Result<Option<String>, String> {
+    fn load(&self) -> Result<Option<Session>, String> {
         let sealed = match fs::read(&self.path) {
             Ok(sealed) => sealed,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -135,10 +166,12 @@ impl Account {
         let Some(key) = self.keys.get()? else {
             return Err("the saved session's key is gone from the keyring".into());
         };
-        open_sealed(&key, &sealed).map(Some)
+        open_sealed(&key, &sealed)
+            .and_then(Session::decode)
+            .map(Some)
     }
 
-    fn persist(&self, cookie: &str) -> Result<(), String> {
+    fn persist(&self, session: &Session) -> Result<(), String> {
         let key = match self.keys.get()? {
             Some(key) if key.len() == 32 => key,
             _ => {
@@ -147,7 +180,8 @@ impl Account {
                 key
             }
         };
-        let sealed = seal(&key, cookie)?;
+        let plaintext = serde_json::to_string(session).expect("a session of strings");
+        let sealed = seal(&key, &plaintext)?;
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir)
                 .map_err(|error| format!("could not create {dir:?}: {error}"))?;
@@ -207,6 +241,13 @@ mod tests {
         }
     }
 
+    fn window(cookie: &str) -> Session {
+        Session {
+            cookie: cookie.into(),
+            browser: None,
+        }
+    }
+
     fn temp_path(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("ymusic-account-{name}-{}", std::process::id()));
@@ -218,19 +259,41 @@ mod tests {
     fn a_session_survives_a_restart_and_is_not_stored_in_the_clear() {
         let path = temp_path("restart");
         let keys = SharedKeys::default();
-        let cookie = "SAPISID=abc/def; __Secure-3PAPISID=abc/def";
+        let session = Session {
+            cookie: "SAPISID=abc/def; __Secure-3PAPISID=abc/def".into(),
+            browser: Some("/home/me/.mozilla/firefox/x.default/cookies.sqlite".into()),
+        };
 
-        Account::open(path.clone(), keys.clone()).save(cookie.into());
+        Account::open(path.clone(), keys.clone()).save(session.clone());
         let on_disk = fs::read(&path).unwrap();
         assert!(!String::from_utf8_lossy(&on_disk).contains("SAPISID"));
 
-        assert_eq!(Account::open(path, keys).cookie().as_deref(), Some(cookie));
+        assert_eq!(Account::open(path, keys).session(), Some(session));
+    }
+
+    #[test]
+    fn a_session_saved_before_browsers_were_remembered_still_opens() {
+        let path = temp_path("legacy");
+        let keys = SharedKeys::default();
+        let key = Key::generate().to_vec();
+        keys.set(&key).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, seal(&key, "SAPISID=x").unwrap()).unwrap();
+
+        let session = Account::open(path, keys).session();
+        assert_eq!(
+            session,
+            Some(Session {
+                cookie: "SAPISID=x".into(),
+                browser: None
+            })
+        );
     }
 
     #[test]
     fn losing_the_key_starts_signed_out() {
         let path = temp_path("lost-key");
-        Account::open(path.clone(), SharedKeys::default()).save("SAPISID=x".into());
+        Account::open(path.clone(), SharedKeys::default()).save(window("SAPISID=x"));
         assert_eq!(Account::open(path, SharedKeys::default()).cookie(), None);
     }
 
@@ -239,7 +302,7 @@ mod tests {
         let path = temp_path("sign-out");
         let keys = SharedKeys::default();
         let account = Account::open(path.clone(), keys.clone());
-        account.save("SAPISID=x".into());
+        account.save(window("SAPISID=x"));
         account.clear().unwrap();
 
         assert_eq!(account.cookie(), None);
@@ -253,7 +316,7 @@ mod tests {
     fn a_tampered_file_starts_signed_out() {
         let path = temp_path("tampered");
         let keys = SharedKeys::default();
-        Account::open(path.clone(), keys.clone()).save("SAPISID=x".into());
+        Account::open(path.clone(), keys.clone()).save(window("SAPISID=x"));
         let mut sealed = fs::read(&path).unwrap();
         *sealed.last_mut().unwrap() ^= 1;
         fs::write(&path, sealed).unwrap();

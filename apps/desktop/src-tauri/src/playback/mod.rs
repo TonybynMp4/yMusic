@@ -748,6 +748,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 emit(&sink, PlaybackEvent::Ended { track_id: previous });
                             }
                         }
+                        release_freed_memory();
                     }
                     // mpv restarts playback after every seek too, including a
                     // seek while paused, so "playing" has to be checked rather
@@ -840,6 +841,21 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
         })
         .expect("spawning the mpv event thread");
 }
+
+/// Hands memory freed by the last song, mostly mpv's demuxer cache, back to
+/// the system. glibc only returns what sits at the top of the heap on its own,
+/// so without this a song's buffers stay in the process after it ends. Called
+/// as the next file starts, after the UI has heard about it.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn release_freed_memory() {
+    // SAFETY: malloc_trim only walks glibc's own arenas, under their locks.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn release_freed_memory() {}
 
 /// What a file starting means for the queue.
 enum Advance {

@@ -113,10 +113,29 @@ export async function createVisitor(options: YouTubeOptions): Promise<string> {
  * forbids eval. Everything evaluated here is YouTube's own player code.
  */
 function installEvaluator(): void {
+  // youtubei.js hands over the extracted player code with a call appended
+  // that has this URL's `n` and signature written into it, so the source is
+  // new every time and the engine compiled all of it again for each URL.
+  // This compiles the part before the call once per player script and passes
+  // the values in instead. Only the latest script is kept, since YouTube
+  // swaps them.
+  let compiled: { source: string; process: Processor } | null = null;
   Platform.shim.eval = (data, env) => {
-    const calls: string[] = [];
-    if (env.n) calls.push(`n: exportedVars.nFunction(${JSON.stringify(env.n)})`);
-    if (env.sig) calls.push(`sig: exportedVars.sigFunction(${JSON.stringify(env.sig)})`);
-    return new Function(`${data.output}\nreturn { ${calls.join(", ")} }`)() as never;
+    const at = data.output.lastIndexOf(PROCESSOR_CALL);
+    if (at === -1) return new Function(data.output)() as never;
+    const source = data.output.slice(0, at);
+    if (compiled?.source !== source) {
+      compiled = { source, process: new Function(`${source}\nreturn process;`)() as Processor };
+    }
+    return compiled.process(text(env.n), text(env.sp), text(env.sig)) as never;
   };
+}
+
+/** How youtubei.js ends the code it evaluates: `return process("<n>", "<sp>", "<sig>");`. */
+const PROCESSOR_CALL = "\nreturn process(";
+
+type Processor = (n: string, sp: string, sig: string) => { n?: string; sig?: string };
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }

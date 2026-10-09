@@ -32,8 +32,13 @@ export const emptyQueue: QueueState = {
   suggestions: [],
 };
 
+/** What of a queue is saved across restarts. Suggestions are asked for again. */
+export type SavedQueueState = Pick<QueueState, "items" | "order" | "cursor" | "repeat" | "shuffle">;
+
 export type QueueAction =
   | { type: "setQueue"; tracks: readonly Track[]; startIndex?: number }
+  /** A queue saved by an earlier run. Ignored unless it is whole and consistent. */
+  | { type: "restore"; queue: SavedQueueState }
   | { type: "jumpTo"; trackId: TrackId }
   | { type: "next"; reason: "user" | "trackEnded" }
   | { type: "previous" }
@@ -75,6 +80,9 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       const cursor = order.indexOf(startIndex);
       return { ...state, items, order, cursor, suggestions: [] };
     }
+
+    case "restore":
+      return restoredQueue(action.queue) ?? state;
 
     case "jumpTo": {
       const itemIndex = state.items.findIndex((t) => t.id === action.trackId);
@@ -227,6 +235,28 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       };
     }
   }
+}
+
+/**
+ * A saved queue as a queue, or null when it can't be played: no song is
+ * current, or the order does not name every item exactly once. A file edited
+ * by hand, or written by a build with another idea of the queue, fails this
+ * rather than crashing.
+ */
+export function restoredQueue(queue: SavedQueueState): QueueState | null {
+  const { items, order, cursor, repeat, shuffle } = queue;
+  if (items.length === 0 || order.length !== items.length) return null;
+  if (cursor === null || !Number.isInteger(cursor) || cursor < 0 || cursor >= order.length) {
+    return null;
+  }
+  const seen = new Set<number>();
+  for (const index of order) {
+    if (!Number.isInteger(index) || index < 0 || index >= items.length || seen.has(index)) {
+      return null;
+    }
+    seen.add(index);
+  }
+  return { items, order, cursor, repeat, shuffle, suggestions: [] };
 }
 
 /** Moves suggestion `index` onto the end of the queue and plays it, dropping those before it. */

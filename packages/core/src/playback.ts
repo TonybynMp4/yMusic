@@ -6,8 +6,11 @@ import type { StreamLease, TrackId } from "./domain.ts";
  * to be worth it. Nothing above this interface knows which one it is talking to.
  */
 export interface PlaybackEngine {
-  /** Starts playing once loaded, unless `paused`. */
-  load(lease: StreamLease, paused?: boolean): Promise<void>;
+  /**
+   * Starts playing once loaded, unless `paused`. `startMs` starts it part
+   * way in, for a queue restored at launch.
+   */
+  load(lease: StreamLease, paused?: boolean, startMs?: number): Promise<void>;
   /**
    * The track to go on to with no gap when `after` ends, or null to take it
    * back. Ignored once `after` is no longer playing. When the engine goes on

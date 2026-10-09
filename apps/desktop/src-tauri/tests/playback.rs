@@ -95,6 +95,7 @@ fn request(url: String) -> LoadRequest {
         headers: Default::default(),
         start_paused: false,
         loudness_db: None,
+        start_ms: None,
     }
 }
 
@@ -359,6 +360,37 @@ fn seeking_while_paused_stays_paused() {
             }
         )),
         "a paused seek reported playing: {after_seek:?}"
+    );
+}
+
+/// A queue restored at launch loads its song paused where it was left, and
+/// the player reads that position back for the next exit.
+#[test]
+fn a_restored_song_starts_paused_where_it_was_left() {
+    let (player, recorder) = player();
+    player
+        .load(LoadRequest {
+            start_paused: true,
+            start_ms: Some(1_500),
+            ..track("restored", fixture_url("tone.wav"))
+        })
+        .expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.max_position_ms() >= 1_400),
+        "never opened at the saved position"
+    );
+    // Long enough that a song left playing would have moved on.
+    std::thread::sleep(Duration::from_millis(600));
+    let last_status = recorder.events().into_iter().rev().find_map(|e| match e {
+        PlaybackEvent::Status { status } => Some(status),
+        _ => None,
+    });
+    assert_eq!(last_status, Some(PlaybackStatus::Paused));
+    let (track, position_ms) = player.position().expect("a position");
+    assert_eq!(track, "restored");
+    assert!(
+        (1_400..1_900).contains(&position_ms),
+        "read back {position_ms} ms"
     );
 }
 

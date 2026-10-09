@@ -71,6 +71,9 @@ pub struct LoadRequest {
     /// YouTube's loudness for the track, in dB above its reference level.
     #[serde(default)]
     pub loudness_db: Option<f64>,
+    /// Where to start, for a queue restored at launch. From the top when None.
+    #[serde(default)]
+    pub start_ms: Option<u64>,
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -284,7 +287,24 @@ impl Player {
         };
 
         self.set_property("pause", request.start_paused)?;
-        self.loadfile(&request.url, "replace", &filter)
+        let mut options = format!("af={}", quote_option(&filter));
+        if let Some(start_ms) = request.start_ms.filter(|&ms| ms > 0) {
+            options.push_str(&format!(",start={}", start_ms as f64 / 1000.0));
+        }
+        self.loadfile_with(&request.url, "replace", &options)
+    }
+
+    /// The track mpv has and how far into it playback is, or None with
+    /// nothing loaded.
+    pub fn position(&self) -> Option<(String, u64)> {
+        let track = self
+            .state
+            .current_track
+            .lock()
+            .expect("track mutex")
+            .clone()?;
+        let seconds = self.mpv.get_property::<f64>("time-pos").ok()?;
+        Some((track, (seconds.max(0.0) * 1000.0).round() as u64))
     }
 
     /// Appends the track to play when `after` ends, or with None, takes back
@@ -351,11 +371,14 @@ impl Player {
     /// one, or a song loaded over an appended one would play with whatever
     /// that put back.
     fn loadfile(&self, url: &str, flags: &str, filter: &str) -> Result<(), String> {
-        let options = format!("af={}", quote_option(filter));
+        self.loadfile_with(url, flags, &format!("af={}", quote_option(filter)))
+    }
+
+    fn loadfile_with(&self, url: &str, flags: &str, options: &str) -> Result<(), String> {
         if self.loadfile_index {
-            self.command("loadfile", &[url, flags, "-1", &options])
+            self.command("loadfile", &[url, flags, "-1", options])
         } else {
-            self.command("loadfile", &[url, flags, &options])
+            self.command("loadfile", &[url, flags, options])
         }
     }
 

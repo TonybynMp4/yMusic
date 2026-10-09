@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { AccountState } from "./useAccount.ts";
+import { searchHistoryIn } from "./useSearchHistory.ts";
 import type { Library } from "./useLibrary.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
@@ -60,9 +61,7 @@ export function SettingsView({
   // Assumed there until the summary says otherwise.
   const hasTray = platform?.hasTray ?? true;
   const signedIn = account.account !== null;
-  // Signed out there is no account to keep it on, so the list is this device's.
-  const searchHistory =
-    settings.searchHistory === "youtube" && !signedIn ? "device" : settings.searchHistory;
+  const searchHistory = searchHistoryIn(settings.searchHistory, signedIn);
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>

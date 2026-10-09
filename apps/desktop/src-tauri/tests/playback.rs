@@ -423,3 +423,23 @@ fn the_volume_is_saved_once_it_settles() {
         "no step of the drag is the unmute level"
     );
 }
+
+/// A change made just before quitting is saved, not lost while it settles.
+#[test]
+fn quitting_saves_a_volume_still_settling() {
+    let (player, _events) = player();
+    let path = std::env::temp_dir()
+        .join(format!("ymusic-flushed-volume-{}", std::process::id()))
+        .join("volume.json");
+    let _ = std::fs::remove_file(&path);
+
+    player
+        .remember_volume(VolumeStore::open(path.clone()))
+        .expect("remember volume");
+    player.set_volume(0.3).expect("set volume");
+    // Wait for mpv to report the change, but not for it to settle.
+    std::thread::sleep(SETTLE / 5);
+    player.flush_volume();
+
+    assert_eq!(VolumeStore::open(path).get().volume, 0.3);
+}

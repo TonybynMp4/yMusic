@@ -164,8 +164,15 @@ pub fn run() {
             }
         })
         .invoke_handler(ymusic_commands!())
-        .run(tauri::generate_context!())
-        .expect("error while running ymusic");
+        .build(tauri::generate_context!())
+        .expect("error while building ymusic")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(player) = app.try_state::<Player>() {
+                    player.flush_volume();
+                }
+            }
+        });
 }
 
 /// Opens the on-disk library, falling back to an in-memory one if the data

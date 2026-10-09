@@ -161,6 +161,9 @@ pub struct Player {
     state: State,
     /// mpv 0.38 added an index argument to `loadfile`, before the options.
     loadfile_index: bool,
+    /// The thread saving the volume, joined on quit so a change still
+    /// settling is saved too.
+    volume_saver: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
@@ -250,6 +253,7 @@ impl Player {
             sink,
             state,
             loadfile_index,
+            volume_saver: Mutex::default(),
         })
     }
 
@@ -534,12 +538,29 @@ impl Player {
     pub fn remember_volume(&self, store: VolumeStore) -> Result<(), String> {
         self.set_volume(store.get().volume)?;
         let (send, changes) = mpsc::channel();
-        thread::Builder::new()
+        let saver = thread::Builder::new()
             .name("volume-saver".into())
             .spawn(move || store.save_settled(changes, SETTLE))
             .map_err(|error| format!("could not start saving the volume: {error}"))?;
         *self.state.volume_changes.lock().expect("volume mutex") = Some(send);
+        *self.volume_saver.lock().expect("saver mutex") = Some(saver);
         Ok(())
+    }
+
+    /// Saves a volume change that has not settled yet and stops saving.
+    /// Called on quit, so a change made just before it is not lost.
+    pub fn flush_volume(&self) {
+        // Dropping the sender is what tells the saver to write and return.
+        self.state
+            .volume_changes
+            .lock()
+            .expect("volume mutex")
+            .take();
+        if let Some(saver) = self.volume_saver.lock().expect("saver mutex").take() {
+            if saver.join().is_err() {
+                log::warn!("the volume saver panicked");
+            }
+        }
     }
 
     pub fn stop(&self) -> Result<(), String> {

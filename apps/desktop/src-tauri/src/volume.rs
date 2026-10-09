@@ -125,7 +125,8 @@ impl VolumeStore {
     }
 
     /// Saves each volume from `changes` once no other has followed it for
-    /// `settle`. Returns when the sender is dropped, saving any last change.
+    /// `settle`. Returns when the sender is dropped, saving any last change:
+    /// `Player::flush_volume` does that on quit.
     pub fn save_settled(&self, changes: Receiver<f64>, settle: Duration) {
         let mut pending = None;
         loop {

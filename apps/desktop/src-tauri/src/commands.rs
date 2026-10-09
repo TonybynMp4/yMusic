@@ -133,7 +133,7 @@ pub fn library_folders(library: State<'_, Library>) -> Result<Vec<String>, Strin
 }
 
 #[tauri::command]
-pub fn library_folder_cover(
+pub async fn library_folder_cover(
     library: State<'_, Library>,
     path: String,
 ) -> Result<Option<CoverArt>, String> {

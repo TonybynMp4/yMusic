@@ -231,18 +231,18 @@ mod tests {
 
     #[test]
     fn a_saved_pause_on_search_history_becomes_off() {
-        let read = |json: &str| read(json.as_bytes()).unwrap().search_history;
+        let history = |json: &str| read(json.as_bytes()).unwrap().search_history;
         assert_eq!(
-            read(r#"{ "pauseSearchHistory": true }"#),
+            history(r#"{ "pauseSearchHistory": true }"#),
             SearchHistory::Off
         );
         assert_eq!(
-            read(r#"{ "pauseSearchHistory": false }"#),
+            history(r#"{ "pauseSearchHistory": false }"#),
             SearchHistory::Youtube
         );
-        assert_eq!(read("{}"), SearchHistory::Youtube);
+        assert_eq!(history("{}"), SearchHistory::Youtube);
         assert_eq!(
-            read(r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#),
+            history(r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#),
             SearchHistory::Device,
             "a choice already made wins over the old switch"
         );

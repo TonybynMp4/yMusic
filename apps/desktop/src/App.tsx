@@ -91,9 +91,25 @@ export function App(props: { settings: Settings }) {
     searchInput.current?.focus();
   };
 
-  // Restores the offset saved for this depth, or the top for a new page.
+  // Restores the offset saved for this depth, or the top for a new page. A
+  // page the browse cache dropped arrives again a moment later, too short to
+  // scroll that far at first, so the offset is applied again as it grows,
+  // until it is reached or the user scrolls.
   useLayoutEffect(() => {
-    if (viewport) viewport.scrollTop = scrolls.current[depth] ?? 0;
+    if (!viewport) return;
+    const target = scrolls.current[depth] ?? 0;
+    viewport.scrollTop = target;
+    const content = viewport.firstElementChild;
+    if (viewport.scrollTop >= target || !content) return;
+    let applied = viewport.scrollTop;
+    const observer = new ResizeObserver(() => {
+      if (viewport.scrollTop !== applied) return observer.disconnect();
+      viewport.scrollTop = target;
+      applied = viewport.scrollTop;
+      if (applied >= target) observer.disconnect();
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
   }, [viewport, depth]);
 
   // The mouse's back button and Alt+Left, as in a browser.

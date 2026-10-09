@@ -10,4 +10,5 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Interactions](interactions.md): the menus on songs, albums, playlists and artists, and liking songs.
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.
+- [Memory](memory.md): where memory goes, and measuring a change with `scripts/memory`.
 - [Testing](testing.md): unit tests and the opt-in network tests.

@@ -52,6 +52,16 @@ Sign release assets with the updater's minisign key so the download is verified 
 
   A saved `pauseSearchHistory` of true becomes *Off*, and false becomes *YouTube*, so nobody's search changes on update. Signed out there is no account to record on, so the list is local and *YouTube* is unavailable.
 
+## Memory
+
+v0.3.0 held 603 MB in RAM and 158 MB in swap after a long session (`docs/memory.md`). Each item is its own PR, measured with `scripts/memory` before and after.
+
+- **Cap glibc's malloc arenas in the core.** `mallopt(M_ARENA_MAX, 2)` in `main.rs` before any thread starts, and `MALLOC_ARENA_MAX=2` in the environment for WebKit's processes. `malloc_trim(0)` when mpv moves to the next song returns what was freed. Expected: 150 to 200 MB less in the core.
+- **Bound the browse page cache.** The pages in `useBrowse.ts` are never evicted. Keep the 30 most recent, never dropping one still loading or on screen. Going back to an evicted page fetches it again.
+- **Skip the player script on `VISIONOS`.** Its formats are not signature-ciphered, so `retrieve_player: false` may be enough. Only if the network stream tests still pass; if a URL needs its `n` deciphered, it stays.
+- **Stop the fallback path keeping code resident.** Compile the decipher code once per player script rather than on every call. Close the BotGuard frame after 5 idle minutes, and have the minter start over when a reopened frame has no minter.
+- **Prune small maps that only grow.** Stream leases in `usePlayer.ts` that can no longer be used, and the song-year cache in `useSongYear.ts`, capped at 500.
+
 ## Later
 
 - **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.

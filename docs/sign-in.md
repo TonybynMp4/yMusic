@@ -8,4 +8,6 @@ The Sign in button opens a menu: Google's page as above, or importing the sessio
 
 Passkeys do not work in the sign-in window on Linux: WebKitGTK (2.52) ships without WebAuthn, so `PublicKeyCredential` is undefined and Google falls back to the password. WebView2 on Windows has WebAuthn. Importing from a browser is the Linux way to sign in without typing a password.
 
+A saved session goes stale: Google rotates part of it (`__Secure-1PSIDTS`) while the browser it came from is in use, and the app keeps the copy it took. YouTube does not refuse a stale session. It answers as if nobody were signed in, with a sign-in prompt where the library was and the signed-out version of a playlist, where music videos stand in for the album songs a signed-in request gets. So the engine checks every answer to a signed-in request for `logged_in` `0` in its `responseContext` (`session.ts`, from a clone, off the caller's path), and on the first one it drops the cookie and tells the app, which shows you signed out with a warning to sign in again. The saved session stays on disk: signing in replaces it.
+
 Only the browsing client is signed in. The `VISIONOS` player client stays anonymous, because a web cookie on a non-web client is exactly the mismatch YouTube flags.

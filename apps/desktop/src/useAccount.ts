@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { accountCookie, accountImport, accountSignIn, accountSignOut } from "@ymusic/ipc";
 import type { AccountSummary } from "@ymusic/youtube";
 
-import { engine } from "./engine.ts";
+import { engine, onSessionExpired } from "./engine.ts";
 
 export interface AccountState {
   account: AccountSummary | null;
@@ -29,6 +29,17 @@ export function useAccount(): AccountState {
     setAccount(cookie === null ? null : await engine.account());
     setError(null);
   }, []);
+
+  // The saved session stays on disk: signing in again replaces it, and a
+  // session imported from a browser can come back to life there.
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        setAccount(null);
+        setError("Your YouTube session has expired. Sign in again");
+      }),
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;

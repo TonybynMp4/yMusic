@@ -12,6 +12,14 @@ import { botguard } from "./botguard.ts";
  * requests come back here to go out through `appFetch`, and it has no DOM, so
  * BotGuard, for the PO-token fallback, runs in a frame this side owns.
  */
+const expiredListeners = new Set<() => void>();
+
+/** Hears when YouTube stops accepting the saved session. Returns the unsubscribe. */
+export function onSessionExpired(listener: () => void): () => void {
+  expiredListeners.add(listener);
+  return () => expiredListeners.delete(listener);
+}
+
 export const engine = connectEngine(
   new Worker(new URL("./engine.worker.ts", import.meta.url), {
     type: "module",
@@ -20,4 +28,7 @@ export const engine = connectEngine(
   appFetch,
   // The frame is served by the app; a plain browser has nothing to load.
   isTauri ? botguard : undefined,
+  () => {
+    for (const listener of expiredListeners) listener();
+  },
 );

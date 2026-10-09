@@ -17,6 +17,8 @@ export interface EngineHost {
   botguardLoad: BotGuardVm["load"];
   botguardCreateMinter: BotGuardVm["createMinter"];
   botguardMint: BotGuardVm["mint"];
+  /** YouTube stopped accepting the saved session; the engine has signed out. */
+  sessionExpired(): void;
 }
 
 /** What the worker offers the main thread. */

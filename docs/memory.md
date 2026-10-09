@@ -14,6 +14,18 @@ v0.3.0, after 4.5 hours of playback, held 603 MB in RAM and 158 MB in swap acros
 
 In the core, most of it was glibc malloc fragmentation. glibc gives each thread that allocates its own arena, up to eight per core, and frees memory back to the arena rather than to the system. 63 arenas held 281 MB of anonymous memory between them. In the web process, the larger parts were the browse page cache, which never evicts, youtubei.js parsing YouTube's player script, and the BotGuard frame with its decipher code staying resident.
 
+## What has been cut
+
+Each change has its before and after in `docs/memory/<change>/`.
+
+### glibc arenas in the core
+
+`main.rs` caps glibc at two malloc arenas with `mallopt(M_ARENA_MAX, 2)`, before any thread starts, and sets `MALLOC_ARENA_MAX=2` for WebKit's processes unless the user set it already. When mpv starts the next file, the playback event thread calls `malloc_trim(0)`, which hands back what the last song's buffers freed. glibc only returns memory at the top of the heap on its own.
+
+The core now ends the scenario 64 MB lower signed out and 70 MB lower signed in, about a quarter less, and its peak RSS is 54 to 66 MB lower (`docs/memory/glibc-arenas/`). Two arenas did not cost anything visible: the thread count is the same and playback did not stall more.
+
+The web process did not measurably change. It ends near 380 MB or near 550 MB, in both builds, depending on whether JavaScriptCore releases what the long playlist used before the end of the run. Totals across processes swing with it, so compare the core on its own for this change.
+
 ## Measuring
 
 `scripts/memory` runs the same session against two builds and compares them. Run it on Linux:

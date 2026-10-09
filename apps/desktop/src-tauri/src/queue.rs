@@ -85,12 +85,7 @@ impl QueueStore {
         };
         let _writing = self.writing.lock().expect("queue store mutex");
         let json = serde_json::to_vec(value).map_err(|error| error.to_string())?;
-        fs::create_dir_all(dir).map_err(|error| format!("could not save the queue: {error}"))?;
-        // Written aside and renamed over, so a crash mid-write leaves the old file.
-        let path = dir.join(name);
-        let partial = path.with_extension("json.partial");
-        fs::write(&partial, json)
-            .and_then(|()| fs::rename(&partial, &path))
+        crate::files::write_atomically(&dir.join(name), &json)
             .map_err(|error| format!("could not save the queue: {error}"))
     }
 }

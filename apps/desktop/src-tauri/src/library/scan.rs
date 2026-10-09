@@ -282,7 +282,10 @@ fn extract_cover_art(library: &Library, id: &str, tag: &Tag) -> Result<Option<(S
 pub(super) fn folder_cover(library: &Library, folder: &Path) -> Result<Option<CoverArt>> {
     // Named after the folder and the image's bytes: a replaced cover gets a
     // new name, so a new asset URL, and the webview cannot keep the old one.
-    let prefix = format!("folder_{}_", short_hash(folder.to_string_lossy().as_bytes()));
+    let prefix = format!(
+        "folder_{}_",
+        short_hash(folder.to_string_lossy().as_bytes())
+    );
     let found = match cover_in(folder) {
         Some((image, extension)) => {
             let data = std::fs::read(&image)?;

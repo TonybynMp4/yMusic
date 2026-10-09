@@ -15,6 +15,8 @@ export interface LibraryPlaylistsState {
    * a fetch has it.
    */
   created: (card: BrowseCard) => void;
+  /** Hides a playlist just deleted, which YouTube's library can list for a while yet. */
+  deleted: (id: string) => void;
 }
 
 export const LIKED_MUSIC = "LM";
@@ -28,7 +30,7 @@ const LIST_RETRIES = 5;
  */
 export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylistsState {
   const [generation, setGeneration] = useState(0);
-  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created">>({
+  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created" | "deleted">>({
     playlists: [],
     loading: false,
     error: null,
@@ -37,6 +39,10 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
   const [pending, setPending] = useState<{ account: string | null; cards: BrowseCard[] }>({
     account: null,
     cards: [],
+  });
+  const [gone, setGone] = useState<{ account: string | null; ids: string[] }>({
+    account: null,
+    ids: [],
   });
   // Whose list `state.playlists` is.
   const listed = useRef<string | null>(null);
@@ -102,14 +108,30 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     },
     [accountKey],
   );
+  const deleted = useCallback(
+    (id: string) => {
+      setGone(({ account, ids }) => ({
+        account: accountKey,
+        ids: [id, ...(account === accountKey ? ids : [])],
+      }));
+      setPending(({ account, cards }) => ({
+        account,
+        cards: cards.filter((card) => card.id !== id),
+      }));
+      setGeneration((g) => g + 1);
+    },
+    [accountKey],
+  );
   // New playlists go where YouTube Music puts them: first, after Liked Music.
   const playlists = useMemo(() => {
-    if (pending.account !== accountKey) return state.playlists;
-    const shown = pending.cards.filter((card) => !state.playlists.some((p) => p.id === card.id));
-    if (shown.length === 0) return state.playlists;
-    const liked = state.playlists.filter((p) => p.id === LIKED_MUSIC);
-    const rest = state.playlists.filter((p) => p.id !== LIKED_MUSIC);
+    const hidden = gone.account === accountKey ? gone.ids : [];
+    const kept = state.playlists.filter((p) => !hidden.includes(p.id));
+    if (pending.account !== accountKey) return kept;
+    const shown = pending.cards.filter((card) => !kept.some((p) => p.id === card.id));
+    if (shown.length === 0) return kept;
+    const liked = kept.filter((p) => p.id === LIKED_MUSIC);
+    const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
     return [...liked, ...shown, ...rest];
-  }, [pending, accountKey, state.playlists]);
-  return { ...state, playlists, reload, created };
+  }, [pending, gone, accountKey, state.playlists]);
+  return { ...state, playlists, reload, created, deleted };
 }

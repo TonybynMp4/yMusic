@@ -168,6 +168,9 @@ export function App(props: { settings: Settings }) {
   const searchAgain = (past: string) => {
     setQuery(past);
     searchHistory.record(past);
+    // The button picked from the keyboard is about to unmount, so focus goes
+    // back to the box rather than the page.
+    searchInput.current?.focus();
     go(null);
   };
   const interactions: Interactions = {
@@ -220,7 +223,15 @@ export function App(props: { settings: Settings }) {
                   <IconArrowLeft size={18} stroke={1.75} />
                 </IconButton>
               )}
-              <div className="relative min-w-0 flex-1">
+              {/* Focus is tracked on the box and its list together, so Tab can
+                  move into the recent searches without closing them. */}
+              <div
+                className="relative min-w-0 flex-1"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) setSearchFocused(false);
+                }}
+              >
                 <IconSearch
                   size={15}
                   className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
@@ -235,8 +246,6 @@ export function App(props: { settings: Settings }) {
                     // Typing is a new search, so it shows the results.
                     go(null);
                   }}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") searchHistory.record(query);
                     if (e.key === "Escape") e.currentTarget.blur();
@@ -246,7 +255,11 @@ export function App(props: { settings: Settings }) {
                   className="h-9 rounded-full bg-secondary pl-9"
                 />
                 {searchBoxEmpty && searchHistory.recent.length > 0 && (
-                  <RecentSearches recent={searchHistory.recent} onSearch={searchAgain} />
+                  <RecentSearches
+                    recent={searchHistory.recent}
+                    onSearch={searchAgain}
+                    onRemoved={() => searchInput.current?.focus()}
+                  />
                 )}
               </div>
               <AccountMenu
@@ -355,9 +368,14 @@ export function App(props: { settings: Settings }) {
 /**
  * Past searches, under the empty search box as YouTube Music lists them. A
  * mouse down here would blur the box and close the list before the click
- * lands, so it is held back.
+ * lands, so it is held back. A removed entry takes its focused button with
+ * it, so `onRemoved` puts focus back on the box.
  */
-function RecentSearches(props: { recent: RecentSearch[]; onSearch: (query: string) => void }) {
+function RecentSearches(props: {
+  recent: RecentSearch[];
+  onSearch: (query: string) => void;
+  onRemoved: () => void;
+}) {
   return (
     <ul
       aria-label="Recent searches"
@@ -375,7 +393,14 @@ function RecentSearches(props: { recent: RecentSearch[]; onSearch: (query: strin
             <span className="truncate">{entry.query}</span>
           </button>
           {entry.remove && (
-            <IconButton label={`Remove ${entry.query}`} size="icon-xs" onClick={entry.remove}>
+            <IconButton
+              label={`Remove ${entry.query}`}
+              size="icon-xs"
+              onClick={() => {
+                entry.remove?.();
+                props.onRemoved();
+              }}
+            >
               <IconX />
             </IconButton>
           )}

@@ -33,7 +33,7 @@ function entryFor(account: string, kind: SavedKind): Entry {
       for (const listener of created.listeners) listener();
     };
     entries.set(key, created);
-    void load(kind, set).catch((error: unknown) =>
+    void load(kind, set, () => entries.get(key) !== created).catch((error: unknown) =>
       set({ status: "error", error: error instanceof Error ? error.message : String(error) }),
     );
     entry = created;
@@ -41,7 +41,12 @@ function entryFor(account: string, kind: SavedKind): Entry {
   return entry;
 }
 
-async function load(kind: SavedKind, set: (state: Entry["state"]) => void): Promise<void> {
+/** `dropped` turns true once `forgetSaved` lets go of the entry, which stops the paging. */
+async function load(
+  kind: SavedKind,
+  set: (state: Entry["state"]) => void,
+  dropped: () => boolean,
+): Promise<void> {
   if (kind === "albums") {
     set({ status: "ready", items: await engine.libraryAlbums(), loadingMore: false });
     return;
@@ -54,7 +59,7 @@ async function load(kind: SavedKind, set: (state: Entry["state"]) => void): Prom
   const first = await engine.librarySongs();
   let tracks = first.tracks;
   set({ status: "ready", items: tracks, loadingMore: first.more !== null });
-  for (let more = first.more; more !== null;) {
+  for (let more = first.more; more !== null && !dropped(); ) {
     try {
       const next = await engine.playlistMore(more);
       tracks = [...tracks, ...next.tracks];
@@ -69,7 +74,6 @@ async function load(kind: SavedKind, set: (state: Entry["state"]) => void): Prom
 
 /** Drops every list, so the next look fetches them again: after a save, a removal, or Refresh. */
 export function forgetSaved(): void {
-  // A list still loading finishes into an entry nobody reads.
   entries.clear();
   generation += 1;
   for (const listener of forgotten) listener();

@@ -26,9 +26,10 @@ it better than prose:
 - Measurements: speed, build time, binary or bundle size, memory. Use a before
   and after table with units, run count, medians and the range, and say how you
   measured. Mark a change smaller than the range as within noise. For many data
-  points, have a script write an SVG chart into `docs/`, commit it, and embed it
-  by a commit-pinned blob URL ending in `?raw=true`, as the memory PRs do with
-  `scripts/memory/compare.mjs`.
+  points, have a script write an SVG chart into a folder for the change under
+  `docs/`, such as `docs/memory/<change>/`, commit it, and embed it by a
+  commit-pinned blob URL ending in `?raw=true`, as the memory PRs do.
+
 Skip it for small fixes, refactors that keep behaviour, dependency bumps,
 docs-only changes, and anything where the diagram would repeat the diff.
 
@@ -49,8 +50,8 @@ this branch in the same state (same song, same window size, both playing or
 both paused). Add a short recording when the change is about motion or
 timing, such as scrolling, dragging or transitions. Paste or drag images into
 this box. If you are an AI agent, give the images to the user in your reply so
-they can add them. Don't commit images. Drop the table for changes with nothing
-to see. -->
+they can add them. Don't commit screenshots or recordings. Drop the table for
+changes with nothing to see. -->
 
 | Before | After |
 | --- | --- |

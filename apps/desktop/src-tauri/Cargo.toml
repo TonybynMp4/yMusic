@@ -53,6 +53,14 @@ pbkdf2 = "0.13"
 secret-service = { version = "5", default-features = false, features = ["crypto-rust"] }
 sha1 = "0.11"
 
+# Line tables keep file and line in our panic backtraces at a fraction of the
+# link time and binary size. Set CARGO_PROFILE_DEV_DEBUG=true for a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 codegen-units = 1
 lto = true

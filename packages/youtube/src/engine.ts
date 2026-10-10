@@ -41,6 +41,11 @@ import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
+import {
+  getSearchHistory,
+  removeSearchHistory,
+  type SearchHistoryEntry,
+} from "./search-history.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
 /**
@@ -126,8 +131,8 @@ export class YouTubeEngine {
 
   /**
    * `signedOut` searches without the account, which keeps the query out of its
-   * YouTube search history. It is how "pause search history" works: YouTube's
-   * own pause is an account setting the app cannot reach.
+   * YouTube search history. It is how search history on this device, or off,
+   * works: YouTube's own pause is an account setting the app cannot reach.
    */
   async search(
     query: string,
@@ -135,6 +140,16 @@ export class YouTubeEngine {
   ): Promise<Track[]> {
     const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
     return searchSongs(youtube, query);
+  }
+
+  /** The account's recent searches, newest first. Empty when signed out. */
+  async searchHistory(): Promise<SearchHistoryEntry[]> {
+    if (this.#cookie === null) return [];
+    return getSearchHistory(await this.#browseClient());
+  }
+
+  async removeSearchHistory(feedbackToken: string): Promise<void> {
+    await removeSearchHistory(await this.#signedIn(), feedbackToken);
   }
 
   /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */

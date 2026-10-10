@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
+import { IconArrowLeft, IconHistory, IconSearch, IconX } from "@tabler/icons-react";
 import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
 import type { Settings } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
@@ -26,6 +26,7 @@ import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
+import { useSearchHistory, type RecentSearch } from "./useSearchHistory.ts";
 import { useSettings } from "./useSettings.ts";
 import { useUpdates } from "./useUpdates.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
@@ -50,11 +51,16 @@ export function App(props: { settings: Settings }) {
   const scrolls = useRef<number[]>([]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
   const searchInput = useRef<HTMLInputElement>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const library = useLibrary(query);
   const settings = useSettings(props.settings);
-  const youtube = useYouTubeSearch(query, true, settings.settings.pauseSearchHistory);
   const account = useAccount();
+  const signedIn = account.account !== null;
+  // Only "youtube" searches with the account: that is what records them there.
+  const youtube = useYouTubeSearch(query, true, settings.settings.searchHistory !== "youtube");
+  const searchBoxEmpty = searchFocused && query.trim().length === 0;
+  const searchHistory = useSearchHistory(settings.settings.searchHistory, signedIn, searchBoxEmpty);
   const player = usePlayer(settings, account.account?.name ?? null);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
@@ -146,8 +152,29 @@ export function App(props: { settings: Settings }) {
     onPlay: play,
     onOpen: go,
   };
+  // Playing or opening a result is what makes a search worth remembering,
+  // not each pause in typing.
+  const searchActions: BrowseActions = {
+    ...browse,
+    onPlay: (tracks, id, from) => {
+      searchHistory.record(query);
+      play(tracks, id, from);
+    },
+    onOpen: (next) => {
+      searchHistory.record(query);
+      go(next);
+    },
+  };
+  const searchAgain = (past: string) => {
+    setQuery(past);
+    searchHistory.record(past);
+    // The button picked from the keyboard is about to unmount, so focus goes
+    // back to the box rather than the page.
+    searchInput.current?.focus();
+    go(null);
+  };
   const interactions: Interactions = {
-    signedIn: account.account !== null,
+    signedIn,
     play,
     enqueue: (tracks, at) =>
       player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
@@ -196,7 +223,15 @@ export function App(props: { settings: Settings }) {
                   <IconArrowLeft size={18} stroke={1.75} />
                 </IconButton>
               )}
-              <div className="relative min-w-0 flex-1">
+              {/* Focus is tracked on the box and its list together, so Tab can
+                  move into the recent searches without closing them. */}
+              <div
+                className="relative min-w-0 flex-1"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) setSearchFocused(false);
+                }}
+              >
                 <IconSearch
                   size={15}
                   className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
@@ -211,10 +246,21 @@ export function App(props: { settings: Settings }) {
                     // Typing is a new search, so it shows the results.
                     go(null);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") searchHistory.record(query);
+                    if (e.key === "Escape") e.currentTarget.blur();
+                  }}
                   placeholder="Search YouTube Music and your files"
                   // A pill on a dark field, which is the shape YouTube Music uses.
                   className="h-9 rounded-full bg-secondary pl-9"
                 />
+                {searchBoxEmpty && searchHistory.recent.length > 0 && (
+                  <RecentSearches
+                    recent={searchHistory.recent}
+                    onSearch={searchAgain}
+                    onRemoved={() => searchInput.current?.focus()}
+                  />
+                )}
               </div>
               <AccountMenu
                 state={account}
@@ -256,7 +302,7 @@ export function App(props: { settings: Settings }) {
                           query={query}
                           local={library.matches}
                           youtube={youtube}
-                          actions={browse}
+                          actions={searchActions}
                         />
                       )}
                     </div>
@@ -316,6 +362,51 @@ export function App(props: { settings: Settings }) {
         )}
       </div>
     </InteractionsProvider>
+  );
+}
+
+/**
+ * Past searches, under the empty search box as YouTube Music lists them. A
+ * mouse down here would blur the box and close the list before the click
+ * lands, so it is held back. A removed entry takes its focused button with
+ * it, so `onRemoved` puts focus back on the box.
+ */
+function RecentSearches(props: {
+  recent: RecentSearch[];
+  onSearch: (query: string) => void;
+  onRemoved: () => void;
+}) {
+  return (
+    <ul
+      aria-label="Recent searches"
+      onMouseDown={(e) => e.preventDefault()}
+      className="absolute top-full right-0 left-0 z-40 mt-1 max-h-96 overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+    >
+      {props.recent.map((entry) => (
+        <li key={entry.query} className="flex items-center rounded-md hover:bg-accent">
+          <button
+            type="button"
+            onClick={() => props.onSearch(entry.query)}
+            className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm"
+          >
+            <IconHistory size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+            <span className="truncate">{entry.query}</span>
+          </button>
+          {entry.remove && (
+            <IconButton
+              label={`Remove ${entry.query}`}
+              size="icon-xs"
+              onClick={() => {
+                entry.remove?.();
+                props.onRemoved();
+              }}
+            >
+              <IconX />
+            </IconButton>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

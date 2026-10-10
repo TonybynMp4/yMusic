@@ -30,6 +30,8 @@ export interface EngineWorkerApi {
   setCookie: YouTubeEngine["setCookie"];
   account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];
+  searchHistory: YouTubeEngine["searchHistory"];
+  removeSearchHistory: YouTubeEngine["removeSearchHistory"];
   radio: YouTubeEngine["radio"];
   songYear: YouTubeEngine["songYear"];
   album: YouTubeEngine["album"];

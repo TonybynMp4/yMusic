@@ -117,7 +117,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Audio output device
 - [x] Stats for nerds: stream, gain, loudness, peaks and limiter over the artwork
 - [x] Pause watch history
-- [x] Pause search history
+- [x] Search history: on the account, on this device, or off
 - [x] Music folders: add, remove, rescan
 - [x] Keep playing in the tray when the window closes
 - [x] Update check at startup, with prereleases opt-in and a link to the release
@@ -133,7 +133,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Playlist details and editing: rename, description, privacy, reorder, remove, delete
 - [ ] The queue saved across restarts
 - [ ] The volume saved across restarts
-- [ ] Search history, local or the account's
+- [x] Search history, local or the account's
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library
 - [ ] Local playlists

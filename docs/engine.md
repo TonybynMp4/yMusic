@@ -17,6 +17,10 @@ Signed in, the engine tells YouTube what plays, the way YouTube Music's web play
 
 The listening is tracked in `useWatchHistory`, from mpv's position updates: steady updates extend a stretch, and a jump or a pause starts a new one (`Listened` in `packages/core`).
 
+## Search history
+
+YouTube Music shows the account's recent searches when its search box opens. They come from `/music/get_search_suggestions` with an empty `input`: the answer is a suggestions section of `historySuggestionRenderer`s, each with its query and a `feedbackEndpoint` token. Removing one posts that token to `/feedback` as `feedbackTokens`, as the web player's remove button does. Both go out on the signed-in `WEB_REMIX` client. Signed out the engine returns an empty list without asking. The setting that decides whether this list or one on the device is shown is in [Settings](settings.md).
+
 ## Resume
 
 YouTube Music keeps each account's queue on its servers, and that server queue is what "Resume" on another device picks up. It is separate from history: plays reported as above land in history without moving the queue.

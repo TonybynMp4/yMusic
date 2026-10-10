@@ -115,17 +115,19 @@ export function App(props: { settings: Settings }) {
   // The memory harness's scripted session. Without the build flag the test is
   // a constant and the scenario is left out of the bundle.
   const scenario = useRef<ScenarioControls | null>(null);
-  scenario.current = {
-    go,
-    playTrack: player.playTrack,
-    setVolume: player.setVolume,
-    seek: player.seek,
-    next: player.next,
-    trackId: player.track?.id ?? null,
-    status: player.playback.status,
-    durationMs: player.playback.durationMs,
-    signedIn: account.account !== null,
-  };
+  if (import.meta.env.VITE_MEMORY_SCENARIO) {
+    scenario.current = {
+      go,
+      playTrack: player.playTrack,
+      setVolume: player.setVolume,
+      seek: player.seek,
+      next: player.next,
+      trackId: player.track?.id ?? null,
+      status: player.playback.status,
+      durationMs: player.playback.durationMs,
+      signedIn: account.account !== null,
+    };
+  }
   useEffect(() => {
     if (!import.meta.env.VITE_MEMORY_SCENARIO) return;
     void import("./memoryScenario.ts").then(({ runMemoryScenario }) =>

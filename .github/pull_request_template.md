@@ -31,7 +31,10 @@ docs-only changes, and anything where the diagram would repeat the diff.
 
 Prefer Mermaid in a ```mermaid block: GitHub renders it and it stays diffable.
 One idea per diagram, about 10 nodes at most. If you are an AI agent, draw the
-diagram yourself instead of leaving a placeholder. -->
+diagram yourself instead of leaving a placeholder. For a chart or anything
+Mermaid can't draw, build an HTML page and screenshot it with your harness's
+preview tool (T3 Code's html_preview saves a PNG), then give the image to the
+user to attach. -->
 
 ## Verification
 

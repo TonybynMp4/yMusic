@@ -83,7 +83,9 @@ function newest(name) {
   let best = null;
   for (const entry of readdirSync("/proc")) {
     if (!/^\d+$/.test(entry) || text(`/proc/${entry}/comm`)?.trim() !== name) continue;
-    const start = Number(text(`/proc/${entry}/stat`).split(") ")[1].split(" ")[19]);
+    const stat = text(`/proc/${entry}/stat`);
+    if (stat === null) continue;
+    const start = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]);
     if (best === null || start > best.start) best = { pid: Number(entry), start };
   }
   return best?.pid ?? null;

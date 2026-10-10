@@ -12,7 +12,26 @@ For a bug, how to reproduce it. -->
 ## Change
 
 <!-- What the app does now, then how it works where the diff doesn't make it
-obvious. Split independent changes into separate PRs. -->
+obvious. Split independent changes into separate PRs.
+
+Add a diagram when the change isn't visible in the app but a picture explains
+it better than prose:
+- Flow across layers: data or events moving between the React app, the IPC
+  package and the Rust side (Tauri commands, events, mpv, the SQLite library).
+  Use a Mermaid sequence diagram or flowchart.
+- State and lifecycle: a new or changed state machine, such as playback, the
+  queue, sign-in, library scanning or updates. Use a Mermaid state diagram.
+- Data shape: the database schema, stored settings or IPC payloads. Use a
+  Mermaid ER diagram or a before and after code block.
+- Measurements: speed, build time, binary or bundle size, memory. Use a before
+  and after table with units and how you measured, or a chart image when there
+  are many data points.
+Skip it for small fixes, refactors that keep behaviour, dependency bumps,
+docs-only changes, and anything where the diagram would repeat the diff.
+
+Prefer Mermaid in a ```mermaid block: GitHub renders it and it stays diffable.
+One idea per diagram, about 10 nodes at most. If you are an AI agent, draw the
+diagram yourself instead of leaving a placeholder. -->
 
 ## Verification
 

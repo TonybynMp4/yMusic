@@ -12,7 +12,7 @@ The app is three processes on Linux:
 
 v0.3.0, after 4.5 hours of playback, held 603 MB in RAM and 158 MB in swap across the three. The core held 279 MB (peak 357 MB, 52 threads) and the web process 321 MB (peak 647 MB). Use was flat over the last minutes measured, so this is a plateau and not a leak that grows by the minute.
 
-In the core, most of it was glibc malloc fragmentation. glibc gives each thread that allocates its own arena, up to eight per core, and frees memory back to the arena rather than to the system. 63 arenas held 281 MB of anonymous memory between them. In the web process, the larger parts were the browse page cache, which never evicts, youtubei.js parsing YouTube's player script, and the BotGuard frame with its decipher code staying resident.
+In the core, most of it was glibc malloc fragmentation. glibc gives each thread that allocates its own arena, up to eight per core, and frees memory back to the arena rather than to the system. 63 arenas held 281 MB of anonymous memory between them. In the web process, the suspects were the browse page cache, which never evicted, youtubei.js parsing YouTube's player script, and the BotGuard frame with its decipher code staying resident. The page cache turned out to be small (below).
 
 ## What has been cut
 
@@ -25,6 +25,14 @@ Each change has its before and after in `docs/memory/<change>/`.
 The core now ends the scenario 64 MB lower signed out and 70 MB lower signed in, about a quarter less, and its peak RSS is 54 to 66 MB lower (`docs/memory/glibc-arenas/`). Two arenas did not cost anything visible: the thread count is the same and playback did not stall more.
 
 The web process did not measurably change. It ends near 380 MB or near 550 MB, in both builds, depending on whether JavaScriptCore releases what the long playlist used before the end of the run. Totals across processes swing with it, so compare the core on its own for this change.
+
+### The browse page cache
+
+`useBrowse.ts` keeps the 10 most recently opened pages and drops the oldest past that. A page on screen, followed by the queue, or still loading is never dropped. Going back to a dropped page fetches it again, and `App.tsx` reapplies the saved scroll offset as the page grows back, until it reaches the offset or you scroll.
+
+The cache was smaller than it looked. Parsed in Node, the scenario's 30 artist, album and playlist pages come to 1.3 MB as JSON and its two thousand-row playlists to 1 MB, so the 20 pages the cap drops held one to three megabytes, and each page opened past ten adds roughly 50 to 150 KB. That is too small to show against the run-to-run spread (`docs/memory/browse-lru/`): the core and the web process end within noise of the build before. The cap is there so an evening of browsing cannot grow without end, not for a saving the scenario can see.
+
+The same runs show where the web process's big swings come from. The build before ended its normal runs at 389, 553 and 617 MB and this change's at 378 to 388 MB, but the 553 MB run is JavaScriptCore keeping what the long playlist used, and the 617 MB one went through swap. Signed in, each build has one run near 500 MB and two near 400 or below.
 
 ## Measuring
 

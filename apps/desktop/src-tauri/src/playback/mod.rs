@@ -71,6 +71,9 @@ pub struct LoadRequest {
     /// YouTube's loudness for the track, in dB above its reference level.
     #[serde(default)]
     pub loudness_db: Option<f64>,
+    /// Where to start, for a queue restored at launch. From the top when None.
+    #[serde(default)]
+    pub start_ms: Option<u64>,
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -284,7 +287,20 @@ impl Player {
         };
 
         self.set_property("pause", request.start_paused)?;
-        self.loadfile(&request.url, "replace", &filter)
+        self.loadfile(&request.url, "replace", &filter, request.start_ms)
+    }
+
+    /// The track mpv has and how far into it playback is, or None with
+    /// nothing loaded.
+    pub fn position(&self) -> Option<(String, u64)> {
+        let track = self
+            .state
+            .current_track
+            .lock()
+            .expect("track mutex")
+            .clone()?;
+        let seconds = self.mpv.get_property::<f64>("time-pos").ok()?;
+        Some((track, (seconds.max(0.0) * 1000.0).round() as u64))
     }
 
     /// Appends the track to play when `after` ends, or with None, takes back
@@ -332,7 +348,7 @@ impl Player {
             .lock()
             .expect("loudness mutex")
             .filter(next.loudness_db);
-        self.loadfile(&next.url, "append", &filter)
+        self.loadfile(&next.url, "append", &filter, None)
     }
 
     /// Appends the next track again, so a change to stable volume or the
@@ -350,8 +366,17 @@ impl Player {
     /// global `af` back when a file with its own ends, so every file gets
     /// one, or a song loaded over an appended one would play with whatever
     /// that put back.
-    fn loadfile(&self, url: &str, flags: &str, filter: &str) -> Result<(), String> {
-        let options = format!("af={}", quote_option(filter));
+    fn loadfile(
+        &self,
+        url: &str,
+        flags: &str,
+        filter: &str,
+        start_ms: Option<u64>,
+    ) -> Result<(), String> {
+        let mut options = format!("af={}", quote_option(filter));
+        if let Some(start_ms) = start_ms.filter(|&ms| ms > 0) {
+            options.push_str(&format!(",start={}", start_ms as f64 / 1000.0));
+        }
         if self.loadfile_index {
             self.command("loadfile", &[url, flags, "-1", &options])
         } else {

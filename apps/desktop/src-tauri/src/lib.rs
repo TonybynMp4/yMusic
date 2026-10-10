@@ -1,11 +1,13 @@
 pub mod account;
 pub mod botguard;
 pub mod commands;
+pub mod files;
 pub mod http;
 pub mod images;
 pub mod library;
 pub mod platform;
 pub mod playback;
+pub mod queue;
 pub mod settings;
 mod tray;
 pub mod updates;
@@ -14,6 +16,7 @@ use account::{Account, OsKeyring};
 use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
+use queue::{QueuePosition, QueueStore};
 use settings::SettingsStore;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -57,6 +60,9 @@ macro_rules! ymusic_commands {
             $crate::commands::account_sign_out,
             $crate::commands::settings_get,
             $crate::commands::settings_set,
+            $crate::commands::queue_load,
+            $crate::commands::queue_save,
+            $crate::commands::queue_save_position,
             $crate::commands::update_check,
             $crate::commands::open_logs_folder
         ]
@@ -108,6 +114,7 @@ pub fn run() {
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);
+            app.manage(open_queue(app.handle()));
 
             // The loader already refuses to start without `libmpv.so.2` (mpv
             // 0.35), so what can still fail here is mpv itself. The app is a
@@ -156,8 +163,32 @@ pub fn run() {
             }
         })
         .invoke_handler(ymusic_commands!())
-        .run(tauri::generate_context!())
-        .expect("error while running ymusic");
+        .build(tauri::generate_context!())
+        .expect("error while building ymusic")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                save_position(app);
+            }
+        });
+}
+
+/// Saves where the playing song is, on the way out. The frontend saves it as
+/// it plays too, but only every few seconds, and it may be gone by now.
+fn save_position<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let (Some(player), Some(store)) = (app.try_state::<Player>(), app.try_state::<QueueStore>())
+    else {
+        return;
+    };
+    let Some((track_id, position_ms)) = player.position() else {
+        return;
+    };
+    let position = QueuePosition {
+        track_id,
+        position_ms,
+    };
+    if let Err(error) = store.save_position(&position) {
+        log::error!("{error}");
+    }
 }
 
 /// Opens the on-disk library, falling back to an in-memory one if the data
@@ -186,6 +217,16 @@ fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf
     app.path()
         .app_cache_dir()
         .unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
+}
+
+fn open_queue<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> QueueStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => QueueStore::open(dir),
+        Err(err) => {
+            log::error!("no app data directory, the queue will not persist: {err}");
+            QueueStore::in_memory()
+        }
+    }
 }
 
 fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore {

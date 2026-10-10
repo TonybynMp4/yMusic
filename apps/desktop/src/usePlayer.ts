@@ -7,6 +7,7 @@ import {
   peekNext,
   type QueueAction,
   queueReducer,
+  restoredQueue,
   type RepeatMode,
   type StreamLease,
   type Track,
@@ -15,6 +16,7 @@ import {
   type VideoId,
   videoIdFromTrackId,
 } from "@ymusic/core";
+import type { QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
@@ -81,6 +83,13 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const source = useRef<{ playlistId: string; ids: Set<TrackId> } | null>(null);
   /** A track to load without playing it, as a resumed queue waits in the player bar. */
   const cued = useRef<TrackId | null>(null);
+  /** Where to start a restored queue's song, until it plays. */
+  const resumeAt = useRef<{ trackId: TrackId; ms: number } | null>(null);
+  /**
+   * What this device last made the account's server queue. Saved with the
+   * queue, so the next launch can tell whether another device played since.
+   */
+  const [shared, setShared] = useState<SavedQueue["shared"]>(null);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -200,6 +209,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     retried.current = null;
     wantsPaused.current = cued.current === trackId;
     cued.current = null;
+    if (resumeAt.current?.trackId !== trackId) resumeAt.current = null;
 
     let cancelled = false;
     void (async () => {
@@ -210,7 +220,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       // Read after the lease, so a play pressed while it resolved holds.
       const paused = wantsPaused.current;
       queued.current = null;
-      await load(lease, paused);
+      await load(lease, paused, resumeAt.current?.ms);
       inMpv.current = trackId;
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
@@ -286,7 +296,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;
           queued.current = null;
-          await load(lease, paused);
+          const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
+          await load(lease, paused, startMs);
           inMpv.current = failed;
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
@@ -426,16 +437,46 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     [send],
   );
 
+  /**
+   * Puts back a queue saved by an earlier run, paused on its song, at
+   * `at` when that is the same song. False when the saved queue does
+   * not hold together, so the caller can fall back to something else.
+   */
+  const restore = useCallback(
+    (saved: SavedQueue, at: QueuePosition | null) => {
+      const restored = restoredQueue(saved);
+      const first = restored && currentTrack(restored);
+      if (!first) return false;
+      stopFollowing();
+      cameUp.current = false;
+      dispatch({ type: "restore", queue: saved });
+      cued.current = first.id;
+      resumeAt.current =
+        at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
+      source.current = saved.playlistId
+        ? { playlistId: saved.playlistId, ids: new Set(saved.items.map((t) => t.id)) }
+        : null;
+      setShared(saved.shared);
+      return true;
+    },
+    [stopFollowing],
+  );
+
+  /** The YouTube playlist the queue was started from, if any, for saving it. */
+  const sourcePlaylist = useCallback(() => source.current?.playlistId ?? null, []);
+
   // Once a YouTube song is playing, make it the account's queue, so YouTube
   // Music on other devices offers to resume it. Only once playing: a queue
   // resumed from elsewhere and still waiting here must not replace itself.
-  const shared = useRef<TrackId | null>(null);
+  const sharedId = useRef<TrackId | null>(null);
   const { learn, now } = ratings;
   useEffect(() => {
-    if (!playing || trackId === null || shared.current === trackId) return;
+    // Once mpv plays it, a reload (a retry, or the song again) starts from the top.
+    if (playing && trackId !== null && inMpv.current === trackId) resumeAt.current = null;
+    if (!playing || trackId === null || sharedId.current === trackId) return;
     const videoId = videoIdFromTrackId(trackId);
     if (videoId === null) return;
-    shared.current = trackId;
+    sharedId.current = trackId;
     const from = source.current;
     const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
     const asked = now();
@@ -443,6 +484,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       .shareQueue(videoId, playlistId)
       .then((rating) => {
         if (rating === null) return;
+        if (account !== null) setShared({ account, videoId, playlistId });
         learn(videoId, rating, asked);
         // Disliked elsewhere since it was last seen here: it started, so skip
         // it now, unless the user has already moved on to another track.
@@ -452,7 +494,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         }
       })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId, learn, now]);
+  }, [playing, trackId, learn, now, account]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.
@@ -550,6 +592,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     },
     [engine],
   );
+  /** The track mpv has, which `position` belongs to once it is not null. */
+  const loadedTrack = useCallback(() => inMpv.current, []);
   const setRepeat = useCallback(
     (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }),
     [],
@@ -568,9 +612,13 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     track,
     playback: state,
     position,
+    loadedTrack,
     volume,
     playTrack,
     cue,
+    restore,
+    shared,
+    sourcePlaylist,
     play,
     pause,
     toggle,

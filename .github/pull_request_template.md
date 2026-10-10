@@ -24,14 +24,17 @@ it better than prose:
 - Data shape: the database schema, stored settings or IPC payloads. Use a
   Mermaid ER diagram or a before and after code block.
 - Measurements: speed, build time, binary or bundle size, memory. Use a before
-  and after table with units and how you measured, or a chart image when there
-  are many data points.
+  and after table with units, run count, medians and the range, and say how you
+  measured. Mark a change smaller than the range as within noise. For many data
+  points, have a script write an SVG chart into `docs/`, commit it, and embed it
+  by a commit-pinned blob URL ending in `?raw=true`, as the memory PRs do with
+  `scripts/memory/compare.mjs`.
 Skip it for small fixes, refactors that keep behaviour, dependency bumps,
 docs-only changes, and anything where the diagram would repeat the diff.
 
 Prefer Mermaid in a ```mermaid block: GitHub renders it and it stays diffable.
 One idea per diagram, about 10 nodes at most. If you are an AI agent, draw the
-diagram yourself instead of leaving a placeholder. For a chart or anything
+diagram yourself instead of leaving a placeholder. For a one-off picture
 Mermaid can't draw, build an HTML page and screenshot it with your harness's
 preview tool (T3 Code's html_preview saves a PNG), then give the image to the
 user to attach. -->

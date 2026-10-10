@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { IconArrowLeft, IconSearch } from "@tabler/icons-react";
 import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
-import type { Settings } from "@ymusic/ipc";
+import type { SavedVolume, Settings } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { IconButton } from "@/components/IconButton";
@@ -37,7 +37,7 @@ const HISTORY_LIMIT = 50;
 /** Local matches shown above YouTube's before "Show all". */
 const LOCAL_PREVIEW = 5;
 
-export function App(props: { settings: Settings }) {
+export function App(props: { settings: Settings; volume: SavedVolume }) {
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
   // Where you have been, newest last; `null` is search. Every move pushes,
@@ -55,7 +55,7 @@ export function App(props: { settings: Settings }) {
   const settings = useSettings(props.settings);
   const youtube = useYouTubeSearch(query, true, settings.settings.pauseSearchHistory);
   const account = useAccount();
-  const player = usePlayer(settings, account.account?.name ?? null);
+  const player = usePlayer(settings, account.account?.name ?? null, props.volume.volume);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
   useResume(player, account.account?.name ?? null);
@@ -297,6 +297,7 @@ export function App(props: { settings: Settings }) {
           onPrevious={player.previous}
           onSeek={player.seek}
           volume={player.volume}
+          unmutedVolume={props.volume.unmuted}
           onVolume={player.setVolume}
           onRepeat={player.setRepeat}
           onShuffle={player.setShuffle}

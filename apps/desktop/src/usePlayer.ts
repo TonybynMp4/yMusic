@@ -60,14 +60,19 @@ function radioSeed(queue: QueueState): TrackId | null {
  *
  * `account` is the signed-in account's name, which the saved ratings belong to.
  */
-export function usePlayer({ settings, update }: SettingsState, account: string | null) {
+export function usePlayer(
+  { settings, update }: SettingsState,
+  account: string | null,
+  savedVolume: number,
+) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
    * The slider position in 0..1. Held here rather than in the player bar
-   * because the OS can set it too, from the MPRIS volume control.
+   * because the OS can set it too, from the MPRIS volume control. It starts
+   * at the saved volume, which Rust has already given mpv.
    */
-  const [volume, setVolumeState] = useState(1);
+  const [volume, setVolumeState] = useState(savedVolume);
   /** On by default, as in YouTube Music: when the queue runs out, its suggestions play on. */
   const autoplay = settings.autoplay;
   /** The queue's source is still arriving, so autoplay waits for its real end. */

@@ -37,6 +37,24 @@ export async function playerAudioDevices(): Promise<AudioDevice[]> {
   return invokeParsed("player_audio_devices", z.array(AudioDevice));
 }
 
+/**
+ * Mirrors `volume::SavedVolume`: the volume the last run left off at, and the
+ * last one above zero, for Unmute. Both are slider positions in 0..1.
+ */
+export const SavedVolume = z.object({
+  volume: z.number().min(0).max(1),
+  unmuted: z.number().min(0).max(1),
+});
+export type SavedVolume = z.infer<typeof SavedVolume>;
+
+export const fullVolume: SavedVolume = { volume: 1, unmuted: 1 };
+
+/** Full volume outside Tauri, where nothing is saved. */
+export async function playerSavedVolume(): Promise<SavedVolume> {
+  if (!isTauri) return fullVolume;
+  return invokeParsed("player_saved_volume", SavedVolume);
+}
+
 /** Mirrors `playback::AudioStats`: what stats for nerds shows. */
 export const AudioStats = z.object({
   codec: z.string().nullable(),

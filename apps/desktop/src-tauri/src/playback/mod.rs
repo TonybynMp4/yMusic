@@ -20,9 +20,10 @@ use libmpv2::{events::Event, Format, Mpv};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::StableVolume;
+use crate::volume::{VolumeStore, SETTLE};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     thread,
 };
 
@@ -54,6 +55,7 @@ struct Sink {
 const OBSERVE_TIME_POS: u64 = 1;
 const OBSERVE_DURATION: u64 = 2;
 const OBSERVE_PAUSE: u64 = 3;
+const OBSERVE_VOLUME: u64 = 4;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,6 +147,9 @@ struct State {
     current_track: Arc<Mutex<Option<String>>>,
     loudness: Arc<Mutex<Loudness>>,
     gapless: Arc<Mutex<Gapless>>,
+    /// Where mpv's volume goes to be saved once it settles, once
+    /// `remember_volume` has started that.
+    volume_changes: Arc<Mutex<Option<mpsc::Sender<f64>>>>,
 }
 
 pub struct Player {
@@ -156,6 +161,9 @@ pub struct Player {
     state: State,
     /// mpv 0.38 added an index argument to `loadfile`, before the options.
     loadfile_index: bool,
+    /// The thread saving the volume, joined on quit so a change still
+    /// settling is saved too.
+    volume_saver: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
@@ -233,6 +241,10 @@ impl Player {
             .map_err(|error| format!("could not observe duration: {error}"))?;
         mpv.observe_property("pause", Format::Flag, OBSERVE_PAUSE)
             .map_err(|error| format!("could not observe pause: {error}"))?;
+        // Rust sees every volume change, the slider's and the OS media
+        // widget's alike, so it is the one place that can save it.
+        mpv.observe_property("volume", Format::Double, OBSERVE_VOLUME)
+            .map_err(|error| format!("could not observe volume: {error}"))?;
 
         spawn_event_thread(Arc::clone(&mpv), sink.clone(), state.clone());
 
@@ -241,6 +253,7 @@ impl Player {
             sink,
             state,
             loadfile_index,
+            volume_saver: Mutex::default(),
         })
     }
 
@@ -518,6 +531,36 @@ impl Player {
     /// alternative is the app quietly getting a linear slider back.
     pub fn set_volume(&self, position: f64) -> Result<(), String> {
         self.set_property("volume", (position.clamp(0.0, 1.0) * 100.0).round())
+    }
+
+    /// Starts from `store`'s saved volume and saves the volume to it from now
+    /// on. Called at startup, before anything loads.
+    pub fn remember_volume(&self, store: VolumeStore) -> Result<(), String> {
+        self.set_volume(store.get().volume)?;
+        let (send, changes) = mpsc::channel();
+        let saver = thread::Builder::new()
+            .name("volume-saver".into())
+            .spawn(move || store.save_settled(changes, SETTLE))
+            .map_err(|error| format!("could not start saving the volume: {error}"))?;
+        *self.state.volume_changes.lock().expect("volume mutex") = Some(send);
+        *self.volume_saver.lock().expect("saver mutex") = Some(saver);
+        Ok(())
+    }
+
+    /// Saves a volume change that has not settled yet and stops saving.
+    /// Called on quit, so a change made just before it is not lost.
+    pub fn flush_volume(&self) {
+        // Dropping the sender is what tells the saver to write and return.
+        self.state
+            .volume_changes
+            .lock()
+            .expect("volume mutex")
+            .take();
+        if let Some(saver) = self.volume_saver.lock().expect("saver mutex").take() {
+            if saver.join().is_err() {
+                log::warn!("the volume saver panicked");
+            }
+        }
     }
 
     pub fn stop(&self) -> Result<(), String> {
@@ -829,6 +872,15 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                         },
                                     },
                                 );
+                            }
+                        }
+                        OBSERVE_VOLUME => {
+                            if let libmpv2::events::PropertyData::Double(volume) = change {
+                                if let Some(send) =
+                                    state.volume_changes.lock().expect("volume mutex").as_ref()
+                                {
+                                    let _ = send.send(volume / 100.0);
+                                }
                             }
                         }
                         _ => {}

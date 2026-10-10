@@ -9,6 +9,7 @@ pub mod playback;
 pub mod settings;
 mod tray;
 pub mod updates;
+pub mod volume;
 
 use account::{Account, OsKeyring};
 use library::Library;
@@ -17,6 +18,7 @@ use playback::Player;
 use settings::SettingsStore;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use volume::VolumeStore;
 
 /// The app's command surface, in one place so tests mount exactly what ships.
 /// A command that is implemented but never registered here is invisible to the
@@ -34,6 +36,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_pause,
             $crate::commands::player_seek,
             $crate::commands::player_set_volume,
+            $crate::commands::player_saved_volume,
             $crate::commands::player_stop,
             $crate::commands::player_audio_devices,
             $crate::commands::player_stats,
@@ -120,6 +123,11 @@ pub fn run() {
                     let media = MediaSession::attach(&window);
                     player.observe(media.clone());
                     player.apply_settings(&startup_settings);
+                    let volume = open_volume(app.handle());
+                    if let Err(error) = player.remember_volume(volume.clone()) {
+                        log::warn!("{error}");
+                    }
+                    app.manage(volume);
                     app.manage(player);
                     app.manage(media);
                 }
@@ -156,8 +164,15 @@ pub fn run() {
             }
         })
         .invoke_handler(ymusic_commands!())
-        .run(tauri::generate_context!())
-        .expect("error while running ymusic");
+        .build(tauri::generate_context!())
+        .expect("error while building ymusic")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(player) = app.try_state::<Player>() {
+                    player.flush_volume();
+                }
+            }
+        });
 }
 
 /// Opens the on-disk library, falling back to an in-memory one if the data
@@ -194,6 +209,18 @@ fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore 
         Err(err) => {
             log::error!("no app data directory, settings will not persist: {err}");
             SettingsStore::in_memory()
+        }
+    }
+}
+
+/// The saved volume, beside the settings. Without a data directory every
+/// launch starts at full volume, as it would with nothing saved.
+fn open_volume<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VolumeStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => VolumeStore::open(dir.join("volume.json")),
+        Err(err) => {
+            log::error!("no app data directory, the volume will not persist: {err}");
+            VolumeStore::in_memory()
         }
     }
 }

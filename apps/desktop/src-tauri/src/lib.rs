@@ -58,7 +58,9 @@ macro_rules! ymusic_commands {
             $crate::commands::settings_get,
             $crate::commands::settings_set,
             $crate::commands::update_check,
-            $crate::commands::open_logs_folder
+            $crate::commands::open_logs_folder,
+            #[cfg(feature = "memory-scenario")]
+            $crate::commands::memory_mark
         ]
     };
 }

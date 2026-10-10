@@ -32,9 +32,17 @@ pub trait KeyStore: Send + Sync + 'static {
 /// Credential Manager on Windows, the Secret Service on Linux.
 pub struct OsKeyring;
 
+/// The keyring is not divided by the app's identifier the way its folders
+/// are, so the memory harness's build (docs/memory.md) files its key under its
+/// own name. Otherwise signing out there would sign out the installed app.
+#[cfg(not(feature = "memory-scenario"))]
+const KEYRING_SERVICE: &str = "ymusic";
+#[cfg(feature = "memory-scenario")]
+const KEYRING_SERVICE: &str = "ymusic-memory";
+
 impl OsKeyring {
     fn entry() -> Result<keyring::Entry, String> {
-        keyring::Entry::new("ymusic", "account-key")
+        keyring::Entry::new(KEYRING_SERVICE, "account-key")
             .map_err(|error| format!("the system keyring is unavailable: {error}"))
     }
 }

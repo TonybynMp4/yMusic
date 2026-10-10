@@ -146,6 +146,15 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Remote control between devices, like Spotify Connect (see PLAN.md)
 - [ ] Mobile
 
+### Memory
+
+- [x] Memory harness: scripted scenario, sampler and before/after report (`scripts/memory`)
+- [ ] Cap glibc malloc arenas in the core
+- [ ] Bound the browse page cache
+- [ ] Skip the player script on `VISIONOS`
+- [ ] Stop the fallback path keeping code resident
+- [ ] Prune stream leases and the song-year cache
+
 ## Known issues
 
 - YouTube Music sometimes answers a radio request with nothing. Autoplay then waits until the queue's last song changes before asking again, so the queue can end with no suggestions.

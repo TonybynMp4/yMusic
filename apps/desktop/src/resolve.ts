@@ -32,6 +32,10 @@ export async function resolveTrack(
     case "youtube": {
       const videoId = videoIdFromTrackId(id);
       if (videoId === null) throw new Error(`not a YouTube track id: ${id}`);
+      // The memory harness's `fallback` variant, to measure the PO-token path.
+      if (import.meta.env.VITE_MEMORY_SCENARIO === "fallback") {
+        return engine.resolve(videoId, { ...options, fallback: true });
+      }
       return engine.resolve(videoId, options);
     }
   }

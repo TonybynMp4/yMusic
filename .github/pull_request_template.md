@@ -12,7 +12,33 @@ For a bug, how to reproduce it. -->
 ## Change
 
 <!-- What the app does now, then how it works where the diff doesn't make it
-obvious. Split independent changes into separate PRs. -->
+obvious. Split independent changes into separate PRs.
+
+Add a diagram when the change isn't visible in the app but a picture explains
+it better than prose:
+- Flow across layers: data or events moving between the React app, the IPC
+  package and the Rust side (Tauri commands, events, mpv, the SQLite library).
+  Use a Mermaid sequence diagram or flowchart.
+- State and lifecycle: a new or changed state machine, such as playback, the
+  queue, sign-in, library scanning or updates. Use a Mermaid state diagram.
+- Data shape: the database schema, stored settings or IPC payloads. Use a
+  Mermaid ER diagram or a before and after code block.
+- Measurements: speed, build time, binary or bundle size, memory. Use a before
+  and after table with units, run count, medians and the range, and say how you
+  measured. Mark a change smaller than the range as within noise. For many data
+  points, have a script write an SVG chart into a folder for the change under
+  `docs/`, such as `docs/memory/<change>/`, commit it, and embed it by a
+  commit-pinned blob URL ending in `?raw=true`, as the memory PRs do.
+
+Skip it for small fixes, refactors that keep behaviour, dependency bumps,
+docs-only changes, and anything where the diagram would repeat the diff.
+
+Prefer Mermaid in a ```mermaid block: GitHub renders it and it stays diffable.
+One idea per diagram, about 10 nodes at most. If you are an AI agent, draw the
+diagram yourself instead of leaving a placeholder. For a one-off picture
+Mermaid can't draw, build an HTML page and screenshot it with your harness's
+preview tool (T3 Code's html_preview saves a PNG), then give the image to the
+user to attach. -->
 
 ## Verification
 
@@ -24,8 +50,8 @@ this branch in the same state (same song, same window size, both playing or
 both paused). Add a short recording when the change is about motion or
 timing, such as scrolling, dragging or transitions. Paste or drag images into
 this box. If you are an AI agent, give the images to the user in your reply so
-they can add them. Don't commit images. Drop the table for changes with nothing
-to see. -->
+they can add them. Don't commit screenshots or recordings. Drop the table for
+changes with nothing to see. -->
 
 | Before | After |
 | --- | --- |

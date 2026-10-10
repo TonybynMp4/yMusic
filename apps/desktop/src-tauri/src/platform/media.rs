@@ -251,6 +251,15 @@ impl EventSink for MediaSession {
     }
 }
 
+/// Becomes `org.mpris.MediaPlayer2.ymusic` on the session bus. The bus name
+/// does not follow the app's identifier, so the memory harness's build
+/// (docs/memory.md) claims its own: otherwise it would take the installed
+/// app's media keys during a run.
+#[cfg(not(feature = "memory-scenario"))]
+const DBUS_NAME: &str = "ymusic";
+#[cfg(feature = "memory-scenario")]
+const DBUS_NAME: &str = "ymusic_memory";
+
 fn create_controls<R: Runtime>(
     window: &WebviewWindow<R>,
     session: MediaSession,
@@ -266,8 +275,7 @@ fn create_controls<R: Runtime>(
 
     let config = PlatformConfig {
         display_name: "yMusic",
-        // Becomes `org.mpris.MediaPlayer2.ymusic` on the session bus.
-        dbus_name: "ymusic",
+        dbus_name: DBUS_NAME,
         hwnd,
     };
     let mut controls = MediaControls::new(config).map_err(|e| format!("{e:?}"))?;

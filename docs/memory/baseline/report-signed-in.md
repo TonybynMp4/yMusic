@@ -1,4 +1,4 @@
-### main
+### Baseline: main at v0.3.0, signed in
 
 Signed-in scenario, 3 runs of `main` (2815d06+dirty) on 2026-10-09. Medians, with the lowest and highest run in brackets. "End" is the mean over the last 60 s of idle; "held" is PSS plus swap.
 

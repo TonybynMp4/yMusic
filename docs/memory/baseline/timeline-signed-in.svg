@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" width="960" height="780" font-family="system-ui, sans-serif" font-size="12">
 <rect width="960" height="780" fill="#ffffff"/>
-<text x="56" y="22" font-size="15" font-weight="600" fill="#1f2328">main</text>
+<text x="56" y="22" font-size="15" font-weight="600" fill="#1f2328">Baseline: main at v0.3.0, signed in</text>
 <g transform="translate(56, 40)">
 <line x1="0" x2="22" y1="0" y2="0" stroke="#d6336c" stroke-width="2.5"/><text x="28" y="4" fill="#1f2328">main (3 runs)</text>
 <text x="520" y="4" fill="#59636e">line: median, shading: lowest to highest run. PSS + swap, MB</text>

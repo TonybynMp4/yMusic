@@ -3,6 +3,14 @@ import { connectEngine } from "@ymusic/youtube/host";
 
 import { botguard } from "./botguard.ts";
 
+const expiredListeners = new Set<() => void>();
+
+/** Hears when YouTube stops accepting the saved session. Returns the unsubscribe. */
+export function onSessionExpired(listener: () => void): () => void {
+  expiredListeners.add(listener);
+  return () => expiredListeners.delete(listener);
+}
+
 /**
  * The YouTube engine, running in a worker for the life of the app.
  *
@@ -20,4 +28,7 @@ export const engine = connectEngine(
   appFetch,
   // The frame is served by the app; a plain browser has nothing to load.
   isTauri ? botguard : undefined,
+  () => {
+    for (const listener of expiredListeners) listener();
+  },
 );

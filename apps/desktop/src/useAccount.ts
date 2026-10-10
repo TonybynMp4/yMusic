@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { accountCookie, accountImport, accountSignIn, accountSignOut } from "@ymusic/ipc";
 import type { AccountSummary } from "@ymusic/youtube";
 
-import { engine } from "./engine.ts";
+import { engine, onSessionExpired } from "./engine.ts";
 
 export interface AccountState {
   account: AccountSummary | null;
@@ -24,11 +24,37 @@ export function useAccount(): AccountState {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Counts expiries, so an `adopt` the session expired under drops its result:
+  // the expiry is read from a copy of a response and can land before the
+  // answer to `engine.account()` does.
+  const expiries = useRef(0);
+
   const adopt = useCallback(async (cookie: string | null) => {
-    await engine.setCookie(cookie);
-    setAccount(cookie === null ? null : await engine.account());
+    const expiry = expiries.current;
+    let summary: AccountSummary | null;
+    try {
+      await engine.setCookie(cookie);
+      summary = cookie === null ? null : await engine.account();
+    } catch (e) {
+      if (expiries.current !== expiry) return;
+      throw e;
+    }
+    if (expiries.current !== expiry) return;
+    setAccount(summary);
     setError(null);
   }, []);
+
+  // The saved session stays on disk: signing in again replaces it, and a
+  // session imported from a browser can come back to life there.
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        expiries.current += 1;
+        setAccount(null);
+        setError("Your YouTube session has expired. Sign in again");
+      }),
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;

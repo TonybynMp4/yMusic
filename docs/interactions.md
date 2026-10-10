@@ -16,6 +16,16 @@ The player bar and the full player show the song's byline as YouTube Music's bar
 
 The year comes with a song from an album page (the header's subtitle), from an up-next panel (radio, mix, the resumed queue, where youtubei.js reads it off the byline's last run) and from a local file's tags. A YouTube song from a search or a playlist has none, so `useSongYear` asks for it with a plain `/next` for that song and reads its own panel row. The answer is kept for the session (a failed lookup is not, and is tried again the next time the song shows), and a song with no album on YouTube, such as a music video, shows no year.
 
+## Your playlists
+
+A playlist's page shows its owner, its summary line, who can see it (your own playlists only: YouTube says so on the edit form alone), a second line with the song count and total length, and the description. Until every row has loaded, the count and length are YouTube's; after, they come from the rows, so they follow your edits.
+
+On your own playlist the page has an Edit button beside Play and Shuffle, and the playlist's menu has "Edit playlist" and "Delete playlist". Edit opens YouTube Music's dialog, the New playlist one filled in, and sends only what changed. Delete asks first, since YouTube cannot bring a playlist back, then takes it out of the sidebar and out of history, so Back never lands on it, and leaves its page if you are on it.
+
+Each row has "Remove from playlist" in its menu, and rows reorder by dragging, with the same drag the queue uses (`useRowDrag.ts`). Rows move and go only once all of them have loaded, because the queue follows a loading playlist by how many rows it has. A row is named by its own id within the playlist (YouTube's `setVideoId`), since a song can be in a playlist twice. youtubei.js drops that id, so it is read from the row's "Remove from playlist" menu item, which only your own playlists have, as ytmusicapi does. That same edit form on the header is what marks a playlist as yours.
+
+Every change shows at once and goes to YouTube after. If YouTube refuses it, the page is fetched again so it shows what YouTube has. The changes are what YouTube Music's web player sends (`packages/youtube/src/edit.ts`): a list of actions to `browse/edit_playlist` (`ACTION_SET_PLAYLIST_NAME`, `ACTION_SET_PLAYLIST_DESCRIPTION`, `ACTION_SET_PLAYLIST_PRIVACY`, `ACTION_REMOVE_VIDEO`, and `ACTION_MOVE_VIDEO_BEFORE` naming the row that ends up after the moved one, or none to move it last), and `playlist/delete`. Both go through the YouTube Music client, as rating does.
+
 ## Liking and disliking
 
 The thumbs down and up sit beside the song in the player bar and under the artwork in the full player, for a YouTube song while signed in. Pressing the one already on clears it. Liking a song adds it to Liked Music, which is YouTube's doing, not the app's.

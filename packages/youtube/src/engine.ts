@@ -29,6 +29,15 @@ import {
   type PlaylistTarget,
 } from "./browse.ts";
 import {
+  deletePlaylist,
+  detailsActions,
+  editPlaylist,
+  moveAction,
+  removeActions,
+  type PlaylistDetails,
+  type PlaylistItem,
+} from "./edit.ts";
+import {
   getPlaybackTracking,
   newCpn,
   playbackPing,
@@ -183,6 +192,24 @@ export class YouTubeEngine {
     await (await this.#signedIn()).playlist.addVideos(playlistId, videoIds);
   }
 
+  /** Renames one of your playlists, or changes its description or who can see it. */
+  async editPlaylist(playlistId: string, details: PlaylistDetails): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, detailsActions(details));
+  }
+
+  async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, removeActions(items));
+  }
+
+  /** Moves the row `itemId` to just before `beforeItemId`, or to the end when that is null. */
+  async moveInPlaylist(playlistId: string, itemId: string, beforeItemId: string | null): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, [moveAction(itemId, beforeItemId)]);
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    await deletePlaylist(await this.#signedIn(), playlistId);
+  }
+
   /**
    * Tells YouTube a song started playing, which adds it to the account's
    * history. Returns a handle for the watch-time reports that follow, or null
@@ -276,12 +303,14 @@ export class YouTubeEngine {
     return { page, more: this.#hold(more) };
   }
 
-  async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
+  async playlistMore(
+    handle: string,
+  ): Promise<{ tracks: Track[]; itemIds: (string | null)[]; more: string | null }> {
     const next = this.#continuations.get(handle);
     if (!next) throw new Error("this playlist page has expired; reopen the playlist");
     this.#continuations.delete(handle);
-    const { tracks, more } = await next();
-    return { tracks, more: this.#hold(more) };
+    const { tracks, itemIds, more } = await next();
+    return { tracks, itemIds, more: this.#hold(more) };
   }
 
   /**

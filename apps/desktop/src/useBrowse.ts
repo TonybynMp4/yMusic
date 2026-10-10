@@ -29,10 +29,14 @@ export type BrowseState =
   | { status: "error"; error: string };
 
 /**
- * Pages already opened this run, so going back is instant and does not
- * refetch, and a long playlist keeps loading while you look at something
- * else. A page that changes upstream (a playlist gaining tracks) is fresh on
- * next launch.
+ * Pages opened recently, so going back is instant and does not refetch, and a
+ * long playlist keeps loading while you look at something else. A page that
+ * changes upstream (a playlist gaining tracks) is fresh on next launch.
+ *
+ * Only the last `CACHE_LIMIT` are kept, oldest dropped first, since a page
+ * holds everything parsed for it and an evening of browsing used to keep them
+ * all (docs/memory.md). A page on screen, followed by the queue, or still
+ * loading is never dropped. Going back to a dropped page fetches it again.
  */
 interface Entry {
   state: BrowseState;
@@ -40,11 +44,16 @@ interface Entry {
 }
 
 const entries = new Map<string, Entry>();
+const CACHE_LIMIT = 10;
 
 function entryFor(route: Route, loader: typeof load = load): Entry {
   const key = `${route.kind}:${route.id}`;
   let entry = entries.get(key);
-  if (!entry) {
+  if (entry) {
+    // Moved to the end, the most recently used, which is the last evicted.
+    entries.delete(key);
+    entries.set(key, entry);
+  } else {
     const created: Entry = {
       state: { status: "loading" },
       listeners: new Set(),
@@ -58,8 +67,22 @@ function entryFor(route: Route, loader: typeof load = load): Entry {
       set({ status: "error", error: message(error) }),
     );
     entry = created;
+    evict();
   }
   return entry;
+}
+
+/** Drops the least recently used pages over the limit that nothing needs. */
+function evict(): void {
+  let over = entries.size - CACHE_LIMIT;
+  for (const [key, entry] of entries) {
+    if (over <= 0) return;
+    const { state } = entry;
+    const busy = state.status === "loading" || (state.status === "ready" && state.loadingMore);
+    if (entry.listeners.size > 0 || busy) continue;
+    entries.delete(key);
+    over--;
+  }
 }
 
 async function load(route: Route, set: (state: BrowseState) => void): Promise<void> {

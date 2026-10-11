@@ -46,6 +46,12 @@ youtubei.js hands the fallback's decipher code over with a call appended that ha
 
 The scenario cannot see either change (`docs/memory/fallback-resident/`). Every number in the fallback variant ends within noise of the build before. The frame only closes after five idle minutes and the scenario's last idle phase lasts two, so the runs never reach it. Each compiled extract used to be garbage once its call returned, so caching saves compile time, not memory. It does keep one compiled extract in the engine worker until the next player script replaces it, on purpose: that is not a leak. The change is for a fallback session that plays a few songs and then sits for hours with BotGuard loaded.
 
+### Small maps
+
+Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved song so going back to it skips a request, and now drops the expired ones each time it stores a new lease; a lease lasts a few hours, so a long session no longer keeps one per song it ever played. `useSongYear.ts` caches each song's release year for the session and now keeps the latest 500.
+
+Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/memory/small-maps/`): every web and total number ends within noise of the build before. Signed in, the core reads 6 MB higher, but this change does not touch the core, and the before runs were so close together (121 MB each) that any difference clears the noise line. This is about a session that runs for days, not a saving an 11 minute run shows.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

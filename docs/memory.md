@@ -43,7 +43,7 @@ A run takes about 11 minutes. `--variant fallback` builds a version that resolve
 
 `compare.mjs` writes three files to `--out`. `timeline.svg` plots each process over the session, median of the runs as a line and the lowest to highest run as shading. `report.md` has the tables: end-of-run memory (mean over the last 60 s), peak and threads per process, all processes at the end of each phase, and the change. A change smaller than the spread between the before runs is marked as within noise. `summary.json` holds the same numbers. For `--variant fallback` or `signed-in`, each name gets the variant as a suffix, such as `report-fallback.md`.
 
-The numbers that matter are PSS (each process's share of the pages it maps, so shared libraries are not counted three times) plus swap. Swap depends on how much else the machine is doing, so each run records the free memory and swap it started with.
+The number that matters is anonymous memory (`Pss_Anon`: heaps, JIT code and buffers the process allocated itself) plus swap. PSS, each process's share of every page it maps, also counts shared libraries, and that share drops whenever another program maps the same libraries. Any other WebKitGTK app open during a run lowers every process's PSS by 20 to 30 MB without the app changing, so the report gives PSS only as a secondary table. Swap depends on how much else the machine is doing, so each run records the free memory and swap it started with.
 
 ### Keeping comparisons fair
 

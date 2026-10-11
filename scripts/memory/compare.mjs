@@ -78,9 +78,15 @@ function value(sample, kind, metric) {
   return metric === "threads" ? kb : kb / 1024;
 }
 
-/** Resident plus swapped: what the process really holds, wherever it sits. */
+/**
+ * Anonymous memory plus swap: the heaps, JIT code and buffers the process
+ * itself allocated, wherever they sit. Shared libraries and other file pages
+ * are left out, because their PSS share drops whenever another program maps
+ * the same libraries (any other WebKitGTK app does), which moves the number
+ * without the app changing. Swap only ever holds anonymous pages.
+ */
 function held(sample, kind) {
-  return value(sample, kind, "pss") + value(sample, kind, "swap");
+  return value(sample, kind, "pssAnon") + value(sample, kind, "swap");
 }
 
 function runMetrics(run) {
@@ -90,9 +96,9 @@ function runMetrics(run) {
   const metrics = {};
   for (const [kind] of KINDS) {
     metrics[kind] = {
-      endPss: mean(kind, "pss"),
+      endHeld: mean(kind, "pssAnon") + mean(kind, "swap"),
       endSwap: mean(kind, "swap"),
-      endHeld: mean(kind, "pss") + mean(kind, "swap"),
+      endPss: mean(kind, "pss"),
       peakHeld: Math.max(...run.samples.map((s) => held(s, kind))),
       peakRss: kind === "all" ? null : Math.max(...run.samples.map((s) => value(s, kind, "hwm"))),
       endThreads: value(last, kind, "threads"),
@@ -156,18 +162,19 @@ function report(s) {
     "Scenario";
   const explained =
     "Medians, with the lowest and highest run in brackets. " +
-    `"End" is the mean over the last ${END_WINDOW_S} s of idle; "held" is PSS plus swap.`;
+    `"End" is the mean over the last ${END_WINDOW_S} s of idle; "held" is anonymous memory ` +
+    "(PSS_Anon) plus swap, which leaves out shared libraries; PSS counts them too.";
   if (single) {
     lines.push(
       `${scenario}, ${s.after.runs} runs of \`${s.after.label}\` (${s.after.commits.join(", ")}) ` +
         `on ${s.after.dates.join(", ")}. ${explained}`,
       "",
-      "| Process | End, held | End, in RAM | End, in swap | Peak, held | Peak RSS | Threads at end |",
+      "| Process | End, held | End, in swap | End, PSS | Peak, held | Peak RSS | Threads at end |",
       "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     );
     for (const [kind, name] of KINDS) {
       const m = s.after.metrics[kind];
-      const cells = ["endHeld", "endPss", "endSwap", "peakHeld", "peakRss", "endThreads"].map(
+      const cells = ["endHeld", "endSwap", "endPss", "peakHeld", "peakRss", "endThreads"].map(
         (metric) => (m[metric] ? cell(m[metric]) : ""),
       );
       lines.push(`| ${name} | ${cells.join(" | ")} |`);
@@ -197,8 +204,8 @@ function report(s) {
     lines.push("");
   };
   table("End of run, held (MB):", "endHeld");
-  table("End of run, in RAM (MB):", "endPss");
   table("End of run, in swap (MB):", "endSwap");
+  table("End of run, PSS with shared libraries (MB):", "endPss");
   table("Peak, held (MB):", "peakHeld");
   table("Peak RSS, from `VmHWM` (MB):", "peakRss");
   table("Threads at end:", "endThreads");
@@ -305,7 +312,7 @@ function timeline() {
           legend(0, colors.before, `before: ${before.label} (${before.runs.length} runs)`),
           legend(260, colors.after, `after: ${after.label} (${after.runs.length} runs)`),
         ]),
-    `<text x="520" y="4" fill="#59636e">line: median, shading: lowest to highest run. PSS + swap, MB</text>`,
+    `<text x="520" y="4" fill="#59636e">line: median, shading: lowest to highest run. Anonymous + swap, MB</text>`,
     `</g>`,
   );
   for (const [i, [kind, name]] of kinds.entries()) {

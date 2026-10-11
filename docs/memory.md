@@ -52,6 +52,12 @@ Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved
 
 Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/memory/small-maps/`): every web and total number ends within noise of the build before. Signed in, the core reads 6 MB higher, but this change does not touch the core, and the before runs were so close together (121 MB each) that any difference clears the noise line. This is about a session that runs for days, not a saving an 11 minute run shows.
 
+### WebKit's memory cache
+
+wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps images, scripts and stylesheets in memory after no page uses them, up to a cap sized from the machine's RAM. Every thumbnail of every page opened stayed decoded in the web process. `lib.rs` switches the model to `DOCUMENT_VIEWER` through `with_webview`, which drops a resource once nothing shows it. Going back to a page draws its thumbnails again from the `img` scheme's disk cache, not the network.
+
+All processes now hold 40 MB less at the end of browsing and 52 MB less once the long playlist has loaded, with every run below every run of the build before (`docs/memory/cache-model/`). Playback climbs to the same level in both builds, and the end of the run is within noise, so the memory that grows while a song plays is somewhere else.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

@@ -62,7 +62,6 @@ Sign release assets with the updater's minisign key so the download is verified 
 
 v0.3.0 held 603 MB in RAM and 158 MB in swap after a long session (`docs/memory.md`). Each item is its own PR, measured before and after with the harness on the `chore/memory-harness` branch.
 
-- **Stop the fallback path keeping code resident.** Compile the decipher code once per player script rather than on every call. Close the BotGuard frame after 5 idle minutes, and have the minter start over when a reopened frame has no minter.
 - **Prune small maps that only grow.** Stream leases in `usePlayer.ts` that can no longer be used, and the song-year cache in `useSongYear.ts`, capped at 500.
 
 ## Later

@@ -118,7 +118,8 @@ function installEvaluator(): void {
   // new every time and the engine compiled all of it again for each URL.
   // This compiles the part before the call once per player script and passes
   // the values in instead. Only the latest script is kept, since YouTube
-  // swaps them.
+  // swaps them. That one stays in the worker by design until the next script
+  // replaces it, even through hours with no fallback song.
   let compiled: { source: string; process: Processor } | null = null;
   Platform.shim.eval = (data, env) => {
     const at = data.output.lastIndexOf(PROCESSOR_CALL);

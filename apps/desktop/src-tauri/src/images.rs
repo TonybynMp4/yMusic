@@ -6,11 +6,17 @@
 //! through one pooled client, is retried with a backoff, and is cached by URL,
 //! so a second visit draws from disk.
 //!
+//! Images are asked for as WebP where Google's hosts can send it at a smaller
+//! size than the JPEG, and the cache is capped at `CAP_BYTES`, least recently
+//! drawn first. Files are named after the URL the page asked for, so a JPEG
+//! cached before still answers it.
+//!
 //! Only Google's image hosts are fetched: the scheme is not a general proxy.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use sha2::{Digest, Sha256};
 use tauri::http::{header, Request, Response, StatusCode};
@@ -20,11 +26,20 @@ pub const SCHEME: &str = "img";
 const ATTEMPTS: u32 = 3;
 const BACKOFF: Duration = Duration::from_millis(400);
 const ALLOWED_HOSTS: [&str; 3] = [".googleusercontent.com", ".ggpht.com", ".ytimg.com"];
+/// The cache trims itself back to `TRIM_TO_BYTES` once it passes this.
+const CAP_BYTES: u64 = 100 * 1024 * 1024;
+const TRIM_TO_BYTES: u64 = 90 * 1024 * 1024;
+/// How much is written between two checks of the cache's size.
+const CHECK_EVERY_BYTES: u64 = 4 * 1024 * 1024;
+/// Above this width Google's WebP is larger than its JPEG at the same quality.
+const WEBP_MAX_WIDTH: u32 = 800;
 
 #[derive(Clone)]
 pub struct Images {
     client: reqwest::Client,
     dir: PathBuf,
+    written: Arc<AtomicU64>,
+    trimming: Arc<AtomicBool>,
 }
 
 impl Images {
@@ -33,7 +48,15 @@ impl Images {
             .timeout(Duration::from_secs(20))
             .build()
             .expect("a client with only a timeout set");
-        Self { client, dir }
+        let images = Self {
+            client,
+            dir,
+            written: Arc::new(AtomicU64::new(0)),
+            trimming: Arc::new(AtomicBool::new(false)),
+        };
+        // A cache left over the cap by an older version, or a crash mid-trim.
+        images.trim_in_background();
+        images
     }
 
     /// Answers `img://localhost/<encoded url>` (Linux, macOS) or
@@ -44,17 +67,49 @@ impl Images {
         };
         let path = self.dir.join(cache_name(&url));
         if let Ok(bytes) = tokio::fs::read(&path).await {
+            // The trim goes by modification time, so a drawn image counts as recent.
+            touch(&path);
             return image(bytes);
         }
-        match self.fetch(&url).await {
+        let webp = as_webp(&url);
+        let fetched = match &webp {
+            Some(webp) => match self.fetch(webp).await {
+                Some(bytes) => Some(bytes),
+                None => self.fetch(&url).await,
+            },
+            None => self.fetch(&url).await,
+        };
+        match fetched {
             Some(bytes) => {
-                if let Err(err) = write_cache(&self.dir, &path, &bytes) {
-                    log::warn!("could not cache artwork: {err}");
+                match write_cache(&self.dir, &path, &bytes) {
+                    Ok(()) => self.wrote(bytes.len() as u64),
+                    Err(err) => log::warn!("could not cache artwork: {err}"),
                 }
                 image(bytes)
             }
             None => status(StatusCode::BAD_GATEWAY),
         }
+    }
+
+    fn wrote(&self, bytes: u64) {
+        let since = self.written.fetch_add(bytes, Ordering::Relaxed) + bytes;
+        if since >= CHECK_EVERY_BYTES {
+            self.written.store(0, Ordering::Relaxed);
+            self.trim_in_background();
+        }
+    }
+
+    fn trim_in_background(&self) {
+        if self.trimming.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let (dir, trimming) = (self.dir.clone(), self.trimming.clone());
+        tauri::async_runtime::spawn_blocking(move || {
+            if let Err(err) = trim(&dir, CAP_BYTES, TRIM_TO_BYTES) {
+                log::warn!("could not trim the artwork cache: {err}");
+            }
+            trimming.store(false, Ordering::Release);
+        });
     }
 
     async fn fetch(&self, url: &str) -> Option<Vec<u8>> {
@@ -103,6 +158,41 @@ fn percent_decode(input: &str) -> Option<String> {
         }
     }
     String::from_utf8(out).ok()
+}
+
+/// The same image as WebP, when the host can send it smaller than the URL asked for.
+///
+/// Google's image hosts take their options after the last `=`, separated by
+/// `-`: `rj` asks for JPEG and `rw` for WebP. YouTube's video thumbnails have
+/// a WebP copy under `vi_webp`, unless the URL is signed with a query.
+fn as_webp(url: &str) -> Option<String> {
+    if let Some(rest) = url.strip_prefix("https://i.ytimg.com/vi/") {
+        let (id, name) = rest.split_once('/')?;
+        let name = name.strip_suffix(".jpg")?;
+        if name.contains(['/', '?']) || id.contains('?') {
+            return None;
+        }
+        return Some(format!("https://i.ytimg.com/vi_webp/{id}/{name}.webp"));
+    }
+    let (base, options) = url.rsplit_once('=')?;
+    if base.contains('?') || options.contains(['/', '?']) {
+        return None;
+    }
+    let options: Vec<&str> = options.split('-').collect();
+    let width = options.iter().find_map(|option| {
+        let number = option
+            .strip_prefix('w')
+            .or_else(|| option.strip_prefix('s'))?;
+        number.parse::<u32>().ok()
+    })?;
+    if width > WEBP_MAX_WIDTH || !options.contains(&"rj") {
+        return None;
+    }
+    let options: Vec<&str> = options
+        .into_iter()
+        .map(|option| if option == "rj" { "rw" } else { option })
+        .collect();
+    Some(format!("{base}={}", options.join("-")))
 }
 
 fn cache_name(url: &str) -> String {
@@ -155,9 +245,112 @@ fn write_cache(dir: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     written
 }
 
+fn touch(path: &Path) {
+    if let Ok(file) = std::fs::File::options().append(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
+    }
+}
+
+/// Deletes the least recently drawn images until the folder holds `to` bytes,
+/// if it holds more than `cap`. Temporary files a crash left behind go too.
+fn trim(dir: &Path, cap: u64, to: u64) -> std::io::Result<()> {
+    let mut files = Vec::new();
+    let mut total = 0;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let meta = entry.metadata()?;
+        if !meta.is_file() {
+            continue;
+        }
+        let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let path = entry.path();
+        let stale_partial = path.extension().is_some_and(|ext| ext == "part")
+            && modified
+                .elapsed()
+                .is_ok_and(|age| age > Duration::from_secs(3600));
+        if stale_partial {
+            let _ = std::fs::remove_file(&path);
+            continue;
+        }
+        total += meta.len();
+        files.push((modified, meta.len(), path));
+    }
+    if total <= cap {
+        return Ok(());
+    }
+    files.sort_by_key(|(modified, ..)| *modified);
+    for (_, len, path) in files {
+        if total <= to {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total -= len;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asks_google_for_webp_up_to_the_width_where_it_is_smaller() {
+        assert_eq!(
+            as_webp("https://lh3.googleusercontent.com/abc=w120-h120-l90-rj").as_deref(),
+            Some("https://lh3.googleusercontent.com/abc=w120-h120-l90-rw")
+        );
+        assert_eq!(
+            as_webp("https://yt3.ggpht.com/abc=s800-c-k-rj").as_deref(),
+            Some("https://yt3.ggpht.com/abc=s800-c-k-rw")
+        );
+        assert_eq!(
+            as_webp("https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj"),
+            None
+        );
+        assert_eq!(
+            as_webp("https://lh3.googleusercontent.com/abc=w120-h120"),
+            None
+        );
+        assert_eq!(as_webp("https://lh3.googleusercontent.com/abc"), None);
+    }
+
+    #[test]
+    fn asks_for_the_webp_copy_of_unsigned_video_thumbnails() {
+        assert_eq!(
+            as_webp("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg").as_deref(),
+            Some("https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/hqdefault.webp")
+        );
+        assert_eq!(
+            as_webp("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg?sqp=abc&rs=def"),
+            None
+        );
+    }
+
+    #[test]
+    fn trims_the_least_recently_drawn_images_first() {
+        let dir = std::env::temp_dir().join(format!("ymusic-images-trim-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = SystemTime::now() - Duration::from_secs(600);
+        for (index, name) in ["a", "b", "c", "d"].iter().enumerate() {
+            let path = dir.join(name);
+            std::fs::write(&path, [0u8; 100]).unwrap();
+            let file = std::fs::File::options().append(true).open(&path).unwrap();
+            file.set_modified(old + Duration::from_secs(index as u64))
+                .unwrap();
+        }
+        // Drawn again just now, so the oldest by write time but the newest by use.
+        touch(&dir.join("a"));
+
+        trim(&dir, 300, 200).unwrap();
+        let mut left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(left, ["a", "d"]);
+    }
 
     #[test]
     fn concurrent_writes_of_one_image_all_succeed() {

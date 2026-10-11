@@ -22,9 +22,9 @@ Each change has its before and after in `docs/memory/<change>/`.
 
 `main.rs` caps glibc at two malloc arenas with `mallopt(M_ARENA_MAX, 2)`, before any thread starts, and sets `MALLOC_ARENA_MAX=2` for WebKit's processes. Every child inherits that variable, so an app opened through `xdg-open` gets two arenas as well. If the user already set a limit through `MALLOC_ARENA_MAX` or `GLIBC_TUNABLES`, the app changes nothing, in the core or its children. When mpv starts the next file, the playback event thread calls `malloc_trim(0)`, which hands back what the last song's buffers freed. glibc only returns memory at the top of the heap on its own.
 
-The core now ends the scenario 64 MB lower signed out and 70 MB lower signed in, about a quarter less, and its peak RSS is 54 to 66 MB lower (`docs/memory/glibc-arenas/`). Two arenas did not cost anything visible: the thread count is the same and playback did not stall more.
+The core now ends the scenario 54 MB lower signed out and 69 MB lower signed in, about a third of its anonymous memory, and its peak RSS is 54 to 61 MB lower (`docs/memory/glibc-arenas/`). Two arenas did not cost anything visible: the thread count is the same and playback did not stall more.
 
-The web process did not measurably change. It ends near 380 MB or near 550 MB, in both builds, depending on whether JavaScriptCore releases what the long playlist used before the end of the run. Totals across processes swing with it, so compare the core on its own for this change.
+The web process did not measurably change. It ends near 330 MB or near 480 to 570 MB, in both builds, depending on whether JavaScriptCore releases what the long playlist used before the end of the run. Totals across processes swing with it, so compare the core on its own for this change.
 
 ## Measuring
 

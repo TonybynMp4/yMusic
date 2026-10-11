@@ -61,7 +61,10 @@ export class PoTokenMinter {
     try {
       return await this.#mintWith(binding);
     } catch (error) {
-      if (ready === null) throw error;
+      // Only a minter that was already built gets a second try. A failed
+      // `#initialize` has cleared `#ready` by now, and repeating it would
+      // send the whole challenge to Google again for nothing.
+      if (ready === null || this.#ready === null) throw error;
       if (this.#ready === ready) this.#ready = null;
       return this.#mintWith(binding);
     }

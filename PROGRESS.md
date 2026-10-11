@@ -153,7 +153,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Bound the browse page cache
 - [x] Skip the player script on `VISIONOS`
 - [x] Stop the fallback path keeping code resident
-- [ ] Prune stream leases and the song-year cache
+- [x] Prune stream leases and the song-year cache
 
 ## Known issues
 

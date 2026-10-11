@@ -1,0 +1,354 @@
+{
+  "title": "Prune small maps",
+  "variant": "normal",
+  "before": {
+    "label": "pr4-no-player-script",
+    "runs": 3,
+    "commits": [
+      "2662e3b"
+    ],
+    "dates": [
+      "2026-10-10"
+    ],
+    "durationS": {
+      "median": 634.645,
+      "min": 634.631,
+      "max": 634.798
+    },
+    "problems": [],
+    "timedOut": 0,
+    "warnings": [
+      0,
+      0,
+      0
+    ],
+    "metrics": {
+      "core": {
+        "endHeld": {
+          "median": 125.6171875,
+          "min": 123.44921875,
+          "max": 126.7890625
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 199.0119140625,
+          "min": 186.708203125,
+          "max": 205.01350911458334
+        },
+        "peakHeld": {
+          "median": 128.1640625,
+          "min": 127.9921875,
+          "max": 134.76953125
+        },
+        "peakRss": {
+          "median": 293.74609375,
+          "min": 289.5078125,
+          "max": 300.859375
+        },
+        "endThreads": {
+          "median": 49,
+          "min": 49,
+          "max": 49
+        }
+      },
+      "web": {
+        "endHeld": {
+          "median": 264.481640625,
+          "min": 257.08619791666666,
+          "max": 292.19322916666664
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 344.5255533854167,
+          "min": 316.1401041666667,
+          "max": 372.86207682291666
+        },
+        "peakHeld": {
+          "median": 319.9609375,
+          "min": 318.3359375,
+          "max": 332.23828125
+        },
+        "peakRss": {
+          "median": 519.5859375,
+          "min": 492.1328125,
+          "max": 525.76171875
+        },
+        "endThreads": {
+          "median": 38,
+          "min": 38,
+          "max": 38
+        }
+      },
+      "network": {
+        "endHeld": {
+          "median": 7.48828125,
+          "min": 7.4609375,
+          "max": 7.51171875
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 16.132877604166666,
+          "min": 15.753743489583334,
+          "max": 16.514615885416667
+        },
+        "peakHeld": {
+          "median": 7.48828125,
+          "min": 7.4609375,
+          "max": 7.515625
+        },
+        "peakRss": {
+          "median": 50.67578125,
+          "min": 49.4765625,
+          "max": 50.9921875
+        },
+        "endThreads": {
+          "median": 11,
+          "min": 11,
+          "max": 11
+        }
+      },
+      "all": {
+        "endHeld": {
+          "median": 398.782421875,
+          "min": 390.19166666666666,
+          "max": 423.10338541666664
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 566.0536783854167,
+          "min": 518.60205078125,
+          "max": 588.0068684895833
+        },
+        "peakHeld": {
+          "median": 418.06640625,
+          "min": 413.87109375,
+          "max": 441.31640625
+        },
+        "peakRss": null,
+        "endThreads": {
+          "median": 98,
+          "min": 98,
+          "max": 98
+        }
+      }
+    },
+    "phases": {
+      "idle": {
+        "median": 145.6640625,
+        "min": 145.16015625,
+        "max": 146.89453125
+      },
+      "browse": {
+        "median": 310.05859375,
+        "min": 304.91015625,
+        "max": 314.96484375
+      },
+      "long-playlist": {
+        "median": 339.17578125,
+        "min": 337.1953125,
+        "max": 347.04296875
+      },
+      "playback": {
+        "median": 403.70703125,
+        "min": 383.84765625,
+        "max": 406.5703125
+      },
+      "idle-end": {
+        "median": 405.8359375,
+        "min": 396.375,
+        "max": 428.765625
+      }
+    }
+  },
+  "after": {
+    "label": "pr6-small-maps",
+    "runs": 3,
+    "commits": [
+      "52b3ee3"
+    ],
+    "dates": [
+      "2026-10-11"
+    ],
+    "durationS": {
+      "median": 636.565,
+      "min": 634.649,
+      "max": 636.619
+    },
+    "problems": [],
+    "timedOut": 0,
+    "warnings": [
+      0,
+      0,
+      0
+    ],
+    "metrics": {
+      "core": {
+        "endHeld": {
+          "median": 126.62890625,
+          "min": 125.790625,
+          "max": 130.90234375
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 183.86907552083332,
+          "min": 182.90611979166667,
+          "max": 187.92086588541667
+        },
+        "peakHeld": {
+          "median": 135.02734375,
+          "min": 130.48828125,
+          "max": 135.09765625
+        },
+        "peakRss": {
+          "median": 301.859375,
+          "min": 297.48046875,
+          "max": 302.2734375
+        },
+        "endThreads": {
+          "median": 49,
+          "min": 49,
+          "max": 49
+        }
+      },
+      "web": {
+        "endHeld": {
+          "median": 280.0708333333333,
+          "min": 254.07916666666668,
+          "max": 296.00885416666665
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 327.0984375,
+          "min": 301.05188802083336,
+          "max": 343.0693359375
+        },
+        "peakHeld": {
+          "median": 314.16015625,
+          "min": 300.5078125,
+          "max": 314.80859375
+        },
+        "peakRss": {
+          "median": 499,
+          "min": 495.34375,
+          "max": 525.390625
+        },
+        "endThreads": {
+          "median": 38,
+          "min": 38,
+          "max": 38
+        }
+      },
+      "network": {
+        "endHeld": {
+          "median": 7.49609375,
+          "min": 7.48046875,
+          "max": 7.50390625
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 13.262272135416667,
+          "min": 13.15234375,
+          "max": 13.279296875
+        },
+        "peakHeld": {
+          "median": 7.49609375,
+          "min": 7.48828125,
+          "max": 7.50390625
+        },
+        "peakRss": {
+          "median": 51.5703125,
+          "min": 51.36328125,
+          "max": 51.6171875
+        },
+        "endThreads": {
+          "median": 11,
+          "min": 11,
+          "max": 11
+        }
+      },
+      "all": {
+        "endHeld": {
+          "median": 413.36536458333336,
+          "min": 388.20416666666665,
+          "max": 434.39166666666665
+        },
+        "endSwap": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "endPss": {
+          "median": 523.2838541666666,
+          "min": 498.18323567708336,
+          "max": 544.1425455729167
+        },
+        "peakHeld": {
+          "median": 441.3359375,
+          "min": 400.828125,
+          "max": 452.54296875
+        },
+        "peakRss": null,
+        "endThreads": {
+          "median": 98,
+          "min": 98,
+          "max": 98
+        }
+      }
+    },
+    "phases": {
+      "idle": {
+        "median": 146.27734375,
+        "min": 145.640625,
+        "max": 146.859375
+      },
+      "browse": {
+        "median": 298.9140625,
+        "min": 298.25390625,
+        "max": 309.6015625
+      },
+      "long-playlist": {
+        "median": 334.0390625,
+        "min": 316.05859375,
+        "max": 340.73828125
+      },
+      "playback": {
+        "median": 381.2265625,
+        "min": 379.71875,
+        "max": 419.28515625
+      },
+      "idle-end": {
+        "median": 429.546875,
+        "min": 390.6640625,
+        "max": 436.9453125
+      }
+    }
+  }
+}

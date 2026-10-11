@@ -52,12 +52,6 @@ Sign release assets with the updater's minisign key so the download is verified 
 
   A saved `pauseSearchHistory` of true becomes *Off*, and false becomes *YouTube*, so nobody's search changes on update. Signed out there is no account to record on, so the list is local and *YouTube* is unavailable.
 
-## Memory
-
-v0.3.0 held 603 MB in RAM and 158 MB in swap after a long session (`docs/memory.md`). Each item is its own PR, measured with `scripts/memory` before and after.
-
-- **Prune small maps that only grow.** Stream leases in `usePlayer.ts` that can no longer be used, and the song-year cache in `useSongYear.ts`, capped at 500.
-
 ## Later
 
 - **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.

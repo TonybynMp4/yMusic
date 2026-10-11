@@ -33,6 +33,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_play,
             $crate::commands::player_pause,
             $crate::commands::player_seek,
+            $crate::commands::player_position,
             $crate::commands::player_set_volume,
             $crate::commands::player_stop,
             $crate::commands::player_audio_devices,

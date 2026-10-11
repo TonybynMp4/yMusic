@@ -28,6 +28,13 @@ export const RustPlaybackEvent = z.discriminatedUnion("type", [
 ]);
 export type RustPlaybackEvent = z.infer<typeof RustPlaybackEvent>;
 
+const PlayerPosition = z
+  .object({
+    positionMs: z.number().int().nonnegative(),
+    durationMs: z.number().int().nonnegative().nullable(),
+  })
+  .nullable();
+
 export const AudioDevice = z.object({ name: z.string(), description: z.string() });
 export type AudioDevice = z.infer<typeof AudioDevice>;
 
@@ -70,6 +77,8 @@ export async function playerStats(): Promise<AudioStats | null> {
 export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
+  #playing = false;
+  #poll: ReturnType<typeof setTimeout> | null = null;
 
   async load(lease: StreamLease, paused = false): Promise<void> {
     await this.#ensureSubscribed();
@@ -138,9 +147,48 @@ export class MpvPlaybackEngine implements PlaybackEngine {
         return;
       }
       const event = toCoreEvent(parsed.data);
-      for (const listener of this.#listeners) listener(event);
+      if (event.type === "status") {
+        this.#playing = event.status === "playing";
+        if (this.#playing) this.#pollIn(0);
+        else this.#stopPolling();
+      }
+      this.#deliver(event);
     };
     await invokeVoid("player_subscribe", { channel });
+  }
+
+  #deliver(event: PlaybackEvent): void {
+    for (const listener of this.#listeners) listener(event);
+  }
+
+  /**
+   * The core only pushes the position when a song starts or after a seek.
+   * Every message it pushes reaches the page as a script WebKit compiles and
+   * keeps, while a command's reply leaves nothing behind, so while a song
+   * plays the page asks for the position instead.
+   */
+  #pollIn(delayMs: number): void {
+    this.#stopPolling();
+    this.#poll = setTimeout(() => void this.#askPosition(), delayMs);
+  }
+
+  #stopPolling(): void {
+    if (this.#poll !== null) clearTimeout(this.#poll);
+    this.#poll = null;
+  }
+
+  async #askPosition(): Promise<void> {
+    this.#poll = null;
+    let position: z.infer<typeof PlayerPosition> = null;
+    try {
+      position = await invokeParsed("player_position", PlayerPosition);
+    } catch (error) {
+      console.error("could not read the playback position", error);
+    }
+    if (!this.#playing) return;
+    if (position) this.#deliver({ type: "position", ...position });
+    // Just after the next whole second, so the time label ticks on time.
+    this.#pollIn(position ? 1000 - (position.positionMs % 1000) + 20 : 1000);
   }
 }
 

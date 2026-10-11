@@ -59,4 +59,16 @@ describe("PoTokenMinter", () => {
     await expect(minter.mint("b")).rejects.toThrow("broken");
     expect(vm.createMinter).toHaveBeenCalledTimes(2);
   });
+
+  it("does not run a failed rebuild twice", async () => {
+    const vm = droppableVm();
+    let now = 0;
+    const minter = new PoTokenMinter(fetch, vm, () => now);
+    await minter.mint("a");
+
+    now = 2 * 3600 * 1000;
+    vm.load.mockRejectedValue(new Error("refused"));
+    await expect(minter.mint("b")).rejects.toThrow("refused");
+    expect(vm.load).toHaveBeenCalledTimes(2);
+  });
 });

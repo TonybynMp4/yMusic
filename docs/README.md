@@ -13,5 +13,6 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.
 - [Memory](memory.md): where memory goes, and what has been cut.
+- [Engine memory](engine-memory.md): measuring what the engine holds and how high it peaks, against recorded responses.
 - [Testing](testing.md): unit tests and the opt-in network tests.
 - [React performance](react-performance.md): how to profile the UI, common causes of slow renders, and what is left to look at.

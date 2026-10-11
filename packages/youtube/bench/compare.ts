@@ -5,8 +5,8 @@ import { loadResult, mb, type Stat } from "./results.ts";
  *
  *   bun bench/compare.ts main my-branch
  *
- * A peak change smaller than either side's spread between runs is marked as
- * within noise. Retained heap barely varies between runs, so any change there
+ * A peak change no larger than the wider of the two sides' spreads between
+ * runs is marked as within noise. Retained heap barely varies between runs, so any change there
  * is real.
  */
 

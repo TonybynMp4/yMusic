@@ -34,8 +34,6 @@ const VOLATILE_FIELDS = ["context", "cpn"];
 
 export interface Recording {
   fetch: typeof fetch;
-  /** Requests answered from the network, in `record` mode. */
-  recorded(): number;
   /**
    * Requests the recording lacked, in `replay` mode. Kept apart from the error
    * each one throws, because the engine's callers may catch that.
@@ -48,8 +46,7 @@ export interface Recording {
  * `replay` fails on any request the recording lacks, naming it. `record`
  * serves what the recording has and fetches and keeps the rest, so a branch
  * that makes a new request extends the recording rather than replacing it.
- * Requests with the same key are answered in the order they were recorded,
- * the last one again once those run out.
+ * Identical requests get the same response.
  */
 export function openRecording(dir: string, mode: "replay" | "record"): Recording {
   const indexPath = join(dir, "index.json");
@@ -59,9 +56,7 @@ export function openRecording(dir: string, mode: "replay" | "record"): Recording
   if (mode === "replay" && entries.length === 0) {
     throw new Error(`no recording in ${dir}; make one with --record`);
   }
-  const byKey = new Map<string, Entry[]>();
-  for (const entry of entries) byKey.set(entry.key, [...(byKey.get(entry.key) ?? []), entry]);
-  const served = new Map<string, number>();
+  const byKey = new Map(entries.map((entry) => [entry.key, entry]));
   let recorded = 0;
   const missing: string[] = [];
   // Signed out, YouTube hands out visitor cookies and expects them back, as
@@ -74,11 +69,7 @@ export function openRecording(dir: string, mode: "replay" | "record"): Recording
     const key = requestKey(request.method, request.url, body);
 
     const known = byKey.get(key);
-    if (known) {
-      const index = served.get(key) ?? 0;
-      served.set(key, index + 1);
-      return responseFrom(dir, known[Math.min(index, known.length - 1)]!);
-    }
+    if (known) return responseFrom(dir, known);
     if (mode === "replay") {
       missing.push(key);
       throw new Error(`not in the recording: ${key}`);
@@ -106,15 +97,13 @@ export function openRecording(dir: string, mode: "replay" | "record"): Recording
       body: bytes.length > 0 ? saveBody(dir, bytes) : null,
     };
     entries.push(entry);
-    byKey.set(key, [entry]);
-    served.set(key, 1);
+    byKey.set(key, entry);
     recorded++;
     return responseFrom(dir, entry);
   };
 
   return {
     fetch: fetchFn as typeof fetch,
-    recorded: () => recorded,
     missing: () => missing,
     save() {
       if (recorded === 0) return;

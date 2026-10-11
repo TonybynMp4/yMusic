@@ -63,9 +63,7 @@ function settled(): Omit<Point, "phase" | "got" | "ms" | "peak"> {
     heap: stats.heapSize,
     extra: stats.extraMemorySize,
     objects: stats.objectCount,
-    types: Object.entries(stats.objectTypeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 25),
+    types: Object.entries(stats.objectTypeCounts).sort((a, b) => b[1] - a[1]),
   };
 }
 

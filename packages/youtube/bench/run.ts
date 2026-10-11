@@ -30,7 +30,8 @@ const { values } = parseArgs({
 
 const dir = recordingDir(values.recording);
 const runs = Number(values.runs);
-const label = values.label ?? git("branch", "--show-current").replaceAll("/", "-");
+if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer, got ${values.runs}`);
+const label = values.label ?? git("branch", "--show-current");
 if (!label) throw new Error("detached HEAD; pass --label");
 const child = join(import.meta.dir, "child.ts");
 

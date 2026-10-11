@@ -16,7 +16,7 @@ export function recordingDir(name: string): string {
 }
 
 export function resultPath(label: string): string {
-  return label.endsWith(".json") ? label : join(HOME, "results", `${label}.json`);
+  return label.endsWith(".json") ? label : join(HOME, "results", `${label.replaceAll("/", "-")}.json`);
 }
 
 export interface Stat {

@@ -34,7 +34,7 @@ Each run is a fresh Bun process (`child.ts`). Each phase gets two numbers:
 - Peak RSS: the process's high-water mark while the phase ran. Before each phase the child resets it by writing `5` to `/proc/self/clear_refs`. This is what the phase costs at its worst, and it is what the user sees, because JavaScriptCore keeps freed pages for a while before handing them back.
 - Retained: the live JS heap plus what its strings and buffers hold outside it, after two full collections. This is what the phase leaves behind: caches, held continuations, compiled code.
 
-Retained memory comes out the same in every run, to within a few hundred kilobytes, so any change there is real. Peak RSS still depends on when JavaScriptCore collects and varies by about 10 to 30 MB, so `run.ts` takes five runs and reports the median and the range. `compare.ts` marks a peak change smaller than either side's range as within noise. A large gap between a phase's peak and what it retains points at short-lived garbage, usually parsing.
+Retained memory comes out the same in every run, to within a few hundred kilobytes, so any change there is real. Peak RSS still depends on when JavaScriptCore collects and varies by about 10 to 30 MB, so `run.ts` takes five runs and reports the median and the range. `compare.ts` marks a peak change no larger than the wider of the two sides' ranges as within noise. A large gap between a phase's peak and what it retains points at short-lived garbage, usually parsing.
 
 `compare.ts` also lists which kinds of live objects changed in number by the end of the session, as a first hint at where a difference comes from.
 

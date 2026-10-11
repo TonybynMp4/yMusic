@@ -115,6 +115,16 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            // WebKitGTK's default cache model keeps every image a page drew in
+            // memory after the page is gone. The `img` scheme already caches
+            // artwork on disk, so drop what nothing shows.
+            #[cfg(target_os = "linux")]
+            let _ = window.with_webview(|webview| {
+                use webkit2gtk::{CacheModel, WebContextExt, WebViewExt};
+                if let Some(context) = webview.inner().context() {
+                    context.set_cache_model(CacheModel::DocumentViewer);
+                }
+            });
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);

@@ -151,7 +151,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Memory harness: scripted scenario, sampler and before/after report (`scripts/memory`)
 - [x] Cap glibc malloc arenas in the core
 - [x] Bound the browse page cache
-- [ ] Skip the player script on `VISIONOS`
+- [x] Skip the player script on `VISIONOS`
 - [ ] Stop the fallback path keeping code resident
 - [ ] Prune stream leases and the song-year cache
 

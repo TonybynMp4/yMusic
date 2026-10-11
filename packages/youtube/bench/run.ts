@@ -11,16 +11,19 @@ import {
   type PhaseSummary,
   type Result,
 } from "./results.ts";
+import { SCENARIOS, type Scenario } from "./scenario.ts";
 
 /**
  * Measures the engine's memory over the scenario in `scenario.ts`, against
  * recorded responses. See `docs/engine-memory.md`.
  *
- *   bun bench/run.ts [--record] [--runs 5] [--recording default] [--label <branch>]
+ *   bun bench/run.ts [--scenario quick|session] [--record] [--runs 5]
+ *                    [--recording default] [--label <branch>]
  */
 
 const { values } = parseArgs({
   options: {
+    scenario: { type: "string", default: "quick" },
     record: { type: "boolean", default: false },
     runs: { type: "string", default: "5" },
     recording: { type: "string", default: "default" },
@@ -28,6 +31,10 @@ const { values } = parseArgs({
   },
 });
 
+if (!(values.scenario in SCENARIOS)) {
+  throw new Error(`--scenario is one of ${Object.keys(SCENARIOS).join(", ")}`);
+}
+const scenario = values.scenario as Scenario;
 const dir = recordingDir(values.recording);
 const runs = Number(values.runs);
 if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer, got ${values.runs}`);
@@ -65,17 +72,18 @@ const phases: PhaseSummary[] = sessions[0]!.map((first, index) => {
 
 const result: Result = {
   label,
+  scenario,
   commit: git("rev-parse", "--short", "HEAD"),
   recording: dir,
   date: new Date().toISOString(),
   runs,
   phases,
 };
-const out = resultPath(label);
+const out = resultPath(label, scenario);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(result, null, 1));
 
-console.log(`${label} (${result.commit}), ${runs} runs, medians in MB\n`);
+console.log(`${label} (${result.commit}), ${scenario}, ${runs} runs, medians in MB\n`);
 console.log("| Phase | Peak RSS | Retained JS heap + extra | Time | Got |");
 console.log("| --- | ---: | ---: | ---: | --- |");
 for (const p of phases) {
@@ -86,7 +94,7 @@ for (const p of phases) {
 console.log(`\nsaved to ${out}`);
 
 async function session(args: string[]): Promise<Point[]> {
-  const proc = Bun.spawn([process.execPath, child, dir, ...args], {
+  const proc = Bun.spawn([process.execPath, child, dir, scenario, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });

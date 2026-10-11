@@ -1,19 +1,26 @@
+import { parseArgs } from "node:util";
+
 import { loadResult, mb, type Stat } from "./results.ts";
+import type { Scenario } from "./scenario.ts";
 
 /**
  * Compares two results by label (or path to their JSON):
  *
- *   bun bench/compare.ts main my-branch
+ *   bun bench/compare.ts main my-branch [--scenario session]
  *
  * A peak change no larger than the wider of the two sides' spreads between
  * runs is marked as within noise. Retained heap barely varies between runs, so any change there
  * is real.
  */
 
-const [beforeLabel, afterLabel] = process.argv.slice(2);
-if (!beforeLabel || !afterLabel) throw new Error("usage: compare.ts <before> <after>");
-const before = loadResult(beforeLabel);
-const after = loadResult(afterLabel);
+const { values, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { scenario: { type: "string", default: "quick" } },
+});
+const [beforeLabel, afterLabel] = positionals;
+if (!beforeLabel || !afterLabel) throw new Error("usage: compare.ts <before> <after> [--scenario session]");
+const before = loadResult(beforeLabel, values.scenario as Scenario);
+const after = loadResult(afterLabel, values.scenario as Scenario);
 if (before.recording !== after.recording) {
   console.warn(`different recordings: ${before.recording} and ${after.recording}\n`);
 }

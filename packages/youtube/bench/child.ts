@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { heapStats } from "bun:jsc";
 
 import { YouTubeEngine } from "../src/engine.ts";
+import { lazyBotGuard } from "./botguard.ts";
 import { openRecording } from "./replay.ts";
-import { PHASES, runPhase, type Phase } from "./scenario.ts";
+import { runPhase, SCENARIOS, type Phase, type Scenario } from "./scenario.ts";
 
 /**
  * One measured session, in its own process, started by `run.ts`. Prints one
@@ -31,13 +32,17 @@ export interface Point {
   types: [string, number][];
 }
 
-const [dir, mode] = process.argv.slice(2);
-if (!dir) throw new Error("usage: child.ts <recording dir> [record]");
+const [dir, scenario, mode] = process.argv.slice(2);
+if (!dir || !scenario || !(scenario in SCENARIOS)) {
+  throw new Error("usage: child.ts <recording dir> <scenario> [record]");
+}
 const recording = openRecording(dir, mode === "record" ? "record" : "replay");
-const engine = new YouTubeEngine(recording.fetch);
+// With BotGuard, as in the app, so a stream the usual client fails on is
+// retried on the fallback client.
+const engine = new YouTubeEngine(recording.fetch, lazyBotGuard());
 
 const points: Point[] = [{ phase: "start", got: "", ms: 0, peak: highWater(), ...settled() }];
-for (const phase of PHASES) {
+for (const phase of SCENARIOS[scenario as Scenario]) {
   resetHighWater();
   const started = performance.now();
   const got = await runPhase(engine, phase);

@@ -30,7 +30,12 @@ const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
  * from an earlier response and so match anyway, but also timestamps.
  */
 const VOLATILE_PARAMS = ["t", "cpn", "_"];
-const VOLATILE_FIELDS = ["context", "cpn"];
+const VOLATILE_FIELDS = ["context", "cpn", "serviceIntegrityDimensions"];
+/**
+ * Requests whose body BotGuard makes up afresh each time, with nothing in it
+ * that picks the response: the attestation traded for an integrity token.
+ */
+const VOLATILE_BODIES = ["https://jnn-pa.googleapis.com/$rpc/google.internal.waa.v1.Waa/GenerateIT"];
 
 export interface Recording {
   fetch: typeof fetch;
@@ -118,7 +123,9 @@ export function requestKey(method: string, url: string, body: string): string {
   for (const name of VOLATILE_PARAMS) parsed.searchParams.delete(name);
   parsed.searchParams.sort();
   let shape = body;
-  if (body.startsWith("{")) {
+  if (VOLATILE_BODIES.includes(url)) {
+    shape = "";
+  } else if (body.startsWith("{")) {
     const json = JSON.parse(body) as Record<string, unknown>;
     for (const field of VOLATILE_FIELDS) delete json[field];
     shape = JSON.stringify(sortKeys(json));

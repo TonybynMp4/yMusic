@@ -1,14 +1,16 @@
 import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import type { YouTubeEngine } from "../src/engine.ts";
+import { loadApp, type App } from "./app.ts";
 
 /**
  * What the app asks of the engine during the memory harness's session
  * (`apps/desktop/src/memoryScenario.ts` on the harness branch), without the
  * waiting: the same pages, and the same calls the UI makes for them.
  *
- * Results are dropped as soon as they arrive. What stays in memory afterwards
- * is the engine's own doing, not the UI's.
+ * The engine phases drop results as soon as they arrive, so what stays in
+ * memory afterwards is the engine's own doing. The `app-` phases go through
+ * the app's own caches instead (`app.ts`), and keep what the app keeps.
  */
 
 const ARTISTS = [
@@ -52,9 +54,20 @@ const LONG_PLAYLIST = "PLZzyUfYacyoJWuK0dFCjcocJQrIGZuxqj";
 /** What is played from: another long one. */
 const PLAY_PLAYLIST = "PLU0CpsviHWH2GP5FsdgOLYJ9hMLtclNpz";
 const TRACKS = 20;
+/** Songs in a long evening of skipping through a playlist: each gets a stream and a year. */
+const SESSION_SONGS = 700;
 
-export const PHASES = ["browse", "long-playlist", "playback"] as const;
-export type Phase = (typeof PHASES)[number];
+/** `quick` takes seconds; `session` adds the long session, which takes about a minute. */
+export const SCENARIOS = {
+  quick: ["browse", "long-playlist", "playback", "fallback", "app-browse"],
+  session: ["browse", "long-playlist", "playback", "fallback", "app-browse", "app-session"],
+} as const;
+export type Scenario = keyof typeof SCENARIOS;
+export type Phase = (typeof SCENARIOS)[Scenario][number];
+
+let app: App | null = null;
+/** The streams the player keeps, as `usePlayer` does: for the rest of the session. */
+const leases = new Map<string, unknown>();
 
 /** Runs `phase` and says what it got, to tell a working run from one that quietly did little. */
 export async function runPhase(engine: YouTubeEngine, phase: Phase): Promise<string> {
@@ -77,6 +90,50 @@ export async function runPhase(engine: YouTubeEngine, phase: Phase): Promise<str
         await engine.songYear(id).catch(() => null);
       }
       return `${resolved} of ${ids.length} streams resolved`;
+    }
+    case "fallback": {
+      // The client the player retries a stream on when mpv cannot play it:
+      // a PO token from BotGuard, and the player script's decipher code.
+      const ids = (await wholePlaylist(engine, PLAY_PLAYLIST)).slice(0, TRACKS);
+      let resolved = 0;
+      for (const id of ids) {
+        if (await engine.resolve(id, { fallback: true }).catch(() => null)) resolved++;
+      }
+      return `${resolved} of ${ids.length} streams resolved on the fallback client`;
+    }
+    case "app-browse": {
+      // An evening of browsing: every page above, opened and left in turn,
+      // the long playlist first, so the oldest is the biggest.
+      app ??= await loadApp(engine);
+      const routes = [
+        { kind: "playlist", id: LONG_PLAYLIST },
+        ...ARTISTS.map((id) => ({ kind: "artist", id })),
+        ...ALBUMS.map((id) => ({ kind: "album", id })),
+        ...PLAYLISTS.map((id) => ({ kind: "playlist", id })),
+      ] as const;
+      let loaded = 0;
+      for (const route of routes) if (await app.settledPage(route).catch(() => null)) loaded++;
+      return `${loaded} of ${routes.length} pages`;
+    }
+    case "app-session": {
+      // Hours of skipping through the long playlist: each song played gets its
+      // stream, and NowPlaying looks up its year, even when skipped at once.
+      // The streams are kept as the player keeps them; it only drops expired
+      // ones, and a stream lasts about six hours.
+      app ??= await loadApp(engine);
+      const page = await app.settledPage({ kind: "playlist", id: LONG_PLAYLIST });
+      if (page.kind !== "playlist") throw new Error("not a playlist");
+      const songs = page.page.tracks.filter((track) => track.year === null).slice(0, SESSION_SONGS);
+      const lookups = app.calls("songYear");
+      for (const track of songs) {
+        app.useSongYear(track);
+        const videoId = videoIdFromTrackId(track.id);
+        const lease = videoId && (await app.engine.resolve(videoId).catch(() => null));
+        if (lease) leases.set(track.id, lease);
+        await app.settle();
+        app.unmount();
+      }
+      return `${leases.size} of ${songs.length} streams resolved, ${app.calls("songYear") - lookups} years looked up`;
     }
   }
 }

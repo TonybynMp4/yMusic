@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Point } from "./child.ts";
+import type { Scenario } from "./scenario.ts";
 
 /**
  * Where recordings and results live: in the user's cache rather than the
@@ -15,8 +16,11 @@ export function recordingDir(name: string): string {
   return name.includes("/") ? name : join(HOME, "recordings", name);
 }
 
-export function resultPath(label: string): string {
-  return label.endsWith(".json") ? label : join(HOME, "results", `${label.replaceAll("/", "-")}.json`);
+/** `quick` results keep the bare label, so those from before scenarios still load. */
+export function resultPath(label: string, scenario: Scenario = "quick"): string {
+  if (label.endsWith(".json")) return label;
+  const name = label.replaceAll("/", "-") + (scenario === "quick" ? "" : `.${scenario}`);
+  return join(HOME, "results", `${name}.json`);
 }
 
 export interface Stat {
@@ -38,6 +42,7 @@ export interface PhaseSummary {
 
 export interface Result {
   label: string;
+  scenario?: Scenario;
   commit: string;
   recording: string;
   date: string;
@@ -45,8 +50,8 @@ export interface Result {
   phases: PhaseSummary[];
 }
 
-export function loadResult(label: string): Result {
-  const path = resultPath(label);
+export function loadResult(label: string, scenario?: Scenario): Result {
+  const path = resultPath(label, scenario);
   if (!existsSync(path)) throw new Error(`no result ${path}; run bench/run.ts on that branch first`);
   return JSON.parse(readFileSync(path, "utf8")) as Result;
 }

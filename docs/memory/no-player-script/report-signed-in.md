@@ -1,24 +1,15 @@
 ### Skipping the player script, signed in
 
-Signed-in scenario, 3 runs of `pr3-browse-lru` (407ce58, a4682f5) and 3 of `pr4-no-player-script` (2662e3b), on 2026-10-10, 2026-10-11. Medians, with the lowest and highest run in brackets. "End" is the mean over the last 60 s of idle; "held" is PSS plus swap.
+Signed-in scenario, 3 runs of `pr3-browse-lru` (407ce58, a4682f5) and 3 of `pr4-no-player-script` (2662e3b), on 2026-10-10, 2026-10-11. Medians, with the lowest and highest run in brackets. "End" is the mean over the last 60 s of idle; "held" is anonymous memory (PSS_Anon) plus swap, which leaves out shared libraries; PSS counts them too.
 
 End of run, held (MB):
 
 | Process | Before | After | Change |
 | --- | ---: | ---: | ---: |
-| Core (Rust, mpv) | 195 (164-210) | 177 (177-177) | -18 (-9%), within noise |
-| Web process (UI, engine worker, BotGuard) | 516 (512-570) | 460 (333-529) | -56 (-11%), within noise |
-| Network process | 16 (14-18) | 13 (13-13) | -3 (-18%), within noise |
-| All processes | 723 (693-797) | 650 (524-719) | -73 (-10%), within noise |
-
-End of run, in RAM (MB):
-
-| Process | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| Core (Rust, mpv) | 195 (136-210) | 177 (177-177) | -18 (-9%), within noise |
-| Web process (UI, engine worker, BotGuard) | 512 (387-570) | 460 (333-529) | -52 (-10%), within noise |
-| Network process | 16 (7-18) | 13 (13-13) | -3 (-18%), within noise |
-| All processes | 723 (531-797) | 650 (524-719) | -73 (-10%), within noise |
+| Core (Rust, mpv) | 125 (124-127) | 121 (121-121) | -4 (-3%) |
+| Web process (UI, engine worker, BotGuard) | 473 (442-486) | 413 (286-481) | -59 (-13%) |
+| Network process | 8 (7-8) | 7 (7-7) | -0 (-0%), within noise |
+| All processes | 607 (573-618) | 542 (414-610) | -65 (-11%) |
 
 End of run, in swap (MB):
 
@@ -29,14 +20,23 @@ End of run, in swap (MB):
 | Network process | 0 (0-6) | 0 (0-0) | 0, within noise |
 | All processes | 0 (0-162) | 0 (0-0) | 0, within noise |
 
+End of run, PSS with shared libraries (MB):
+
+| Process | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| Core (Rust, mpv) | 195 (136-210) | 177 (177-177) | -18 (-9%), within noise |
+| Web process (UI, engine worker, BotGuard) | 512 (387-570) | 460 (333-529) | -52 (-10%), within noise |
+| Network process | 16 (7-18) | 13 (13-13) | -3 (-18%), within noise |
+| All processes | 723 (531-797) | 650 (524-719) | -73 (-10%), within noise |
+
 Peak, held (MB):
 
 | Process | Before | After | Change |
 | --- | ---: | ---: | ---: |
-| Core (Rust, mpv) | 205 (204-211) | 178 (177-178) | -27 (-13%) |
-| Web process (UI, engine worker, BotGuard) | 590 (572-609) | 528 (524-550) | -62 (-11%) |
-| Network process | 17 (16-18) | 13 (13-13) | -4 (-23%) |
-| All processes | 799 (770-834) | 711 (710-740) | -88 (-11%) |
+| Core (Rust, mpv) | 134 (125-136) | 122 (122-123) | -12 (-9%) |
+| Web process (UI, engine worker, BotGuard) | 513 (502-526) | 481 (479-503) | -32 (-6%) |
+| Network process | 8 (8-8) | 8 (7-8) | -0 (-0%), within noise |
+| All processes | 648 (621-655) | 606 (601-631) | -42 (-6%) |
 
 Peak RSS, from `VmHWM` (MB):
 
@@ -59,11 +59,11 @@ All processes, held at the end of each phase (MB):
 
 | Phase | Before | After | Change |
 | --- | ---: | ---: | ---: |
-| idle | 639 (527-644) | 293 (289-298) | -346 (-54%) |
-| browse | 494 (475-503) | 415 (409-427) | -79 (-16%) |
-| long-playlist | 511 (491-523) | 437 (436-444) | -74 (-14%) |
-| playback | 728 (722-785) | 646 (517-703) | -82 (-11%) |
-| idle-end | 732 (692-804) | 661 (526-740) | -72 (-10%), within noise |
+| idle | 471 (391-472) | 193 (189-195) | -278 (-59%) |
+| browse | 328 (328-346) | 309 (309-322) | -19 (-6%) |
+| long-playlist | 348 (344-363) | 336 (331-339) | -11 (-3%), within noise |
+| playback | 586 (572-606) | 542 (407-594) | -44 (-7%) |
+| idle-end | 625 (583-627) | 553 (417-631) | -72 (-12%) |
 
 `pr3-browse-lru`: stall yt:syNLBJ_Lq9E; stall yt:syNLBJ_Lq9E; stall yt:syNLBJ_Lq9E
 

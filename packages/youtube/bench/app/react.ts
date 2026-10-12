@@ -21,14 +21,6 @@ export function useCallback<T>(callback: T): T {
   return callback;
 }
 
-export function useMemo<T>(create: () => T): T {
-  return create();
-}
-
-export function useRef<T>(current: T): { current: T } {
-  return { current };
-}
-
 export function useSyncExternalStore<T>(_subscribe: unknown, snapshot: () => T): T {
   return snapshot();
 }

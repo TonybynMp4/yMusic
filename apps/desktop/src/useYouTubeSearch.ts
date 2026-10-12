@@ -183,8 +183,11 @@ export function useYouTubeSearch(
         next = { results, more: page.more };
         cache.current.set(key, next);
       } catch (error) {
-        // What arrived stays; the chip just ends there.
+        // What arrived stays; the chip just ends there, so the cache must
+        // not offer the handle again either.
         console.error("could not load more search results", error);
+        const before = cache.current.get(key);
+        if (before) cache.current.set(key, { ...before, more: null });
       }
       if (shown.current !== key) return;
       setLoaded((s) =>

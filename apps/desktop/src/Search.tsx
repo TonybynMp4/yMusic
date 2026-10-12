@@ -5,7 +5,7 @@ import type { SearchFilter, SearchResults, Track } from "@ymusic/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Card, Shelf, type BrowseActions } from "./Browse.tsx";
+import { Card, Shelf, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { TrackList } from "./TrackList.tsx";
 import type { YouTubeSearchState } from "./useYouTubeSearch.ts";
 
@@ -59,7 +59,7 @@ export function YouTubeResults({
     <Everything results={results} actions={actions} onFilter={youtube.setFilter} />
   ) : (
     <>
-      <Filtered results={results} actions={actions} />
+      <Filtered results={results} filter={filter} actions={actions} />
       {youtube.hasMore && <More loading={youtube.loadingMore} onReach={youtube.loadMore} />}
     </>
   );
@@ -115,10 +115,7 @@ function Everything({
           />
         ) : (
           <section key={shelf.filter} className="mb-6">
-            <div className="flex items-baseline justify-between px-3">
-              <h2 className="mb-2 text-xl font-semibold">{LABELS[shelf.filter]}</h2>
-              {showAll}
-            </div>
+            <ShelfHeader title={LABELS[shelf.filter]} action={showAll} />
             <Tracks tracks={shelf.tracks} actions={actions} />
           </section>
         );
@@ -149,9 +146,20 @@ function TopResult({ top, actions }: { top: NonNullable<SearchResults["top"]>; a
   );
 }
 
-/** One chip's results: a list for songs and videos, a grid of cards for the rest. */
-function Filtered({ results, actions }: { results: SearchResults; actions: BrowseActions }) {
-  const [shelf] = results.shelves;
+/**
+ * One chip's results: a list for songs and videos, a grid of cards for the
+ * rest. Only the chip's own kind shows, should YouTube slip another kind in.
+ */
+function Filtered({
+  results,
+  filter,
+  actions,
+}: {
+  results: SearchResults;
+  filter: SearchFilter;
+  actions: BrowseActions;
+}) {
+  const shelf = results.shelves.find((s) => s.filter === filter);
   if (!shelf) return null;
   if (shelf.kind === "tracks") return <Tracks tracks={shelf.tracks} actions={actions} />;
   return (
@@ -172,11 +180,14 @@ function More({ loading, onReach }: { loading: boolean; onReach: () => void }) {
   useEffect(() => {
     const target = end.current;
     if (!target || loading) return;
+    // The margin only widens the root, so the root has to be the scroll area
+    // the results sit in, not the window.
+    const root = target.closest<HTMLElement>("[data-slot=scroll-area-viewport]");
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) onReach();
       },
-      { rootMargin: "100% 0px" },
+      { root, rootMargin: "100% 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();

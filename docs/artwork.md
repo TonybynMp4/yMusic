@@ -4,9 +4,9 @@ Remote artwork goes through the core rather than the webview: the page asks for 
 
 ## Fetching
 
-One pooled client fetches each image, with three attempts and a backoff, because Google's CDN answers a share of requests with errors when a page asks for many at once.
+One pooled client fetches each image, with three attempts and a backoff, because Google's CDN answers a share of requests with errors when a page asks for many at once. A client error (4xx) is final and not retried, except a timeout (408) or a rate limit (429).
 
-Where it saves bytes, the core asks for WebP instead of the JPEG the URL names. Google's image hosts take options after the last `=`: `rj` asks for JPEG and `rw` for WebP, at the same quality. Measured on album covers, WebP is 35 to 45% smaller up to about 800 px wide and larger past that, so wider images stay JPEG. Video thumbnails on `i.ytimg.com` have a WebP copy under `vi_webp`, about half the size; URLs signed with a query are left alone. If the WebP request fails, the original URL is fetched instead.
+Where it saves bytes, the core asks for WebP instead of the JPEG the URL names. Google's image hosts take options after the last `=`: `rj` asks for JPEG and `rw` for WebP, at the same quality. Measured on album covers, WebP is 35 to 45% smaller on small covers, less as they grow, and larger past about 800 px, so wider images stay JPEG. Video thumbnails on `i.ytimg.com` have a WebP copy under `vi_webp`, about half the size; URLs signed with a query are left alone. If the WebP request fails, the original URL is fetched instead, straight away when the WebP copy is missing.
 
 ## Disk cache
 

@@ -41,6 +41,16 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 
+/**
+ * Forgets every page nothing shows, and every failed one, so the next visit
+ * fetches it again. A page on screen keeps its entry and its listeners.
+ */
+export function clearBrowseCache(): void {
+  for (const [key, entry] of entries) {
+    if (entry.listeners.size === 0 || entry.state.status === "error") entries.delete(key);
+  }
+}
+
 function entryFor(route: Route, loader: typeof load = load): Entry {
   const key = `${route.kind}:${route.id}`;
   let entry = entries.get(key);

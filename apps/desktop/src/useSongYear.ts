@@ -6,6 +6,11 @@ import { engine } from "./engine.ts";
 /** Looked up once per song for the whole session: a year never changes. */
 const years = new Map<string, Promise<number | null>>();
 
+/** Forgets the years looked up so far. */
+export function clearSongYears(): void {
+  years.clear();
+}
+
 /**
  * The year the track's album came out. Most tracks bring it with them; a
  * YouTube song from a playlist or search does not, and is looked up.

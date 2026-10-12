@@ -44,12 +44,15 @@ export function openLogsFolder(): Promise<void> {
   return invokeVoid("open_logs_folder");
 }
 
-/** How many bytes the artwork cache takes on disk. */
-export function artworkCacheSize(): Promise<number> {
-  return invokeParsed("artwork_cache_size", z.number().int().nonnegative());
+/** How many bytes the artwork cache takes on disk, the only cache with a size to show. */
+export function cacheSize(): Promise<number> {
+  return invokeParsed("cache_size", z.number().int().nonnegative());
 }
 
-/** Deletes the cached artwork. Images already on screen stay until the page draws them again. */
-export function artworkCacheClear(): Promise<void> {
-  return invokeVoid("artwork_cache_clear");
+/**
+ * Deletes the cached artwork and empties the webview's memory and disk caches.
+ * Cookies, storage, settings and the account stay.
+ */
+export function cacheClear(): Promise<void> {
+  return invokeVoid("cache_clear");
 }

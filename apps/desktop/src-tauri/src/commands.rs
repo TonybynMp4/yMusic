@@ -289,9 +289,10 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
 }
 
-/// How many bytes the artwork cache takes on disk.
+/// How many bytes the artwork cache takes on disk, the only cache with a size
+/// worth showing.
 #[tauri::command]
-pub async fn artwork_cache_size(images: State<'_, Images>) -> Result<u64, String> {
+pub async fn cache_size(images: State<'_, Images>) -> Result<u64, String> {
     let images = images.inner().clone();
     tauri::async_runtime::spawn_blocking(move || images.size())
         .await
@@ -299,12 +300,60 @@ pub async fn artwork_cache_size(images: State<'_, Images>) -> Result<u64, String
         .map_err(|e| e.to_string())
 }
 
-/// Deletes the cached artwork. Images on screen stay, from the webview's memory.
+/// Deletes the cached artwork and empties the webview's own memory and disk
+/// caches, so the app fetches and draws as on a cold start. Cookies and
+/// storage stay. The frontend drops its in-memory pages itself.
 #[tauri::command]
-pub async fn artwork_cache_clear(images: State<'_, Images>) -> Result<(), String> {
+pub async fn cache_clear<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    images: State<'_, Images>,
+) -> Result<(), String> {
     let images = images.inner().clone();
     tauri::async_runtime::spawn_blocking(move || images.clear())
         .await
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if let Some(window) = app.get_webview_window("main") {
+        clear_webview_cache(&window).await?;
+    }
+    Ok(())
+}
+
+/// Empties WebKitGTK's memory and disk caches and waits until it is done.
+#[cfg(target_os = "linux")]
+async fn clear_webview_cache<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<(), String> {
+    let (done, finished) = tokio::sync::oneshot::channel();
+    window
+        .with_webview(move |webview| {
+            use webkit2gtk::{WebViewExt, WebsiteDataManagerExtManual, WebsiteDataTypes};
+            let Some(manager) = webview.inner().website_data_manager() else {
+                let _ = done.send(Ok(()));
+                return;
+            };
+            // Caches only: cookies, local storage (ratings) and IndexedDB hold
+            // user data and stay.
+            let caches = WebsiteDataTypes::MEMORY_CACHE
+                | WebsiteDataTypes::DISK_CACHE
+                | WebsiteDataTypes::OFFLINE_APPLICATION_CACHE;
+            // A timespan of 0 clears everything, however old.
+            manager.clear(
+                caches,
+                webkit2gtk::glib::TimeSpan(0),
+                None::<&webkit2gtk::gio::Cancellable>,
+                move |result| {
+                    let _ = done.send(result.map_err(|e| e.to_string()));
+                },
+            );
+        })
+        .map_err(|e| e.to_string())?;
+    finished.await.map_err(|e| e.to_string())?
+}
+
+/// Windows: WebView2's `ClearBrowsingData` with the disk cache kind would do
+/// it, but it needs `webview2-com` and `windows` as direct dependencies at the
+/// versions wry uses, so it waits until it can be built and tried on Windows.
+/// macOS has no build. Both keep their webview caches until the app restarts.
+#[cfg(not(target_os = "linux"))]
+async fn clear_webview_cache<R: Runtime>(_window: &tauri::WebviewWindow<R>) -> Result<(), String> {
+    Ok(())
 }

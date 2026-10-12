@@ -59,8 +59,8 @@ macro_rules! ymusic_commands {
             $crate::commands::settings_set,
             $crate::commands::update_check,
             $crate::commands::open_logs_folder,
-            $crate::commands::artwork_cache_size,
-            $crate::commands::artwork_cache_clear
+            $crate::commands::cache_size,
+            $crate::commands::cache_clear
         ]
     };
 }

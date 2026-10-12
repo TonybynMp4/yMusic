@@ -18,6 +18,8 @@ The folder is capped at 100 MB. After every 4 MB written, and once at startup, a
 
 ## Clearing
 
-Settings has an Artwork cache row showing the folder's size, with a Clear button (`artwork_cache_size` and `artwork_cache_clear`). A clear deletes every file in the folder, temporary ones included. Images already on screen stay, because the webview keeps them in memory.
+Settings has a Cache row showing the folder's size, with a Clear button (`cache_size` and `cache_clear`). A clear deletes every file in the folder, temporary ones included. Library art in `<cache>/art` is not touched, since only a rescan would bring it back.
+
+The same Clear empties every other cache, so the app behaves like a cold start: on Linux, `cache_clear` asks WebKitGTK's `WebsiteDataManager` to clear its memory, disk and offline application caches and waits for it, and the page drops its browse pages (`clearBrowseCache`, keeping the one on screen) and song years (`clearSongYears`). Cookies, local storage (ratings) and IndexedDB stay. Windows and macOS keep their webview caches until restart. Images already on screen stay drawn.
 
 A clear can land while downloads are in flight. Each write takes a read lock just to write and rename its file, never across the download, and a clear takes the write lock while it deletes. A counter goes up with each clear, and a write lands only if the counter is the same as when its download began, so nothing fetched before a clear reappears after it.

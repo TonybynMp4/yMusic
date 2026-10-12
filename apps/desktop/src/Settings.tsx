@@ -2,10 +2,10 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
 import {
   accountBrowsers,
-  artworkCacheClear,
-  artworkCacheSize,
   type AudioDevice,
   type Browser,
+  cacheClear,
+  cacheSize,
   isTauri,
   openLogsFolder,
   platformSummary,
@@ -38,6 +38,8 @@ import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { AccountState } from "./useAccount.ts";
 import type { Library } from "./useLibrary.ts";
+import { clearBrowseCache } from "./useBrowse.ts";
+import { clearSongYears } from "./useSongYear.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
 
@@ -235,7 +237,7 @@ export function SettingsView({
             />
           }
         />
-        {isTauri && <ArtworkCacheRow />}
+        {isTauri && <CacheRow />}
         <div className="flex items-center gap-6 px-4 py-3">
           <span className="flex-1 text-sm text-muted-foreground">
             {updates.status ?? "Find out whether a newer version is out."}
@@ -369,31 +371,36 @@ function AccountSection({ state }: { state: AccountState }) {
   );
 }
 
-/** The artwork kept on disk, with its size and a way to empty it. */
-function ArtworkCacheRow() {
+/**
+ * Every cache the app keeps, with the artwork's size and a way to empty them
+ * all, so the app fetches and draws as on a cold start.
+ */
+function CacheRow() {
   const [size, setSize] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   useEffect(() => {
-    artworkCacheSize()
+    cacheSize()
       .then(setSize)
-      .catch((error: unknown) => console.warn("could not read the artwork cache size", error));
+      .catch((error: unknown) => console.warn("could not read the cache size", error));
   }, []);
   const clear = () => {
     setClearing(true);
-    artworkCacheClear()
-      .catch((error: unknown) => console.warn("could not clear the artwork cache", error))
-      .then(artworkCacheSize)
+    clearBrowseCache();
+    clearSongYears();
+    cacheClear()
+      .catch((error: unknown) => console.warn("could not clear the cache", error))
+      .then(cacheSize)
       .then(setSize)
-      .catch((error: unknown) => console.warn("could not read the artwork cache size", error))
+      .catch((error: unknown) => console.warn("could not read the cache size", error))
       .finally(() => setClearing(false));
   };
   return (
     <Row
-      label="Artwork cache"
+      label="Cache"
       action
       description={cacheDescription(size)}
       control={
-        <Button variant="outline" disabled={clearing || size === 0} onClick={clear}>
+        <Button variant="outline" disabled={clearing} onClick={clear}>
           <IconTrash />
           Clear
         </Button>
@@ -403,9 +410,11 @@ function ArtworkCacheRow() {
 }
 
 function cacheDescription(bytes: number | null): string {
-  const what = "album art and thumbnails kept on this computer, so pages draw them without downloading them again.";
+  const kept = "Sign-in, settings and history stay.";
+  const memory = "the pages and images kept in memory this session";
+  if (bytes === 0) return `No album art on disk yet. Clearing still empties ${memory}. ${kept}`;
+  const what = `album art and thumbnails kept on this computer. Clearing deletes them, along with ${memory}. ${kept}`;
   if (bytes === null) return `The ${what}`;
-  if (bytes === 0) return "Empty. Album art and thumbnails are kept here as pages draw them.";
   const mb = bytes / (1024 * 1024);
   const size = mb >= 10 ? `${Math.round(mb)} MB` : mb >= 0.1 ? `${mb.toFixed(1)} MB` : "Under 0.1 MB";
   return `${size} of ${what}`;

@@ -211,20 +211,23 @@ pub fn account_cookie(account: State<'_, Account>) -> Option<String> {
 }
 
 /// Opens Google's sign-in and resolves once it completes. `None` means the user
-/// closed the window, which is a cancel rather than an error.
+/// closed the window, which is a cancel rather than an error. Google's cookies
+/// from the last sign-in window go into this one, so it knows the device.
 #[tauri::command]
 pub async fn account_sign_in<R: Runtime>(
     app: tauri::AppHandle<R>,
     account: State<'_, Account>,
 ) -> Result<Option<String>, String> {
-    let cookie = sign_in::sign_in(&app).await?;
-    if let Some(cookie) = &cookie {
-        account.save(Session {
-            cookie: cookie.clone(),
-            browser: None,
-        });
-    }
-    Ok(cookie)
+    let device = account.session().map(|s| s.device).unwrap_or_default();
+    let Some(signed_in) = sign_in::sign_in(&app, device).await? else {
+        return Ok(None);
+    };
+    account.save(Session {
+        cookie: signed_in.cookie.clone(),
+        browser: None,
+        device: signed_in.device,
+    });
+    Ok(Some(signed_in.cookie))
 }
 
 /// The browser profiles a session can be imported from.
@@ -242,6 +245,7 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
     account.save(Session {
         cookie: cookie.clone(),
         browser: Some(id),
+        device: Vec::new(),
     });
     Ok(cookie)
 }
@@ -257,19 +261,19 @@ pub async fn account_refresh(
     account: State<'_, Account>,
     stale: String,
 ) -> Result<Option<String>, String> {
-    let Some(Session { cookie, browser }) = account.session() else {
+    let Some(session) = account.session() else {
         return Ok(None);
     };
-    if cookie != stale {
-        return Ok(Some(cookie));
+    if session.cookie != stale {
+        return Ok(Some(session.cookie));
     }
-    let Some(id) = browser else {
-        return rotated(&account, &stale).await;
+    let Some(id) = session.browser.clone() else {
+        return rotated(&account, session).await;
     };
-    let cookie = import_from(id.clone()).await?;
+    let cookie = import_from(id).await?;
     let session = Session {
         cookie: cookie.clone(),
-        browser: Some(id),
+        ..session
     };
     // Reading the browser can wait on a keyring prompt, long enough to sign
     // out or in again meanwhile.
@@ -285,24 +289,22 @@ pub async fn account_refresh(
 #[tauri::command]
 pub async fn account_rotate(account: State<'_, Account>) -> Result<Option<String>, String> {
     match account.session() {
-        Some(Session {
-            cookie,
-            browser: None,
-        }) => rotated(&account, &cookie).await,
+        Some(session) if session.browser.is_none() => rotated(&account, session).await,
         _ => Ok(None),
     }
 }
 
-async fn rotated(account: &Account, cookie: &str) -> Result<Option<String>, String> {
-    let Some(fresh) = rotate::rotate(cookie).await? else {
+async fn rotated(account: &Account, session: Session) -> Result<Option<String>, String> {
+    let Some(fresh) = rotate::rotate(&session.cookie).await? else {
         return Ok(None);
     };
+    let stale = session.cookie.clone();
     let session = Session {
         cookie: fresh.clone(),
-        browser: None,
+        ..session
     };
     // Signed out or signed in again while the request was out.
-    if !account.replace(cookie, session) {
+    if !account.replace(&stale, session) {
         return Ok(None);
     }
     Ok(Some(fresh))

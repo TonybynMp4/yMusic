@@ -42,6 +42,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] An expired session signs the app out and asks to sign in again
 - [x] An imported session read again from its browser when it goes stale
 - [x] A sign-in window session kept alive by rotating `__Secure-1PSIDTS`
+- [x] The sign-in window remembers the device across sign-ins
 - [x] Album, artist and playlist pages
 - [x] Library playlists in the sidebar, Liked Music first
 - [x] Long playlists load progressively, with virtualized lists

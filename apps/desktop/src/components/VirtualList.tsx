@@ -63,8 +63,8 @@ export function VirtualList({
     <ul
       ref={list}
       className={className}
-      // Contained, so mounting rows lays out and repaints only the list.
-      style={{ position: "relative", height: virtualizer.getTotalSize(), contain: "layout paint" }}
+      // Contained, so mounting rows lays out only the list.
+      style={{ position: "relative", height: virtualizer.getTotalSize(), contain: "layout style" }}
     >
       {virtualizer.getVirtualItems().map((item) => (
         <li
@@ -75,8 +75,9 @@ export function VirtualList({
             left: 0,
             width: "100%",
             height: item.size,
-            // A row's size never depends on what is inside it.
-            contain: "strict",
+            // A row's size never depends on what is inside it. Not `strict`:
+            // paint containment would clip a dragged queue row's shadow.
+            contain: "size layout style",
             transform: `translateY(${item.start - offset}px)`,
           }}
         >

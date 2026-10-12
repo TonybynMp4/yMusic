@@ -27,7 +27,7 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 - A `Menu.Root` with no `Menu.Trigger` breaks its submenus: Base UI links a submenu to its parent menu through the trigger's floating node. The shared menu keeps a hidden trigger and sets `triggerId` on the root.
 - Base UI's detached triggers (`Menu.createHandle()` with `payload`) are the official shared menu, but `ContextMenu.Root` does not take a handle, and each row would still mount a `Menu.Trigger`.
 - `@tanstack/react-virtual` renders synchronously inside the scroll event by default. `useFlushSync: false` lets React schedule it, and the overscan hides the delay.
-- `contain: strict` on fixed-height rows and `contain: layout paint` on the list keep a mounted row from re-laying out the page.
+- `contain: size layout style` on fixed-height rows and `contain: layout style` on the list keep a mounted row from re-laying out the page. Paint containment (`strict`) would clip a dragged row's shadow.
 - WebKitGTK's scrollbar is unusable during a fast scroll. Styled through `::-webkit-scrollbar` or `scrollbar-width`, the thumb vanishes while moving. Unstyled, the GTK overlay indicator fades out. `ScrollArea` draws its own thumb outside the scrolled element instead.
 - Queue rows were not memoized, and the queue drew 8 rows past the viewport against the playlist's 25.
 

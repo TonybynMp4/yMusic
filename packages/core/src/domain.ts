@@ -240,7 +240,7 @@ export const StreamLease = z.object({
   codec: AudioCodec,
   /** Null when the container does not report one. */
   bitrate: z.number().int().positive().nullable(),
-  /** Set when the audio is the Premium-only format. Logged to verify Premium. */
+  /** Set when the audio is a Premium format (itag 774 or 141). */
   isPremiumFormat: z.boolean(),
   /**
    * How far the track sits above YouTube's reference level, in dB, or below it
@@ -251,6 +251,13 @@ export const StreamLease = z.object({
   headers: z.record(z.string(), z.string()),
   /** Null means the lease never expires, as for a file on disk. */
   expiresAt: z.number().int().positive().nullable(),
+  /** The InnerTube client that resolved it, such as `WEB_REMIX`. Null for local files. */
+  playerClient: z.string().nullable(),
+  /**
+   * Why the song plays below the best its account gets at the chosen quality,
+   * for the player to show. Null when it does not.
+   */
+  degraded: z.string().nullable(),
 });
 export type StreamLease = z.infer<typeof StreamLease>;
 

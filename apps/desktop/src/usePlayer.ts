@@ -174,6 +174,13 @@ export function usePlayer(
    * `loadedId` moves as soon as a load starts, before mpv knows about it.
    */
   const inMpv = useRef<TrackId | null>(null);
+  /** The lease mpv is playing, for the degraded badge and stats for nerds. */
+  const [streaming, setStreaming] = useState<StreamLease | null>(null);
+  const playingLease = useRef<StreamLease | null>(null);
+  const playLease = useCallback((next: StreamLease | null) => {
+    playingLease.current = next;
+    setStreaming(next);
+  }, []);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -214,6 +221,7 @@ export function usePlayer(
       if (loadedId.current !== null) {
         loadedId.current = null;
         inMpv.current = null;
+        playLease(null);
         void engine.stop().catch(logPlaybackFailure);
       }
       return;
@@ -242,6 +250,7 @@ export function usePlayer(
       queued.current = null;
       await load(lease, paused, resumeAt.current?.ms);
       inMpv.current = trackId;
+      playLease(lease);
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
@@ -253,7 +262,7 @@ export function usePlayer(
     return () => {
       cancelled = true;
     };
-  }, [trackId, engine, load, reportError, leaseFor]);
+  }, [trackId, engine, load, reportError, leaseFor, playLease]);
 
   // Hand mpv the next track while this one plays, so it opens it ahead of
   // time and goes on to it with no gap. Only once playing, so resolving it
@@ -297,8 +306,8 @@ export function usePlayer(
   }, [playing, joinable, upcomingId, trackId, leaseFor, audioQuality, engine]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
-  // it, and a 403 surfaces only here. Retry such a track once on the PO-token
-  // client before letting the error stand.
+  // it, and a 403 surfaces only here. Retry such a track once on the player
+  // clients after the one that resolved it before letting the error stand.
   useEffect(
     () =>
       engine.subscribe((event) => {
@@ -308,8 +317,12 @@ export function usePlayer(
         if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
         retried.current = failed;
         leases.current.delete(failed);
+        const refused = playingLease.current?.trackId === failed ? playingLease.current : null;
         void (async () => {
-          const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
+          const lease = await resolveTrack(failed, {
+            refused: refused?.playerClient ?? null,
+            quality: quality.current,
+          });
           if (loadedId.current !== failed) return;
           keepLease(leases.current, failed, lease);
           // A song paused by the user, or cued by a resumed queue, stays
@@ -319,6 +332,7 @@ export function usePlayer(
           const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
           await load(lease, paused, startMs);
           inMpv.current = failed;
+          playLease(lease);
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
@@ -327,7 +341,7 @@ export function usePlayer(
           }
         });
       }),
-    [engine, load, reportError],
+    [engine, load, reportError, playLease],
   );
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
@@ -356,12 +370,13 @@ export function usePlayer(
         if (inMpv.current !== currentId.current) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
+        playLease(leases.current.get(event.trackId) ?? null);
         retried.current = null;
         queued.current = null;
         cameUp.current = true;
         dispatch({ type: "next", reason: "trackEnded" });
       }),
-    [engine],
+    [engine, playLease],
   );
 
   const stopFollowing = useCallback(() => {
@@ -649,6 +664,8 @@ export function usePlayer(
     autoplay,
     setAutoplay,
     track,
+    /** The playing song's stream, once mpv has it. */
+    lease: streaming?.trackId === track?.id ? streaming : null,
     playback: state,
     position,
     loadedTrack,

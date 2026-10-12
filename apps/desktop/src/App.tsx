@@ -423,6 +423,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
               {expanded && (
                 <FullPlayer
                   track={player.track}
+                  lease={player.lease}
                   queue={player.queue}
                   playingFrom={player.playingFrom}
                   filling={player.filling}
@@ -463,6 +464,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
           device={player.playingFrom?.device ?? null}
           rating={rating}
           onOpen={go}
+          degraded={player.lease?.degraded ?? null}
         />
         <UpdateNotice updates={updates} />
         {notice.message && (

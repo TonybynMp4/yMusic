@@ -7,6 +7,7 @@ import { expose, transfer, type Endpoint, type Remote } from "comlink";
 
 import type { FetchLike } from "./client.ts";
 import { YouTubeEngine } from "./engine.ts";
+import type { PlayerScriptSource } from "./player-script.ts";
 import type { BotGuardVm } from "./po-token.ts";
 import { deserializeResponse, serializeRequest } from "./remote-fetch.ts";
 import type { EngineHost, EngineWorkerApi } from "./rpc.ts";
@@ -32,12 +33,19 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     mint: (binding) => connected().botguardMint(binding),
   };
   const sessionExpired = () => void connected().sessionExpired();
+  const playerScript: PlayerScriptSource = (playerId, libraryVersion) =>
+    connected().playerScript(playerId, libraryVersion);
   let engine = new YouTubeEngine(fetch, undefined, sessionExpired);
 
   const api: EngineWorkerApi = {
-    connect(remote, hasBotGuard) {
+    connect(remote, offers) {
       host = remote;
-      if (hasBotGuard) engine = new YouTubeEngine(fetch, botguard, sessionExpired);
+      engine = new YouTubeEngine(
+        fetch,
+        offers.botguard ? botguard : undefined,
+        sessionExpired,
+        offers.playerScript ? playerScript : undefined,
+      );
     },
     setCookie: (cookie) => engine.setCookie(cookie),
     renewCookie: (cookie) => engine.renewCookie(cookie),

@@ -724,6 +724,8 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
         .name("mpv-events".into())
         .spawn(move || {
             let mut duration_ms: Option<u64> = None;
+            // Set on a restart, so the next `time-pos` reaches the page too.
+            let mut page_wants_position = false;
 
             loop {
                 let Some(event) = mpv.wait_event(0.5) else {
@@ -793,6 +795,12 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         // song plays. It only hears it from here when a song
                         // starts or after a seek, which also covers a scrub
                         // while paused, when the page is not asking.
+                        //
+                        // `time-pos` can still fall short of the seek target
+                        // here and only settle in the next change, which mpv
+                        // may also have queued before this event. So the page
+                        // gets both what mpv reads now and that next change.
+                        page_wants_position = true;
                         if let Some(Position {
                             position_ms,
                             duration_ms,
@@ -856,14 +864,16 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                     } => match reply_userdata {
                         OBSERVE_TIME_POS => {
                             if let libmpv2::events::PropertyData::Double(seconds) = change {
-                                let position_ms = seconds_to_ms(seconds);
-                                emit_to_observers(
-                                    &sink,
-                                    PlaybackEvent::Position {
-                                        position_ms,
-                                        duration_ms,
-                                    },
-                                );
+                                let event = PlaybackEvent::Position {
+                                    position_ms: seconds_to_ms(seconds),
+                                    duration_ms,
+                                };
+                                if page_wants_position {
+                                    page_wants_position = false;
+                                    emit(&sink, event);
+                                } else {
+                                    emit_to_observers(&sink, event);
+                                }
                             }
                         }
                         OBSERVE_DURATION => {

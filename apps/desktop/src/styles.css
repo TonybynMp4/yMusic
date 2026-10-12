@@ -191,3 +191,22 @@
   --channel-solo-foreground: var(--channel-solo);
   --channel-monitor-foreground: var(--channel-monitor);
 }
+
+/* A thin rounded thumb on a clear track, for `ScrollArea`. WebKitGTK draws
+   these natively, so scrolling costs no JavaScript. */
+@layer components {
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track,
+  .thin-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-color: var(--border);
+    background-clip: padding-box;
+  }
+}

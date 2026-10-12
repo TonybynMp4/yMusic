@@ -15,5 +15,7 @@ YouTube serves a playlist a hundred rows at a time, each page a round trip, so a
 
 `TrackList` renders rows of a fixed 48 px. From 60 rows on it is virtualized with `@tanstack/react-virtual` (`components/VirtualList.tsx`), with 25 rows drawn past each edge of the viewport, about two screenfuls, so a quick scroll lands on rows already drawn.
 
+The main area, the queue and the sidebar scroll natively, with the scrollbar styled in CSS (`components/ui/scroll-area.tsx`). Base UI's scroll area set CSS variables on the scrolled element on every scroll event, which restyled every row inside it. A fast scroll through 2000 songs drew about 7 frames a second with it and 20 or more without.
+
 - **Rows are memoized.** The list hands each row handlers that never change (they read the latest props when called) and only that row's own state: whether it is the current song, and whether it is playing. So more rows arriving re-renders no row already shown, a new current song re-renders only the old and new current rows, and play or pause re-renders only the current row.
 - **Covers load eagerly.** A row only exists near the viewport, so the browser's `loading="lazy"` would only add WebKit's own deferral on top. Covers load through the `img` scheme (`src-tauri/src/images.rs`), which caches them on disk.

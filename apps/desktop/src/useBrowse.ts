@@ -150,26 +150,29 @@ const PUBLISH_EVERY_MS = 250;
  * playlist is browsable at once and complete in the end.
  *
  * When a later page fails, the rows so far stay and the state carries a
- * `resume` that fetches the rest from where it stopped. `shown`, when
- * reloading a playlist whose rows are already showing, holds those rows on
- * screen until as many have arrived again.
+ * `resume` that fetches the rest from where it stopped. `held`, when
+ * reloading a playlist whose rows are already showing, keeps those rows on
+ * screen until as many have arrived again, even if the reload fails first.
  */
 async function follow(
   id: string,
   first: FirstPage,
   set: (state: BrowseState) => void,
-  shown = 0,
+  held: readonly Track[] = [],
 ): Promise<void> {
   const header = first.page;
   const tracks = [...header.tracks];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = -Infinity;
 
+  // The rows to show: the reload's own once it has caught up.
+  const visible = () => (tracks.length < held.length ? held : tracks);
+
   const publish = (loadingMore: boolean, resume?: () => void) => {
     clearTimeout(timer);
     timer = undefined;
     last = Date.now();
-    const page: Page = { kind: "playlist", page: { ...header, tracks: [...tracks] } };
+    const page: Page = { kind: "playlist", page: { ...header, tracks: [...visible()] } };
     set(
       resume
         ? { status: "ready", page, loadingMore, resume }
@@ -178,7 +181,7 @@ async function follow(
   };
   // Shows what has arrived now, or when the current interval is up.
   const progress = () => {
-    if (tracks.length < shown || timer !== undefined) return;
+    if (tracks.length < held.length || timer !== undefined) return;
     const wait = last + PUBLISH_EVERY_MS - Date.now();
     if (wait <= 0) publish(true);
     else timer = setTimeout(() => publish(true), wait);
@@ -186,7 +189,7 @@ async function follow(
 
   const reload = async () => {
     try {
-      await follow(id, await engine.playlist(id), set, tracks.length);
+      await follow(id, await engine.playlist(id), set, [...visible()]);
     } catch (error) {
       console.error("could not reload the playlist", error);
       publish(false, () => {
@@ -217,11 +220,13 @@ async function follow(
       resuming = false;
       if (more !== null) progress();
     }
+    // Complete: the playlist may have shrunk since the rows held were shown.
+    held = [];
     publish(false);
   };
 
   // A playlist of one page is shown once, by `run`, as complete.
-  if (first.more !== null && tracks.length >= shown) publish(true);
+  if (first.more !== null && tracks.length >= held.length) publish(true);
   else last = Date.now();
   await run(first.more, false);
 }

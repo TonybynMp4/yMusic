@@ -251,4 +251,36 @@ describe("a long playlist", () => {
     expect(seen.map((update) => update.count)).toEqual([100, 200, 200, 400]);
     expect(seen.at(-1)).toEqual({ count: 400, loading: false });
   });
+
+  it("keeps the rows on screen when the reload fails before catching up", async () => {
+    const more = continuations(4, 10);
+    engine.playlist.mockResolvedValue(first("PL6", "1"));
+    engine.playlistMore
+      .mockImplementationOnce(more)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockRejectedValueOnce(new Error("this playlist page has expired; reopen the playlist"))
+      .mockRejectedValueOnce(new Error("network"))
+      .mockImplementation(more);
+    const route = { kind: "playlist", id: "PL6" } as const;
+    const { seen } = follow("PL6");
+    await vi.runAllTimersAsync();
+    const expired = browse.browseState(route);
+    if (expired.status !== "ready") throw new Error("not ready");
+    expired.resume!();
+    await vi.runAllTimersAsync();
+
+    // The reload got its first page, then failed: still the 200 rows, with Retry.
+    const failed = browse.browseState(route);
+    if (failed.status !== "ready" || failed.page.kind !== "playlist") throw new Error("not ready");
+    expect(failed.page.page.tracks).toHaveLength(200);
+    expect(failed.resume).toBeTypeOf("function");
+
+    failed.resume!();
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+    // Never back to the reloaded first page alone.
+    expect(seen.slice(1).every((update) => update.count >= 200)).toBe(true);
+    expect(seen.at(-1)).toEqual({ count: 400, loading: false });
+  });
 });

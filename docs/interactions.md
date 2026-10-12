@@ -1,6 +1,6 @@
 # Interactions
 
-An interaction is what you can do with a song, album, playlist or artist. A right click and the dots button open the same menu, built in `Interactions.tsx` from one list per kind, in YouTube Music's order. A collection's page loads when its menu opens, through the same cache that opening the page uses, so the menu knows the saved or subscribed state and has the tracks to queue. Actions that need every row of a long playlist wait for the rest to arrive.
+An interaction is what you can do with a song, album, playlist or artist. A right click and the dots button open the same menu, built in `Interactions.tsx` from one list per kind, in YouTube Music's order. There is one menu for the whole app, held by `InteractionsProvider`: rows only ask it to open, with their subject and where to appear, because a menu of their own made each row in a long list several times as costly to mount. It keeps a hidden trigger, without which Base UI cannot link a submenu to its menu. A collection's page loads when its menu opens, through the same cache that opening the page uses, so the menu knows the saved or subscribed state and has the tracks to queue. Actions that need every row of a long playlist wait for the rest to arrive.
 
 YouTube Music's own buttons name what to call:
 

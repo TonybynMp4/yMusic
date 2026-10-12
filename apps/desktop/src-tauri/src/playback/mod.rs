@@ -444,12 +444,7 @@ impl Player {
     /// Where the playing song is, for the page to ask once a second. None when
     /// nothing is loaded.
     pub fn position(&self) -> Option<Position> {
-        let position_ms = self.mpv.get_property::<f64>("time-pos").ok()?;
-        let duration_ms = self.mpv.get_property::<f64>("duration").ok();
-        Some(Position {
-            position_ms: seconds_to_ms(position_ms),
-            duration_ms: duration_ms.map(seconds_to_ms),
-        })
+        read_position(&self.mpv)
     }
 
     /// What stats for nerds shows. The meters read nothing while it is off.
@@ -729,12 +724,6 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
         .name("mpv-events".into())
         .spawn(move || {
             let mut duration_ms: Option<u64> = None;
-            // mpv reports `time-pos` many times a second, and each message
-            // runs a script in the page and updates its state. At that rate the
-            // web process held about 80 MB more by the end of a session, so the
-            // page asks for the position itself (`Player::position`) and is
-            // only sent the first one after a song starts or a seek.
-            let mut page_wants_position = true;
 
             loop {
                 let Some(event) = mpv.wait_event(0.5) else {
@@ -768,7 +757,6 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                 match event {
                     Event::StartFile => {
                         duration_ms = None;
-                        page_wants_position = true;
                         match advance(&mpv, &state) {
                             Advance::None => emit(
                                 &sink,
@@ -797,7 +785,27 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                     // seek while paused, so "playing" has to be checked rather
                     // than assumed or a paused scrub flips the UI to playing.
                     Event::PlaybackRestart => {
-                        page_wants_position = true;
+                        // mpv reports `time-pos` many times a second, and each
+                        // message runs a script in the page and updates its
+                        // state. At that rate the web process held about 80 MB
+                        // more by the end of a session, so the page asks for
+                        // the position itself (`Player::position`) while a
+                        // song plays. It only hears it from here when a song
+                        // starts or after a seek, which also covers a scrub
+                        // while paused, when the page is not asking.
+                        if let Some(Position {
+                            position_ms,
+                            duration_ms,
+                        }) = read_position(&mpv)
+                        {
+                            emit(
+                                &sink,
+                                PlaybackEvent::Position {
+                                    position_ms,
+                                    duration_ms,
+                                },
+                            );
+                        }
                         let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
                         let status = if paused {
                             PlaybackStatus::Paused
@@ -849,16 +857,13 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         OBSERVE_TIME_POS => {
                             if let libmpv2::events::PropertyData::Double(seconds) = change {
                                 let position_ms = seconds_to_ms(seconds);
-                                let event = PlaybackEvent::Position {
-                                    position_ms,
-                                    duration_ms,
-                                };
-                                if page_wants_position {
-                                    page_wants_position = false;
-                                    emit(&sink, event);
-                                } else {
-                                    emit_to_observers(&sink, event);
-                                }
+                                emit_to_observers(
+                                    &sink,
+                                    PlaybackEvent::Position {
+                                        position_ms,
+                                        duration_ms,
+                                    },
+                                );
                             }
                         }
                         OBSERVE_DURATION => {
@@ -933,6 +938,15 @@ fn advance(mpv: &Mpv, state: &State) -> Advance {
     *current = Some(next.track_id.clone());
     state.loudness.lock().expect("loudness mutex").track_db = next.loudness_db;
     Advance::Joined(next.track_id)
+}
+
+fn read_position(mpv: &Mpv) -> Option<Position> {
+    let position_ms = mpv.get_property::<f64>("time-pos").ok()?;
+    let duration_ms = mpv.get_property::<f64>("duration").ok();
+    Some(Position {
+        position_ms: seconds_to_ms(position_ms),
+        duration_ms: duration_ms.map(seconds_to_ms),
+    })
 }
 
 fn emit_to_observers(sink: &Sink, event: PlaybackEvent) {

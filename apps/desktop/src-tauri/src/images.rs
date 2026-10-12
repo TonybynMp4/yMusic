@@ -353,8 +353,7 @@ mod tests {
 
     #[test]
     fn trims_the_least_recently_drawn_images_first() {
-        let dir = std::env::temp_dir().join(format!("ymusic-images-trim-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("trim");
         let old = SystemTime::now() - Duration::from_secs(600);
         for (index, name) in ["a", "b", "c", "d"].iter().enumerate() {
             let path = dir.join(name);
@@ -426,6 +425,146 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    /// An empty folder of its own under the system's temporary one.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ymusic-images-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn age(path: &Path, by: Duration) {
+        let file = std::fs::File::options().append(true).open(path).unwrap();
+        file.set_modified(SystemTime::now() - by).unwrap();
+    }
+
+    #[test]
+    fn trims_a_folder_not_created_yet_as_empty() {
+        let dir = scratch("trim-missing");
+        let trimmed = trim(&dir.join("images"), 0, 0);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(trimmed.is_ok());
+    }
+
+    #[test]
+    fn keeps_everything_under_the_cap_and_leaves_subfolders_alone() {
+        let dir = scratch("trim-under");
+        std::fs::write(dir.join("a"), [0u8; 100]).unwrap();
+        std::fs::write(dir.join("b"), [0u8; 100]).unwrap();
+        // Bigger than the cap on its own, so counting it would trigger a trim.
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub").join("c"), [0u8; 1000]).unwrap();
+
+        trim(&dir, 250, 100).unwrap();
+        let left = names(&dir);
+        let nested = names(&dir.join("sub"));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(left, ["a", "b", "sub"]);
+        assert_eq!(nested, ["c"]);
+    }
+
+    #[test]
+    fn sweeps_temporary_files_a_crash_left_but_not_ones_being_written() {
+        let dir = scratch("trim-part");
+        let image = dir.join("abc");
+        std::fs::write(&image, [0u8; 10]).unwrap();
+        age(&image, Duration::from_secs(7200));
+        let stale = dir.join("abc.0.part");
+        std::fs::write(&stale, [0u8; 10]).unwrap();
+        age(&stale, Duration::from_secs(7200));
+        std::fs::write(dir.join("abc.1.part"), [0u8; 10]).unwrap();
+
+        trim(&dir, u64::MAX, u64::MAX).unwrap();
+        let left = names(&dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(left, ["abc", "abc.1.part"]);
+    }
+
+    #[test]
+    fn retries_only_answers_that_may_change() {
+        for code in [400, 403, 404, 410] {
+            assert!(!retryable(StatusCode::from_u16(code).unwrap()), "{code}");
+        }
+        for code in [408, 429, 500, 502, 503] {
+            assert!(retryable(StatusCode::from_u16(code).unwrap()), "{code}");
+        }
+    }
+
+    /// A local HTTP server giving `answers` in turn, the last one from then on.
+    /// Returns its address and how many requests it has served.
+    fn serve(answers: Vec<(&'static str, &'static [u8])>) -> (String, Arc<AtomicU64>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}/image", listener.local_addr().unwrap());
+        let served = Arc::new(AtomicU64::new(0));
+        let count = served.clone();
+        std::thread::spawn(move || {
+            for (index, stream) in listener.incoming().enumerate() {
+                let mut stream = stream.unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0u8; 1024];
+                while !request.ends_with(b"\r\n\r\n") {
+                    let read = stream.read(&mut buf).unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buf[..read]);
+                }
+                let (status, body) = answers[index.min(answers.len() - 1)];
+                let head = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                count.fetch_add(1, Ordering::SeqCst);
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body);
+            }
+        });
+        (address, served)
+    }
+
+    const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0];
+
+    #[test]
+    fn gives_up_on_a_client_error_after_one_request() {
+        let (url, served) = serve(vec![("404 Not Found", b"")]);
+        let dir = scratch("fetch-404");
+        let images = Images::new(dir.join("images"));
+        let started = std::time::Instant::now();
+        let fetched = tauri::async_runtime::block_on(images.fetch(&url));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(fetched, None);
+        assert_eq!(served.load(Ordering::SeqCst), 1);
+        assert!(
+            started.elapsed() < BACKOFF,
+            "no backoff before falling back"
+        );
+    }
+
+    #[test]
+    fn retries_server_errors_and_html_until_an_image_comes() {
+        let (url, served) = serve(vec![
+            ("503 Service Unavailable", b""),
+            ("200 OK", b"<!DOCTYPE html>"),
+            ("200 OK", JPEG),
+        ]);
+        let dir = scratch("fetch-retry");
+        let images = Images::new(dir.join("images"));
+        let fetched = tauri::async_runtime::block_on(images.fetch(&url));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(fetched.as_deref(), Some(JPEG));
+        assert_eq!(served.load(Ordering::SeqCst), 3);
     }
 
     #[test]

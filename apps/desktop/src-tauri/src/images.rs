@@ -68,7 +68,8 @@ impl Images {
         let path = self.dir.join(cache_name(&url));
         if let Ok(bytes) = tokio::fs::read(&path).await {
             // The trim goes by modification time, so a drawn image counts as recent.
-            touch(&path);
+            // Blocking file calls, kept off the runtime and out of the response's way.
+            tauri::async_runtime::spawn_blocking(move || touch(&path));
             return image(bytes);
         }
         let webp = match as_webp(&url) {

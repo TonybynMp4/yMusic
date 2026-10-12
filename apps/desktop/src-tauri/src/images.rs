@@ -269,12 +269,19 @@ fn touch(path: &Path) {
 
 /// Deletes the least recently drawn images until the folder holds `to` bytes,
 /// if it holds more than `cap`. Temporary files a crash left behind go too.
+/// A folder not created yet counts as empty, and an entry that cannot be read
+/// (a write renaming it away, say) is skipped.
 fn trim(dir: &Path, cap: u64, to: u64) -> std::io::Result<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err),
+    };
     let mut files = Vec::new();
     let mut total = 0;
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let meta = entry.metadata()?;
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let Ok(meta) = entry.metadata() else { continue };
         if !meta.is_file() {
             continue;
         }

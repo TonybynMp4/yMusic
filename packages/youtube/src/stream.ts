@@ -200,7 +200,7 @@ export async function resolveStream(
 export async function streamUrl(format: RawFormat, player: unknown): Promise<string> {
   const url = await format.decipher(player);
   if (player == null && (url === "" || new URL(url).searchParams.has("n"))) {
-    throw new Error("This client's stream URL needs the player script to decipher it");
+    throw new Error("this client's stream URL needs the player script to decipher it");
   }
   return url;
 }

@@ -71,12 +71,12 @@ impl Images {
             touch(&path);
             return image(bytes);
         }
-        let webp = as_webp(&url);
-        let fetched = match &webp {
-            Some(webp) => match self.fetch(webp).await {
-                Some(bytes) => Some(bytes),
-                None => self.fetch(&url).await,
-            },
+        let webp = match as_webp(&url) {
+            Some(webp) => self.fetch(&webp).await,
+            None => None,
+        };
+        let fetched = match webp {
+            Some(bytes) => Some(bytes),
             None => self.fetch(&url).await,
         };
         match fetched {
@@ -87,7 +87,10 @@ impl Images {
                 }
                 image(bytes)
             }
-            None => status(StatusCode::BAD_GATEWAY),
+            None => {
+                log::warn!("could not fetch artwork: {url}");
+                status(StatusCode::BAD_GATEWAY)
+            }
         }
     }
 
@@ -123,13 +126,26 @@ impl Images {
                     Ok(_) => log::debug!("artwork was not an image: {url}"),
                     Err(err) => log::debug!("artwork body failed: {err}"),
                 },
-                Ok(response) => log::debug!("artwork answered {}: {url}", response.status()),
+                Ok(response) => {
+                    log::debug!("artwork answered {}: {url}", response.status());
+                    if !retryable(response.status()) {
+                        return None;
+                    }
+                }
                 Err(err) => log::debug!("artwork request failed: {err}"),
             }
         }
-        log::warn!("gave up on artwork after {ATTEMPTS} attempts: {url}");
+        log::debug!("gave up on artwork after {ATTEMPTS} attempts: {url}");
         None
     }
+}
+
+/// Whether an error answer may go away if asked again. A client error is
+/// definite (a missing WebP copy answers 404), except for a timeout or a rate limit.
+fn retryable(status: StatusCode) -> bool {
+    !status.is_client_error()
+        || status == StatusCode::REQUEST_TIMEOUT
+        || status == StatusCode::TOO_MANY_REQUESTS
 }
 
 /// The remote URL, if the request names one on an allowed host.

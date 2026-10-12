@@ -113,6 +113,11 @@ export async function createVisitor(options: YouTubeOptions): Promise<string> {
  * forbids eval. Everything evaluated here is YouTube's own player code.
  */
 function installEvaluator(): void {
+  Platform.shim.eval = playerEvaluator();
+}
+
+/** The evaluator `installEvaluator` installs, separate so tests can run it. */
+export function playerEvaluator(): typeof Platform.shim.eval {
   // youtubei.js hands over the extracted player code with a call appended
   // that has this URL's `n` and signature written into it, so the source is
   // new every time and the engine compiled all of it again for each URL.
@@ -121,7 +126,7 @@ function installEvaluator(): void {
   // swaps them. That one stays in the worker by design until the next script
   // replaces it, even through hours with no fallback song.
   let compiled: { source: string; process: Processor } | null = null;
-  Platform.shim.eval = (data, env) => {
+  return (data, env) => {
     const at = data.output.lastIndexOf(PROCESSOR_CALL);
     if (at === -1) return new Function(data.output)() as never;
     const source = data.output.slice(0, at);

@@ -43,3 +43,13 @@ export function updateCheck(): Promise<Update | null> {
 export function openLogsFolder(): Promise<void> {
   return invokeVoid("open_logs_folder");
 }
+
+/** How many bytes the artwork cache takes on disk. */
+export function artworkCacheSize(): Promise<number> {
+  return invokeParsed("artwork_cache_size", z.number().int().nonnegative());
+}
+
+/** Deletes the cached artwork. Images already on screen stay until the page draws them again. */
+export function artworkCacheClear(): Promise<void> {
+  return invokeVoid("artwork_cache_clear");
+}

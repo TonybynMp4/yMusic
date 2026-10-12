@@ -6,6 +6,7 @@
 
 use crate::account::{import, sign_in, Account};
 use crate::http::Http;
+use crate::images::Images;
 use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
 use crate::settings::{Settings, SettingsStore};
@@ -286,4 +287,24 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
     let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// How many bytes the artwork cache takes on disk.
+#[tauri::command]
+pub async fn artwork_cache_size(images: State<'_, Images>) -> Result<u64, String> {
+    let images = images.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || images.size())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+/// Deletes the cached artwork. Images on screen stay, from the webview's memory.
+#[tauri::command]
+pub async fn artwork_cache_clear(images: State<'_, Images>) -> Result<(), String> {
+    let images = images.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || images.clear())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
 }

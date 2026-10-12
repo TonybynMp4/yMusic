@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { AudioQuality } from "@ymusic/core";
 import {
   accountBrowsers,
+  artworkCacheClear,
+  artworkCacheSize,
   type AudioDevice,
   type Browser,
   isTauri,
@@ -18,6 +20,7 @@ import {
   IconFolderPlus,
   IconLogout,
   IconRefresh,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -232,6 +235,7 @@ export function SettingsView({
             />
           }
         />
+        {isTauri && <ArtworkCacheRow />}
         <div className="flex items-center gap-6 px-4 py-3">
           <span className="flex-1 text-sm text-muted-foreground">
             {updates.status ?? "Find out whether a newer version is out."}
@@ -363,6 +367,48 @@ function AccountSection({ state }: { state: AccountState }) {
       />
     </Section>
   );
+}
+
+/** The artwork kept on disk, with its size and a way to empty it. */
+function ArtworkCacheRow() {
+  const [size, setSize] = useState<number | null>(null);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    artworkCacheSize()
+      .then(setSize)
+      .catch((error: unknown) => console.warn("could not read the artwork cache size", error));
+  }, []);
+  const clear = () => {
+    setClearing(true);
+    artworkCacheClear()
+      .catch((error: unknown) => console.warn("could not clear the artwork cache", error))
+      .then(artworkCacheSize)
+      .then(setSize)
+      .catch((error: unknown) => console.warn("could not read the artwork cache size", error))
+      .finally(() => setClearing(false));
+  };
+  return (
+    <Row
+      label="Artwork cache"
+      action
+      description={cacheDescription(size)}
+      control={
+        <Button variant="outline" disabled={clearing || size === 0} onClick={clear}>
+          <IconTrash />
+          Clear
+        </Button>
+      }
+    />
+  );
+}
+
+function cacheDescription(bytes: number | null): string {
+  const what = "album art and thumbnails kept on this computer, so pages draw them without downloading them again.";
+  if (bytes === null) return `The ${what}`;
+  if (bytes === 0) return "Empty. Album art and thumbnails are kept here as pages draw them.";
+  const mb = bytes / (1024 * 1024);
+  const size = mb >= 10 ? `${Math.round(mb)} MB` : mb >= 0.1 ? `${mb.toFixed(1)} MB` : "Under 0.1 MB";
+  return `${size} of ${what}`;
 }
 
 function useBrowsers(enabled: boolean): Browser[] {

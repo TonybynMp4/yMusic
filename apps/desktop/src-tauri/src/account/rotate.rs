@@ -7,72 +7,55 @@
 //! new cookies. Never for an imported session: the browser rotates that one,
 //! and two holders rotating one session invalidate each other's copy.
 //!
-//! The endpoint is undocumented. youtube.com rotates through
-//! `accounts.youtube.com`; clients of Google's other web apps post the same
-//! body to `accounts.google.com`. Both are tried, in that order, and what each
-//! answered is logged (statuses and cookie names, never values).
+//! The endpoint is undocumented: it is what youtube.com's accounts frame
+//! posts. It answers 429 when asked again too soon, and a session just signed
+//! in counts. Each answer is logged by status and cookie names, never values.
+//! (`accounts.google.com/RotateCookies`, which clients of Google's other web
+//! apps use, answers a youtube.com session with 401.)
 
 use std::time::Duration;
 
 use reqwest::header::{CONTENT_TYPE, COOKIE, ORIGIN, SET_COOKIE};
 
-const ENDPOINTS: [(&str, &str); 2] = [
-    (
-        "https://accounts.youtube.com/RotateCookies",
-        "https://accounts.youtube.com",
-    ),
-    (
-        "https://accounts.google.com/RotateCookies",
-        "https://accounts.google.com",
-    ),
-];
+const URL: &str = "https://accounts.youtube.com/RotateCookies";
 const BODY: &str = r#"[000,"-0000000000000000000"]"#;
 const ROTATED: &str = "__Secure-1PSIDTS";
 
-/// The cookie header with the rotated cookies in, or None if no endpoint
-/// rotated it.
+/// The cookie header with the rotated cookies in, or None if Google did not
+/// rotate it.
 pub async fn rotate(cookie: &str) -> Result<Option<String>, String> {
-    let client = reqwest::Client::builder()
+    let response = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|error| error.to_string())?;
-    for (url, origin) in ENDPOINTS {
-        let response = match client
-            .post(url)
-            .header(CONTENT_TYPE, "application/json")
-            .header(ORIGIN, origin)
-            .header(COOKIE, cookie)
-            .body(BODY)
-            .send()
-            .await
-        {
-            Ok(response) => response,
-            Err(error) => {
-                log::warn!("rotating the session at {url}: {error}");
-                continue;
-            }
-        };
-        let set: Vec<SetCookie> = response
-            .headers()
-            .get_all(SET_COOKIE)
-            .iter()
-            .filter_map(|value| value.to_str().ok())
-            .filter_map(SetCookie::parse)
-            .collect();
-        log::info!(
-            "rotating the session at {url}: HTTP {}, set {}",
-            response.status().as_u16(),
-            set.iter()
-                .map(SetCookie::describe)
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        if set.iter().any(|c| c.name == ROTATED && c.value.is_some()) {
-            return Ok(Some(merge(cookie, &set)));
-        }
+        .map_err(|error| error.to_string())?
+        .post(URL)
+        .header(CONTENT_TYPE, "application/json")
+        .header(ORIGIN, "https://accounts.youtube.com")
+        .header(COOKIE, cookie)
+        .body(BODY)
+        .send()
+        .await
+        .map_err(|error| format!("could not rotate the session: {error}"))?;
+    let set: Vec<SetCookie> = response
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .filter_map(SetCookie::parse)
+        .collect();
+    log::info!(
+        "rotating the session: HTTP {}, set {}",
+        response.status().as_u16(),
+        set.iter()
+            .map(SetCookie::describe)
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    if !set.iter().any(|c| c.name == ROTATED && c.value.is_some()) {
+        return Ok(None);
     }
-    Ok(None)
+    Ok(Some(merge(cookie, &set)))
 }
 
 #[derive(Debug, PartialEq)]

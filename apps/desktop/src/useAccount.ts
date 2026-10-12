@@ -35,11 +35,14 @@ export function useAccount(): AccountState {
   // the expiry is read from a copy of a response and can land before the
   // answer to `engine.account()` does.
   const expiries = useRef(0);
+  // The cookie the engine has, which is the one an expiry is about.
+  const current = useRef<string | null>(null);
 
   const adopt = useCallback(async (cookie: string | null) => {
     const expiry = expiries.current;
     let summary: AccountSummary | null;
     try {
+      current.current = cookie;
       await engine.setCookie(cookie);
       summary = cookie === null ? null : await engine.account();
     } catch (e) {
@@ -51,18 +54,19 @@ export function useAccount(): AccountState {
     setError(null);
   }, []);
 
-  // An imported session is read again from its browser, which keeps its copy
-  // fresh. Otherwise the saved session stays on disk until signing in again
-  // replaces it. Signed out in between, so the library reloads either way.
+  // A fresher copy is looked for (see `accountRefresh`). Without one, the
+  // saved session stays on disk until signing in again replaces it. Signed
+  // out in between, so the library reloads either way.
   useEffect(
     () =>
       onSessionExpired(() => {
+        const stale = current.current;
         expiries.current += 1;
         setAccount(null);
         setBusy(true);
         void (async () => {
           try {
-            const cookie = await accountRefresh();
+            const cookie = stale === null ? null : await accountRefresh(stale);
             if (cookie === null) throw new Error("no newer session to read");
             await adopt(cookie);
           } catch {
@@ -84,14 +88,14 @@ export function useAccount(): AccountState {
     const rotate = () => {
       void accountRotate()
         .then(async (cookie) => {
-          if (cookie !== null) await engine.setCookie(cookie);
+          if (cookie !== null) await adopt(cookie);
         })
         .catch(() => {});
     };
     rotate();
     const timer = setInterval(rotate, ROTATE_EVERY);
     return () => clearInterval(timer);
-  }, [signedIn]);
+  }, [signedIn, adopt]);
 
   useEffect(() => {
     let cancelled = false;

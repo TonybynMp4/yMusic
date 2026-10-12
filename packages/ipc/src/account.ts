@@ -33,12 +33,12 @@ export async function accountImport(id: string): Promise<string> {
 }
 
 /**
- * A fresher copy of the session, for when YouTube stops accepting ours: read
- * again from its browser if imported, rotated if not. Null when neither gives
- * anything newer.
+ * A fresher copy of the session, for when YouTube stops accepting `stale`: one
+ * saved since, read again from its browser if imported, or rotated if not.
+ * Null when none of those gives anything newer.
  */
-export async function accountRefresh(): Promise<string | null> {
-  return invokeParsed("account_refresh", Cookie);
+export async function accountRefresh(stale: string): Promise<string | null> {
+  return invokeParsed("account_refresh", Cookie, { stale });
 }
 
 /**

@@ -10,7 +10,7 @@ import type { FetchLike } from "./client.ts";
  * were. Every InnerTube answer says which it was in its `responseContext`, so
  * the body is read on the side, from a clone, and never holds up the caller.
  */
-export function watchSession(fetch: FetchLike, onSignedOut: () => void): FetchLike {
+export function watchSession(fetch: FetchLike, onSignedOut: (url: string) => void): FetchLike {
   return async (input, init) => {
     const response = await fetch(input, init);
     if (response.ok) {
@@ -18,12 +18,17 @@ export function watchSession(fetch: FetchLike, onSignedOut: () => void): FetchLi
         .clone()
         .text()
         .then((body) => {
-          if (SIGNED_OUT.test(body)) onSignedOut();
+          if (SIGNED_OUT.test(body)) onSignedOut(urlOf(input));
         })
         .catch(() => {});
     }
     return response;
   };
+}
+
+function urlOf(input: Parameters<FetchLike>[0]): string {
+  if (typeof input === "string") return input;
+  return input instanceof URL ? input.href : input.url;
 }
 
 const SIGNED_OUT = /"key":\s*"logged_in",\s*"value":\s*"0"/;

@@ -246,19 +246,23 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
     Ok(cookie)
 }
 
-/// A fresher copy of the session, once YouTube has stopped accepting ours.
-/// An imported session is read again from its browser, which rotates the
-/// session it shares with us, so its copy is the live one. A sign-in window
-/// session is rotated here. None when neither gives anything newer.
+/// A fresher copy of the session, once YouTube has stopped accepting `stale`,
+/// the cookie the engine had. A rotation can land while a request with the
+/// old copy is out, so a session saved since is the answer. Otherwise an
+/// imported session is read again from its browser, which rotates the session
+/// it shares with us, so its copy is the live one, and a sign-in window
+/// session is rotated here. None when nothing gives anything newer.
 #[tauri::command]
-pub async fn account_refresh(account: State<'_, Account>) -> Result<Option<String>, String> {
-    let Some(Session {
-        cookie: stale,
-        browser,
-    }) = account.session()
-    else {
+pub async fn account_refresh(
+    account: State<'_, Account>,
+    stale: String,
+) -> Result<Option<String>, String> {
+    let Some(Session { cookie, browser }) = account.session() else {
         return Ok(None);
     };
+    if cookie != stale {
+        return Ok(Some(cookie));
+    }
     let Some(id) = browser else {
         return rotated(&account, &stale).await;
     };

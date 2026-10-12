@@ -356,13 +356,14 @@ export class YouTubeEngine {
 
   #createBrowseClient(cookie: string | null): Promise<Innertube> {
     if (cookie === null) return createYouTube({ fetch: this.#fetch });
-    const fetch = watchSession(this.#fetch, () => this.#expired(cookie));
+    const fetch = watchSession(this.#fetch, (url) => this.#expired(cookie, url));
     return createYouTube({ fetch, cookie });
   }
 
   /** Only for the cookie YouTube refused, not one signed in since. */
-  #expired(cookie: string): void {
+  #expired(cookie: string, url: string): void {
     if (cookie !== this.#cookie) return;
+    console.warn(`YouTube answered ${new URL(url, "https://music.youtube.com").pathname} as signed out`);
     this.setCookie(null);
     this.#onSessionExpired();
   }

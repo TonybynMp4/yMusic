@@ -162,6 +162,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Stop the fallback path keeping code resident
 - [x] Prune stream leases and the song-year cache
 - [x] Drop unused resources from WebKit's memory cache
+- [x] Let the page ask for the playback position instead of pushing it
 
 ## Known issues
 

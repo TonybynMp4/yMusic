@@ -62,6 +62,16 @@ Measured against `main` with all of the stack before it merged (`docs/memory/cac
 
 In the `DOCUMENT_VIEWER` runs, the core's PSS rose 28 MB while the memory it holds did not move, so the rise is in shared pages (libraries and other mapped files), not memory the core allocated. PSS splits a shared page between the processes that have it resident, and which process gets charged shifts when another one stops touching those pages. The change does not touch the core, and with `DOCUMENT_BROWSER` the core's PSS ends within noise.
 
+### The playback position
+
+mpv reports `time-pos` many times a second, and the core used to send each one to the page over a Tauri channel. Each message runs as a script in the page and updates its state. Now the core sends the page only the first position after a song starts or a seek. While a song plays, `MpvPlaybackEngine` in `packages/ipc` asks for it with the `player_position` command just after each whole second, so the time label still ticks on the second. A command's reply comes back over Tauri's `ipc://` protocol, not as a script. Rust code that watches playback, such as MPRIS, still gets every position.
+
+The web process ends the scenario 81 MB lower, 199 MB against 280, and all processes 75 MB lower (`docs/memory/position-pull/`). The peak doesn't move: the gain is what the web process used to keep building up during playback and the last idle minutes. Its three runs also land within 5 MB of each other, where the build before spread over 42 MB.
+
+Sending the positions once a second instead, still pushed, ended within noise of pulling. The pull leaves about four messages per song. A test that kept every push but sent each one as arguments to one fixed function, so WebKit had no new source to compile, still ended near 294 MB in the two runs that played. So compiling the scripts doesn't seem to be the main cost. The page's work for each message is a better guess, but neither test proves it.
+
+Synced lyrics will need the position more often than once a second. They should estimate it in the page from the last position, the time it arrived (`performance.now()`) and whether the song is playing, not ask the core more often.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

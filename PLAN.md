@@ -57,6 +57,7 @@ Sign release assets with the updater's minisign key so the download is verified 
   - *Off*: nothing recorded anywhere, the current pause.
 
   A saved `pauseSearchHistory` of true becomes *Off*, and false becomes *YouTube*, so nobody's search changes on update. Signed out there is no account to record on, so the list is local and *YouTube* is unavailable.
+- **React performance pass.** Once the open memory and playlist PRs are merged, profile a release build: what re-renders during playback, while scrolling browse pages, search results, the sidebar and the queue, and while a menu or dialog opens. Fix what the profile shows, measuring before and after. `docs/react-performance.md` lists how to measure, the common causes, and what is known but not yet looked at.
 
 ## Later
 

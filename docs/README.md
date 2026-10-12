@@ -14,3 +14,4 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Versions and releases](releases.md): versioning, the release workflow and CI.
 - [Memory](memory.md): where memory goes, and what has been cut.
 - [Testing](testing.md): unit tests and the opt-in network tests.
+- [React performance](react-performance.md): how to profile the UI, common causes of slow renders, and what is left to look at.

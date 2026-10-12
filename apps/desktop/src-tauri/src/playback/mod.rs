@@ -709,6 +709,10 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
             // the position itself (`Player::position`) and is only sent the
             // first one after a song starts or a seek.
             let mut page_wants_position = true;
+            // Lets the memory harness measure pushing every position, the old
+            // behaviour, with the same build.
+            let push_every_position = cfg!(feature = "memory-scenario")
+                && std::env::var_os("YMUSIC_PUSH_POSITION").is_some();
 
             loop {
                 let Some(event) = mpv.wait_event(0.5) else {
@@ -827,7 +831,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                     position_ms,
                                     duration_ms,
                                 };
-                                if page_wants_position {
+                                if page_wants_position || push_every_position {
                                     page_wants_position = false;
                                     emit(&sink, event);
                                 } else {

@@ -55,6 +55,7 @@ macro_rules! ymusic_commands {
             $crate::commands::account_browsers,
             $crate::commands::account_import,
             $crate::commands::account_refresh,
+            $crate::commands::account_rotate,
             $crate::commands::account_sign_out,
             $crate::commands::settings_get,
             $crate::commands::settings_set,

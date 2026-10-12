@@ -3,6 +3,7 @@ import {
   accountCookie,
   accountImport,
   accountRefresh,
+  accountRotate,
   accountSignIn,
   accountSignOut,
 } from "@ymusic/ipc";
@@ -74,6 +75,24 @@ export function useAccount(): AccountState {
     [adopt],
   );
 
+  // A session from the sign-in window has no browser rotating it, so it is
+  // rotated here while signed in, as a browser would, starting at launch since
+  // a saved session can be days old. An imported one is left to its browser.
+  const signedIn = account !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const rotate = () => {
+      void accountRotate()
+        .then(async (cookie) => {
+          if (cookie !== null) await engine.setCookie(cookie);
+        })
+        .catch(() => {});
+    };
+    rotate();
+    const timer = setInterval(rotate, ROTATE_EVERY);
+    return () => clearInterval(timer);
+  }, [signedIn]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -138,6 +157,9 @@ export function useAccount(): AccountState {
 
   return { account, busy, error, signIn, importFrom, signOut };
 }
+
+/** Browsers rotate about every ten minutes; Google refuses more than about once a minute. */
+const ROTATE_EVERY = 10 * 60 * 1000;
 
 function describe(prefix: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);

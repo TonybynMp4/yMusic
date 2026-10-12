@@ -33,12 +33,20 @@ export async function accountImport(id: string): Promise<string> {
 }
 
 /**
- * Reads an imported session again from its browser, for when YouTube stops
- * accepting ours. Null when the session was not imported, or the browser has
- * nothing newer.
+ * A fresher copy of the session, for when YouTube stops accepting ours: read
+ * again from its browser if imported, rotated if not. Null when neither gives
+ * anything newer.
  */
 export async function accountRefresh(): Promise<string | null> {
   return invokeParsed("account_refresh", Cookie);
+}
+
+/**
+ * Rotates a session from the sign-in window, which nothing else keeps alive.
+ * Null for an imported session, or when the rotation did not take.
+ */
+export async function accountRotate(): Promise<string | null> {
+  return invokeParsed("account_rotate", Cookie);
 }
 
 export async function accountSignOut(): Promise<void> {

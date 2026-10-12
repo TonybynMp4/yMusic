@@ -4,7 +4,7 @@
 //! macros beside each function, and those collide with the crate root once the
 //! functions are public enough for `ymusic_commands!` to name them.
 
-use crate::account::{import, sign_in, Account, Session};
+use crate::account::{import, rotate, sign_in, Account, Session};
 use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
@@ -246,18 +246,21 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
     Ok(cookie)
 }
 
-/// Reads an imported session again from its browser, once YouTube has stopped
-/// accepting ours: the browser rotates the session it shares with us, and its
-/// copy is the live one. None when the session was not imported, or the
-/// browser holds the same session we already have.
+/// A fresher copy of the session, once YouTube has stopped accepting ours.
+/// An imported session is read again from its browser, which rotates the
+/// session it shares with us, so its copy is the live one. A sign-in window
+/// session is rotated here. None when neither gives anything newer.
 #[tauri::command]
 pub async fn account_refresh(account: State<'_, Account>) -> Result<Option<String>, String> {
     let Some(Session {
         cookie: stale,
-        browser: Some(id),
+        browser,
     }) = account.session()
     else {
         return Ok(None);
+    };
+    let Some(id) = browser else {
+        return rotated(&account, &stale).await;
     };
     let cookie = import_from(id.clone()).await?;
     if cookie == stale {
@@ -268,6 +271,35 @@ pub async fn account_refresh(account: State<'_, Account>) -> Result<Option<Strin
         browser: Some(id),
     });
     Ok(Some(cookie))
+}
+
+/// Rotates a sign-in window session, which the app has to keep alive itself.
+/// None for an imported session, which its browser keeps alive, or when the
+/// rotation did not take.
+#[tauri::command]
+pub async fn account_rotate(account: State<'_, Account>) -> Result<Option<String>, String> {
+    match account.session() {
+        Some(Session {
+            cookie,
+            browser: None,
+        }) => rotated(&account, &cookie).await,
+        _ => Ok(None),
+    }
+}
+
+async fn rotated(account: &Account, cookie: &str) -> Result<Option<String>, String> {
+    let Some(fresh) = rotate::rotate(cookie).await? else {
+        return Ok(None);
+    };
+    // Signed out or signed in again while the request was out.
+    if account.cookie().as_deref() != Some(cookie) {
+        return Ok(None);
+    }
+    account.save(Session {
+        cookie: fresh.clone(),
+        browser: None,
+    });
+    Ok(Some(fresh))
 }
 
 async fn import_from(id: String) -> Result<String, String> {

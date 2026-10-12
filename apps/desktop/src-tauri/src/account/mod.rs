@@ -15,6 +15,7 @@
 //! `docs/sign-in.md`.
 
 pub mod import;
+pub mod rotate;
 pub mod sign_in;
 
 use chacha20poly1305::{

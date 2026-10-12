@@ -1,8 +1,10 @@
 import {
   IconArrowsShuffle,
   IconDisc,
+  IconHeart,
   IconLoader2,
   IconPlayerPlayFilled,
+  IconPlaylist,
   IconUser,
 } from "@tabler/icons-react";
 import type {
@@ -24,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, type Subject } from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
+import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
 /** What a browse page needs of the player and the navigation stack. */
@@ -135,10 +138,16 @@ function Playlist({
   actions: BrowseActions;
   route: Route;
 }) {
+  // The same icons as the sidebar: Liked Music always shows the heart, and a
+  // playlist whose artwork is missing shows the playlist icon.
+  const liked = route.id === LIKED_MUSIC;
   return (
     <>
       <Header
-        thumbnails={page.thumbnails}
+        thumbnails={liked ? [] : page.thumbnails}
+        fallback={
+          liked ? <IconHeart size={64} stroke={1.25} /> : <IconPlaylist size={64} stroke={1.25} />
+        }
         title={page.title}
         subtitle={page.subtitle}
         tracks={page.tracks}

@@ -21,6 +21,7 @@ function ScrollArea({
   viewportRef?: React.Ref<HTMLDivElement>
 }) {
   const viewport = React.useRef<HTMLDivElement | null>(null)
+  const track = React.useRef<HTMLDivElement>(null)
   const thumb = React.useRef<HTMLDivElement>(null)
   const setViewport = React.useCallback(
     (element: HTMLDivElement | null) => {
@@ -42,11 +43,13 @@ function ScrollArea({
 
   React.useLayoutEffect(() => {
     const element = viewport.current
+    const rail = track.current
     const bar = thumb.current
-    if (!element || !bar) return
+    if (!element || !rail || !bar) return
     const update = () => {
       const { height, range, top } = geometry()
-      bar.style.display = range > 0 ? "" : "none"
+      // The whole track goes, not just the thumb: it sits over the content's edge.
+      rail.style.display = range > 0 ? "" : "none"
       bar.style.height = `${height}px`
       bar.style.transform = `translateY(${top}px)`
     }
@@ -107,7 +110,7 @@ function ScrollArea({
         className="no-scrollbar min-h-0 flex-1 overflow-auto outline-none"
         {...props}
       />
-      <div aria-hidden className="absolute inset-y-0 right-0 w-2.5" onPointerDown={page}>
+      <div ref={track} aria-hidden className="absolute inset-y-0 right-0 w-2.5" onPointerDown={page}>
         <div
           ref={thumb}
           onPointerDown={drag}

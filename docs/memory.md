@@ -48,7 +48,7 @@ The scenario cannot see either change (`docs/memory/fallback-resident/`). Every 
 
 ### Small maps
 
-Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved song so going back to it skips a request, and now drops the expired ones each time it stores a new lease; a lease lasts a few hours, so a long session no longer keeps one per song it ever played. `useSongYear.ts` caches each song's release year for the session and now keeps the latest 500.
+Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved YouTube song so going back to it skips a request, and now drops the expired ones each time it stores a new lease; a lease lasts a few hours, so a long session no longer keeps one per song it ever played. A local file's lease never expires, so it is not kept at all: pruning would never drop it, and resolving the file again only reads the disk. `useSongYear.ts` caches each song's release year for the session and now keeps the latest 500.
 
 Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/memory/small-maps/`): every web and total number ends within noise of the build before. Signed in, the core reads 6 MB higher, but this change does not touch the core, and the before runs were so close together (121 MB each) that any difference clears the noise line. This is about a session that runs for days, not a saving an 11 minute run shows.
 

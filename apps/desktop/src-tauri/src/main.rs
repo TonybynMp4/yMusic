@@ -22,7 +22,7 @@ fn main() {
 fn limit_malloc_arenas() {
     const ARENAS: i32 = 2;
     let tunables = std::env::var("GLIBC_TUNABLES").unwrap_or_default();
-    if std::env::var_os("MALLOC_ARENA_MAX").is_some() || tunables.contains("arena_max") {
+    if user_set_arena_limit(std::env::var_os("MALLOC_ARENA_MAX").is_some(), &tunables) {
         return;
     }
     // SAFETY: called first thing in `main`, before any other thread exists, so
@@ -35,3 +35,35 @@ fn limit_malloc_arenas() {
 
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 fn limit_malloc_arenas() {}
+
+/// Whether the user limited the arenas already, through `MALLOC_ARENA_MAX`
+/// or a `glibc.malloc.arena_max` entry in `GLIBC_TUNABLES`.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn user_set_arena_limit(arena_max_set: bool, tunables: &str) -> bool {
+    arena_max_set
+        || tunables
+            .split(':')
+            .any(|tunable| tunable.starts_with("glibc.malloc.arena_max="))
+}
+
+#[cfg(all(test, target_os = "linux", target_env = "gnu"))]
+mod tests {
+    use super::user_set_arena_limit;
+
+    #[test]
+    fn limits_arenas_when_the_user_did_not() {
+        assert!(!user_set_arena_limit(false, ""));
+        assert!(!user_set_arena_limit(false, "glibc.malloc.tcache_count=0"));
+        assert!(!user_set_arena_limit(false, "glibc.malloc.arena_test=4"));
+    }
+
+    #[test]
+    fn leaves_a_limit_the_user_set_alone() {
+        assert!(user_set_arena_limit(true, ""));
+        assert!(user_set_arena_limit(false, "glibc.malloc.arena_max=8"));
+        assert!(user_set_arena_limit(
+            false,
+            "glibc.malloc.tcache_count=0:glibc.malloc.arena_max=4"
+        ));
+    }
+}

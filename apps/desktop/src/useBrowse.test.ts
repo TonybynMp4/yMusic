@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AlbumPage, PlaylistPage } from "@ymusic/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AlbumPage, PlaylistPage, Track } from "@ymusic/core";
 
 import type { engine as realEngine } from "./engine.ts";
 
@@ -107,5 +107,148 @@ describe("the browse page cache", () => {
     await flush();
     expect(loading).toBe(false);
     stop();
+  });
+});
+
+const PAGE = 100;
+
+function tracks(from: number, count: number): Track[] {
+  return Array.from({ length: count }, (_, i) => ({ id: `yt:${from + i}` }) as unknown as Track);
+}
+
+function first(id: string, more: string | null) {
+  return {
+    page: { id, title: "Liked Music", tracks: tracks(0, PAGE) } as unknown as PlaylistPage,
+    more,
+  };
+}
+
+/** Continuations named by page number, each taking `ms` to arrive. */
+function continuations(pages: number, ms: number) {
+  return async (handle: string) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    const n = Number(handle);
+    return { tracks: tracks(n * PAGE, PAGE), more: n + 1 < pages ? String(n + 1) : null };
+  };
+}
+
+/** Every update a queue following the playlist would get. */
+function follow(id: string) {
+  const seen: { count: number; loading: boolean }[] = [];
+  const stop = browse.followPlaylist(id, (list, loading) => seen.push({ count: list.length, loading }));
+  return { seen, stop };
+}
+
+describe("a long playlist", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("shows its rows a few times as they arrive, not once per page", async () => {
+    engine.playlist.mockResolvedValue(first("PL1", "1"));
+    engine.playlistMore.mockImplementation(continuations(19, 50));
+    const { seen } = follow("PL1");
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlistMore).toHaveBeenCalledTimes(18);
+    // The first page at once, then at most one showing per 250 ms over the
+    // 900 ms the rest takes, then the end.
+    expect(seen[0]).toEqual({ count: PAGE, loading: true });
+    expect(seen.length).toBeLessThanOrEqual(6);
+    expect(seen.at(-1)).toEqual({ count: 1900, loading: false });
+    expect(seen.slice(0, -1).every((update) => update.loading)).toBe(true);
+    const counts = seen.map((update) => update.count);
+    expect(counts).toEqual([...counts].sort((a, b) => a - b));
+  });
+
+  it("tries the first page again before failing", async () => {
+    engine.playlist
+      .mockRejectedValueOnce(new Error("timed out"))
+      .mockResolvedValueOnce(first("PL2", null));
+    const { seen } = follow("PL2");
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual([{ count: PAGE, loading: false }]);
+  });
+
+  it("fails after the first page fails twice", async () => {
+    engine.playlist.mockRejectedValue(new Error("timed out"));
+    follow("PL3");
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+    expect(browse.browseState({ kind: "playlist", id: "PL3" })).toEqual({
+      status: "error",
+      error: "timed out",
+    });
+  });
+
+  it("keeps the rows when a page fails, and resumes from that page", async () => {
+    const more = continuations(5, 10);
+    engine.playlist.mockResolvedValue(first("PL4", "1"));
+    engine.playlistMore
+      .mockImplementationOnce(more)
+      .mockImplementationOnce(more)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockImplementation(more);
+    const route = { kind: "playlist", id: "PL4" } as const;
+    browse.browseState(route);
+    await vi.runAllTimersAsync();
+
+    const failed = browse.browseState(route);
+    if (failed.status !== "ready" || failed.page.kind !== "playlist") throw new Error("not ready");
+    expect(failed.page.page.tracks).toHaveLength(300);
+    expect(failed.loadingMore).toBe(false);
+    expect(failed.resume).toBeTypeOf("function");
+
+    failed.resume!();
+    expect(browse.browseState(route)).toMatchObject({ loadingMore: true });
+    expect(browse.browseState(route)).not.toHaveProperty("resume");
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlistMore.mock.calls.map(([handle]) => handle)).toEqual([
+      "1",
+      "2",
+      "3",
+      "3",
+      "4",
+    ]);
+    const done = browse.browseState(route);
+    if (done.status !== "ready" || done.page.kind !== "playlist") throw new Error("not ready");
+    expect(done.page.page.tracks).toHaveLength(500);
+    expect(done.loadingMore).toBe(false);
+    expect(done).not.toHaveProperty("resume");
+  });
+
+  it("reloads when the failed page has expired, keeping the rows on screen", async () => {
+    const more = continuations(4, 10);
+    engine.playlist.mockResolvedValue(first("PL5", "1"));
+    engine.playlistMore
+      .mockImplementationOnce(more)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockRejectedValueOnce(new Error("this playlist page has expired; reopen the playlist"))
+      .mockImplementation(more);
+    const { seen } = follow("PL5");
+    await vi.runAllTimersAsync();
+
+    const failed = browse.browseState({ kind: "playlist", id: "PL5" });
+    if (failed.status !== "ready") throw new Error("not ready");
+    expect(seen.at(-1)).toEqual({ count: 200, loading: false });
+
+    failed.resume!();
+    await vi.runAllTimersAsync();
+
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+    // Never back to the reloaded first page alone.
+    expect(seen.map((update) => update.count)).toEqual([100, 200, 200, 400]);
+    expect(seen.at(-1)).toEqual({ count: 400, loading: false });
   });
 });

@@ -307,8 +307,9 @@ export class YouTubeEngine {
   async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
     const next = this.#continuations.get(handle);
     if (!next) throw new Error("this playlist page has expired; reopen the playlist");
-    this.#continuations.delete(handle);
+    // Dropped only once fetched, so a page that failed can be asked for again.
     const { tracks, more } = await next();
+    this.#continuations.delete(handle);
     return { tracks, more: this.#hold(more) };
   }
 

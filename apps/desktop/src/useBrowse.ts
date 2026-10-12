@@ -24,8 +24,12 @@ export type Page =
 
 export type BrowseState =
   | { status: "loading" }
-  /** `loadingMore`: a long playlist is still arriving, a page of rows at a time. */
-  | { status: "ready"; page: Page; loadingMore: boolean }
+  /**
+   * `loadingMore`: a long playlist is still arriving, a page of rows at a
+   * time. `resume`: the rest of it failed to load, and this fetches it again
+   * from where it stopped.
+   */
+  | { status: "ready"; page: Page; loadingMore: boolean; resume?: () => void }
   | { status: "error"; error: string };
 
 /**
@@ -112,32 +116,119 @@ async function load(route: Route, set: (state: BrowseState) => void): Promise<vo
       });
       return;
     case "playlist":
-      await follow(await engine.playlist(route.id), set);
+      await follow(route.id, await firstPage(route.id), set);
   }
 }
 
+type FirstPage = Awaited<ReturnType<typeof engine.playlist>>;
+
 /**
- * Shows a playlist's first page, then the rest a page of rows at a time, so a
- * long playlist is browsable at once and complete in the end.
+ * A playlist's first page, tried twice: a long playlist's first request is
+ * the slow one, and one that times out often succeeds straight after.
+ */
+async function firstPage(id: string): Promise<FirstPage> {
+  try {
+    return await engine.playlist(id);
+  } catch (error) {
+    console.warn("could not open the playlist, trying again", error);
+    await new Promise((resolve) => setTimeout(resolve, FIRST_PAGE_RETRY_MS));
+    return engine.playlist(id);
+  }
+}
+
+const FIRST_PAGE_RETRY_MS = 500;
+
+/**
+ * How often, at most, rows arriving for a long playlist are shown. Each
+ * showing re-renders the page and updates a queue following it, so rows are
+ * gathered between showings rather than shown a page of a hundred at a time.
+ */
+const PUBLISH_EVERY_MS = 250;
+
+/**
+ * Shows a playlist's first page, then the rest as it arrives, so a long
+ * playlist is browsable at once and complete in the end.
+ *
+ * When a later page fails, the rows so far stay and the state carries a
+ * `resume` that fetches the rest from where it stopped. `shown`, when
+ * reloading a playlist whose rows are already showing, holds those rows on
+ * screen until as many have arrived again.
  */
 async function follow(
-  first: Awaited<ReturnType<typeof engine.playlist>>,
+  id: string,
+  first: FirstPage,
   set: (state: BrowseState) => void,
+  shown = 0,
 ): Promise<void> {
-  let page = first.page;
-  set({ status: "ready", page: { kind: "playlist", page }, loadingMore: first.more !== null });
-  for (let more = first.more; more !== null; ) {
+  const header = first.page;
+  const tracks = [...header.tracks];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let last = -Infinity;
+
+  const publish = (loadingMore: boolean, resume?: () => void) => {
+    clearTimeout(timer);
+    timer = undefined;
+    last = Date.now();
+    const page: Page = { kind: "playlist", page: { ...header, tracks: [...tracks] } };
+    set(
+      resume
+        ? { status: "ready", page, loadingMore, resume }
+        : { status: "ready", page, loadingMore },
+    );
+  };
+  // Shows what has arrived now, or when the current interval is up.
+  const progress = () => {
+    if (tracks.length < shown || timer !== undefined) return;
+    const wait = last + PUBLISH_EVERY_MS - Date.now();
+    if (wait <= 0) publish(true);
+    else timer = setTimeout(() => publish(true), wait);
+  };
+
+  const reload = async () => {
     try {
-      const next = await engine.playlistMore(more);
-      page = { ...page, tracks: [...page.tracks, ...next.tracks] };
-      more = next.more;
+      await follow(id, await engine.playlist(id), set, tracks.length);
     } catch (error) {
-      // What arrived stays; the rest is simply missing until next launch.
-      console.error("could not load the rest of the playlist", error);
-      more = null;
+      console.error("could not reload the playlist", error);
+      publish(false, () => {
+        publish(true);
+        void reload();
+      });
     }
-    set({ status: "ready", page: { kind: "playlist", page }, loadingMore: more !== null });
-  }
+  };
+
+  // `resuming`: the first fetch is a retry of one that failed, whose handle
+  // may have expired in the meantime, which only a reload gets past.
+  const run = async (more: string | null, resuming: boolean): Promise<void> => {
+    while (more !== null) {
+      const handle: string = more;
+      try {
+        const next = await engine.playlistMore(handle);
+        tracks.push(...next.tracks);
+        more = next.more;
+      } catch (error) {
+        if (resuming && expired(error)) return reload();
+        console.error("could not load the rest of the playlist", error);
+        publish(false, () => {
+          publish(true);
+          void run(handle, true);
+        });
+        return;
+      }
+      resuming = false;
+      if (more !== null) progress();
+    }
+    publish(false);
+  };
+
+  // A playlist of one page is shown once, by `run`, as complete.
+  if (first.more !== null && tracks.length >= shown) publish(true);
+  else last = Date.now();
+  await run(first.more, false);
+}
+
+/** The engine's answer for a continuation it no longer holds (`playlistMore`). */
+function expired(error: unknown): boolean {
+  return message(error).includes("expired");
 }
 
 /** How many times a new playlist is fetched before its page shows whatever came back. */
@@ -158,7 +249,7 @@ export function newPlaylistRoute(id: string, tracks: number): Route {
       // A first page with more to come is full, so the songs are all there.
       const served =
         first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
-      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(first, set);
+      if (served || attempt === NEW_PLAYLIST_TRIES) return follow(id, first, set);
       await new Promise((resolve) => setTimeout(resolve, attempt * 500));
     }
   });
@@ -167,6 +258,11 @@ export function newPlaylistRoute(id: string, tracks: number): Route {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** A page's state now, outside React. */
+export function browseState(route: Route): BrowseState {
+  return entryFor(route).state;
 }
 
 export function useBrowse(route: Route): BrowseState {

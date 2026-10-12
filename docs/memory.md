@@ -83,6 +83,20 @@ A run takes about 11 minutes. `--variant fallback` builds a version that resolve
 
 The number that matters is anonymous memory (`Pss_Anon`: heaps, JIT code and buffers the process allocated itself) plus swap. PSS, each process's share of every page it maps, also counts shared libraries, and that share drops whenever another program maps the same libraries. Any other WebKitGTK app open during a run lowers every process's PSS by 20 to 30 MB without the app changing, so the report gives PSS only as a secondary table. Swap depends on how much else the machine is doing, so each run records the free memory and swap it started with.
 
+### On Windows
+
+The runner and sampler also work on Windows, with Node, pnpm, Rust (MSVC) and the Visual Studio C++ build tools installed. The first build downloads libmpv from [shinchiro's builds](https://github.com/shinchiro/mpv-winbuild-cmake/releases) into `.memory/mpv` and unpacks it with the `tar` Windows ships. Set `MPV_DIR` to a folder holding `libmpv-2.dll` and `libmpv.dll.a` to use another copy. The build copies the DLL next to the binary.
+
+The sampler reads `Win32_Process` once a second through PowerShell for `ymusic.exe` and every `msedgewebview2.exe` under it. Private bytes stand in for anonymous memory plus swap, since Windows reports no swap per process, and the working set stands in for PSS. The renderer counts as the web process, the GPU process gets its own row, and the network service counts as the network process. Compare Windows runs with Windows runs only.
+
+`--push-position` makes the core push every playback position to the page, as it did before the page asked for it. One build then measures both:
+
+```sh
+node scripts/memory/run.mjs pull --runs 3
+node scripts/memory/run.mjs push --runs 3 --push-position --skip-build
+node scripts/memory/compare.mjs push pull --out .memory/report --title "Position pushed vs pulled, Windows"
+```
+
 ### Keeping comparisons fair
 
 The scenario loads real pages from YouTube, and those change: a playlist gains songs, an artist page gains a shelf. Measure the before and the after on the same day, one after the other, rather than against an old baseline. Close what you can before a run, since swap depends on other programs. `docs/memory/baseline/` is the first measurement of `main`, for the long view.

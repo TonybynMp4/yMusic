@@ -17,10 +17,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 /** The last stretch of the run that "end of run" averages over, in seconds. */
 const END_WINDOW_S = 60;
-/** The processes reported on, in order, and "all" for their sum. */
-const KINDS = [
+/** The processes reported on, in order, and "all" for their sum. Only WebView2 has a GPU process. */
+const ALL_KINDS = [
   ["core", "Core (Rust, mpv)"],
   ["web", "Web process (UI, engine worker, BotGuard)"],
+  ["gpu", "GPU process"],
   ["network", "Network process"],
   ["all", "All processes"],
 ];
@@ -41,6 +42,11 @@ const out = resolve(ROOT, outArg);
 
 const before = load(beforeLabel);
 const after = single ? before : load(afterLabel);
+const KINDS = ALL_KINDS.filter(
+  ([kind]) =>
+    kind === "all" ||
+    [before, after].some((set) => set.runs.some((run) => run.samples.some((s) => s.processes[kind]))),
+);
 mkdirSync(out, { recursive: true });
 
 const svgName = variant === "normal" ? "timeline.svg" : `timeline-${variant}.svg`;

@@ -148,6 +148,21 @@ impl Account {
         *self.session.lock().expect("session mutex") = Some(session);
     }
 
+    /// Saves `session` only if the session is still the one with cookie
+    /// `expected`: a refresh or rotation that took a while must not undo a
+    /// sign-out or a sign-in made meanwhile. True when it saved.
+    pub fn replace(&self, expected: &str, session: Session) -> bool {
+        let mut current = self.session.lock().expect("session mutex");
+        if current.as_ref().map(|s| s.cookie.as_str()) != Some(expected) {
+            return false;
+        }
+        if let Err(error) = self.persist(&session) {
+            log::error!("signed in for this session only: {error}");
+        }
+        *current = Some(session);
+        true
+    }
+
     pub fn clear(&self) -> Result<(), String> {
         *self.session.lock().expect("session mutex") = None;
         match fs::remove_file(&self.path) {
@@ -289,6 +304,21 @@ mod tests {
                 browser: None
             })
         );
+    }
+
+    #[test]
+    fn a_late_refresh_does_not_undo_a_sign_out_or_a_new_sign_in() {
+        let account = Account::open(temp_path("replace"), SharedKeys::default());
+        account.save(window("SAPISID=new"));
+        assert!(!account.replace("SAPISID=old", window("SAPISID=rotated")));
+        assert_eq!(account.cookie().as_deref(), Some("SAPISID=new"));
+
+        assert!(account.replace("SAPISID=new", window("SAPISID=rotated")));
+        assert_eq!(account.cookie().as_deref(), Some("SAPISID=rotated"));
+
+        account.clear().unwrap();
+        assert!(!account.replace("SAPISID=rotated", window("SAPISID=late")));
+        assert_eq!(account.cookie(), None);
     }
 
     #[test]

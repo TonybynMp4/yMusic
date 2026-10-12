@@ -13,7 +13,7 @@
 //! (`accounts.google.com/RotateCookies`, which clients of Google's other web
 //! apps use, answers a youtube.com session with 401.)
 
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
 use reqwest::header::{CONTENT_TYPE, COOKIE, ORIGIN, SET_COOKIE};
 
@@ -24,11 +24,7 @@ const ROTATED: &str = "__Secure-1PSIDTS";
 /// The cookie header with the rotated cookies in, or None if Google did not
 /// rotate it.
 pub async fn rotate(cookie: &str) -> Result<Option<String>, String> {
-    let response = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|error| error.to_string())?
+    let response = client()
         .post(URL)
         .header(CONTENT_TYPE, "application/json")
         .header(ORIGIN, "https://accounts.youtube.com")
@@ -56,6 +52,19 @@ pub async fn rotate(cookie: &str) -> Result<Option<String>, String> {
         return Ok(None);
     }
     Ok(Some(merge(cookie, &set)))
+}
+
+/// Its own client, not the engine's: that one keeps a cookie jar, which must
+/// not pick up the signed-in cookies this answer sets.
+fn client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("a client with a timeout and no redirects")
+    })
 }
 
 #[derive(Debug, PartialEq)]

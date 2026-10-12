@@ -267,13 +267,15 @@ pub async fn account_refresh(
         return rotated(&account, &stale).await;
     };
     let cookie = import_from(id.clone()).await?;
-    if cookie == stale {
-        return Ok(None);
-    }
-    account.save(Session {
+    let session = Session {
         cookie: cookie.clone(),
         browser: Some(id),
-    });
+    };
+    // Reading the browser can wait on a keyring prompt, long enough to sign
+    // out or in again meanwhile.
+    if cookie == stale || !account.replace(&stale, session) {
+        return Ok(None);
+    }
     Ok(Some(cookie))
 }
 
@@ -295,14 +297,14 @@ async fn rotated(account: &Account, cookie: &str) -> Result<Option<String>, Stri
     let Some(fresh) = rotate::rotate(cookie).await? else {
         return Ok(None);
     };
-    // Signed out or signed in again while the request was out.
-    if account.cookie().as_deref() != Some(cookie) {
-        return Ok(None);
-    }
-    account.save(Session {
+    let session = Session {
         cookie: fresh.clone(),
         browser: None,
-    });
+    };
+    // Signed out or signed in again while the request was out.
+    if !account.replace(cookie, session) {
+        return Ok(None);
+    }
     Ok(Some(fresh))
 }
 

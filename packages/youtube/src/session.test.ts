@@ -6,17 +6,24 @@ function answering(loggedIn: string): typeof fetch {
   const body = JSON.stringify({
     responseContext: {
       serviceTrackingParams: [
-        { service: "GFEEDBACK", params: [{ key: "logged_in", value: loggedIn }] },
+        {
+          service: "GFEEDBACK",
+          params: [{ key: "logged_in", value: loggedIn }],
+        },
       ],
     },
   });
-  return async () => new Response(body, { headers: { "content-type": "application/json" } });
+  return async () =>
+    new Response(body, { headers: { "content-type": "application/json" } });
 }
 
 describe("watchSession", () => {
   it("reports an answer YouTube gave as if nobody were signed in", async () => {
     const onSignedOut = vi.fn<() => void>();
-    const response = await watchSession(answering("0"), onSignedOut)("https://music.youtube.com");
+    const response = await watchSession(
+      answering("0"),
+      onSignedOut,
+    )("https://music.youtube.com/youtubei/v1/browse");
     // The caller still gets the whole body: the check reads a clone.
     expect(await response.json()).toHaveProperty("responseContext");
     await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalledOnce());
@@ -24,7 +31,21 @@ describe("watchSession", () => {
 
   it("stays quiet while the session holds", async () => {
     const onSignedOut = vi.fn<() => void>();
-    await (await watchSession(answering("1"), onSignedOut)("https://music.youtube.com")).text();
+    await (
+      await watchSession(
+        answering("1"),
+        onSignedOut,
+      )("https://music.youtube.com/youtubei/v1/browse")
+    ).text();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
+  it("ignores calls that answer signed out whatever the session", async () => {
+    const onSignedOut = vi.fn<() => void>();
+    const url =
+      "https://music.youtube.com/youtubei/v1/config?prettyPrint=false";
+    await (await watchSession(answering("0"), onSignedOut)(url)).text();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onSignedOut).not.toHaveBeenCalled();
   });

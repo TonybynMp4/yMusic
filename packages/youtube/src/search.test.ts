@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { YTMusic } from "youtubei.js";
+import { Parser, YTMusic } from "youtubei.js";
 import type { SearchResults } from "@ymusic/core";
 
-import { resultsFrom } from "./search.ts";
+import { resultsFrom, searchMore } from "./search.ts";
 import { toTrack, type RawSong } from "./parse.ts";
 import { toThumbnails } from "./thumbnails.ts";
 
@@ -246,6 +246,38 @@ describe("resultsFrom, filtered", () => {
     const songs = shelfOf(recorded("songs", true), "songs");
     if (songs?.kind !== "tracks") throw new Error("no songs");
     expect(songs.tracks[0]).toMatchObject({ durationMs: 93_000, album: expect.any(String) });
+  });
+});
+
+describe("searchMore", () => {
+  /** A page whose continuation answers with the recorded second page of videos, forever. */
+  const page = () => {
+    const data: unknown = JSON.parse(
+      readFileSync(new URL("./fixtures/search-videos-continuation.json", import.meta.url), "utf8"),
+    );
+    const next = {
+      contents: Parser.parseResponse(data as never).continuation_contents as never,
+      getContinuation: async () => next,
+    };
+    return { getContinuation: async () => next };
+  };
+
+  it("reads the next page of a chip as that chip's shelf", async () => {
+    const { results, more } = await searchMore(page(), 1)();
+    expect(results.shelves.map((s) => s.filter)).toEqual(["videos"]);
+    expect(titles(results, "videos")).toHaveLength(3);
+    expect(titles(results, "videos")).toContain("Booba x Daft Punk - Touch (Remix)");
+    expect(more).not.toBeNull();
+  });
+
+  it("stops after ten pages, however many YouTube offers", async () => {
+    let more: ReturnType<typeof searchMore> | null = searchMore(page(), 1);
+    let pages = 1;
+    while (more) {
+      more = (await more()).more;
+      pages += 1;
+    }
+    expect(pages).toBe(10);
   });
 });
 

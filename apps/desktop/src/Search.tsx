@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { IconLoader2 } from "@tabler/icons-react";
 import type { SearchFilter, SearchResults, Track } from "@ymusic/core";
 
 import { Button } from "@/components/ui/button";
@@ -56,7 +58,10 @@ export function YouTubeResults({
   return filter === null ? (
     <Everything results={results} actions={actions} onFilter={youtube.setFilter} />
   ) : (
-    <Filtered results={results} actions={actions} />
+    <>
+      <Filtered results={results} actions={actions} />
+      {youtube.hasMore && <More loading={youtube.loadingMore} onReach={youtube.loadMore} />}
+    </>
   );
 }
 
@@ -154,6 +159,36 @@ function Filtered({ results, actions }: { results: SearchResults; actions: Brows
       {shelf.cards.map((card) => (
         <Card key={`${card.kind}:${card.id}`} card={card} onOpen={actions.onOpen} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * The end of a chip's list. Coming within a screen of it loads the next page,
+ * as YouTube Music does; there is no button.
+ */
+function More({ loading, onReach }: { loading: boolean; onReach: () => void }) {
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = end.current;
+    if (!target || loading) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) onReach();
+      },
+      { rootMargin: "100% 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loading, onReach]);
+  return (
+    <div ref={end} className="flex h-12 items-center justify-center text-xs text-muted-foreground">
+      {loading && (
+        <span className="flex items-center gap-2">
+          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          Loading more results
+        </span>
+      )}
     </div>
   );
 }

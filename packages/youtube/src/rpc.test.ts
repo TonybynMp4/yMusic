@@ -11,7 +11,7 @@ describe("the worker's forwarding", () => {
   // still typechecks. Pausing search history once went missing that way.
   it("passes search options through to the engine", async () => {
     const search = vi.spyOn(YouTubeEngine.prototype, "search")
-      .mockResolvedValue({ top: null, shelves: [], filters: [] });
+      .mockResolvedValue({ results: { top: null, shelves: [], filters: [] }, more: null });
     const { port1, port2 } = new MessageChannel();
     exposeEngine(port1);
     const engine = connectEngine(port2, globalThis.fetch);
@@ -43,7 +43,7 @@ live("the engine across a message port", () => {
       return globalThis.fetch(input, init);
     });
 
-    const results = await engine.search("boards of canada roygbiv", { filter: "songs" });
+    const { results } = await engine.search("boards of canada roygbiv", { filter: "songs" });
     const tracks = results.shelves.flatMap((shelf) => (shelf.kind === "tracks" ? shelf.tracks : []));
     expect(tracks.length).toBeGreaterThan(0);
     // The requests really went through the host, not around it.

@@ -37,8 +37,18 @@ const FILTER_ORDER: readonly SearchFilter[] = [
   "artists",
 ];
 
+/** The next page of a chip's results. */
+export type SearchMore = () => Promise<{ results: SearchResults; more: SearchMore | null }>;
+
+/**
+ * Pages a chip loads at most, twenty rows each. YouTube Music keeps offering
+ * more well past where the results stop matching, so this bounds a long scroll.
+ */
+const MAX_SEARCH_PAGES = 10;
+
 /**
  * A YouTube Music search: everything when `filter` is null, one kind otherwise.
+ * A filtered search returns its first 20 rows, and `more` fetches the next.
  *
  * YouTube Music rather than plain YouTube: the two post to the same
  * `/youtubei/v1/search` endpoint and differ only by the client context in the
@@ -51,21 +61,46 @@ export async function searchMusic(
   youtube: Innertube,
   query: string,
   filter: SearchFilter | null = null,
-): Promise<SearchResults> {
+): Promise<{ results: SearchResults; more: SearchMore | null }> {
   const trimmed = query.trim();
-  if (trimmed.length === 0) return { top: null, shelves: [], filters: [] };
+  if (trimmed.length === 0) return { results: { top: null, shelves: [], filters: [] }, more: null };
   const response = await youtube.actions.execute("/search", {
     query: trimmed,
     ...(filter ? { params: FILTERS[filter].params } : {}),
     client: "YTMUSIC",
   });
-  return resultsFrom(new YTMusic.Search(response, youtube.actions, filter !== null));
+  const search = new YTMusic.Search(response, youtube.actions, filter !== null);
+  return {
+    results: resultsFrom(search),
+    more: search.has_continuation ? searchMore(search, 1) : null,
+  };
 }
 
 /** Songs matching a query: the songs filter, for callers that want tracks alone. */
 export async function searchSongs(youtube: Innertube, query: string): Promise<Track[]> {
-  const results = await searchMusic(youtube, query, "songs");
+  const { results } = await searchMusic(youtube, query, "songs");
   return results.shelves.flatMap((shelf) => (shelf.kind === "tracks" ? shelf.tracks : []));
+}
+
+/** youtubei.js's `SearchContinuation`: one more page of the chip's shelf. */
+interface RawContinuation {
+  contents?: { type?: unknown; contents?: readonly unknown[] | null; continuation?: unknown } | null;
+  getContinuation(): Promise<RawContinuation>;
+}
+
+/** Exported for tests. `pages` counts the pages already loaded, the first included. */
+export function searchMore(
+  page: { getContinuation(): Promise<RawContinuation> },
+  pages: number,
+): SearchMore {
+  return async () => {
+    const next = await page.getContinuation();
+    const shelf = next.contents;
+    return {
+      results: resultsFrom({ contents: shelf ? [shelf] : [] }),
+      more: shelf?.continuation && pages + 1 < MAX_SEARCH_PAGES ? searchMore(next, pages + 1) : null,
+    };
+  };
 }
 
 interface RawRun {

@@ -10,7 +10,7 @@ Both search on `/youtubei/v1/search`. They differ only by the client in the requ
 
 An unfiltered search is not a set of shelves. The answer is a notice section, then a `MusicCardShelf` for the top result (the card and up to three of its songs), then one `ItemSection` per row. Rows of every kind come mixed in YouTube's ranking: a song, then an album, then a video, then a playlist. The answer has no shelf titles, no "Show all" links and no continuation. The header carries the chips: Songs, Videos, Albums, Featured playlists, Community playlists, Artists, and some the app has no use for (profiles, podcasts, episodes).
 
-A filtered search, what a chip sends, answers with one `MusicShelf` of 20 rows and a continuation for more.
+A filtered search, what a chip sends, answers with one `MusicShelf` of 20 rows and a continuation for more. Posting that token back to `/search` returns a `musicShelfContinuation` with the next 20 and the next token. Featured playlists usually fit in one page and have no token.
 
 The filter is a `params` string. The parser reads which chips YouTube offered by the start of each chip's params, because the chips append a suffix that changes with the query. youtubei.js has no filter value for featured playlists, so `FILTERS` in `search.ts` spells every filter's params out rather than encoding them through the library.
 
@@ -24,7 +24,7 @@ youtubei.js's `YTMusic.Search` parses the answer into classes, and the app reads
 
 ## One request, then one per chip
 
-Opening a search costs one unfiltered request. Selecting a chip costs one filtered request for that chip. The hook (`useYouTubeSearch.ts`) keeps every answer for the current query, so going back to All or to a chip already opened makes no request. A new query clears the kept answers and puts the chips back on All.
+Opening a search costs one unfiltered request. Selecting a chip costs one filtered request for that chip, and each further page of it one more. The hook (`useYouTubeSearch.ts`) keeps every answer for the current query, so going back to All or to a chip already opened makes no request. A new query clears the kept answers and puts the chips back on All.
 
 The other way would be one filtered request per kind for every query, six at once, then cutting each to a few rows for the All view. I did not do that. It is six times the requests for every keystroke that survives the 350ms debounce, which is a quick way to get rate limited. It also throws away YouTube's ranking across kinds: the unfiltered answer says the album beats the songs for "boards of canada" and the artist leads for "daft punk", and six separate lists cannot say that. The cost of the single request is that the All view gets only what YouTube ranked into it, usually a handful of each kind, which is also what YouTube Music shows there.
 
@@ -37,7 +37,7 @@ This follows YouTube Music's search page:
 - The chips sit on top. All is first and selected for a new query.
 - Under All: the top result, the card beside its songs (or the song itself first when the top result is a song or video). Then a shelf per kind, each with "Show all", which selects that kind's chip. Shelves come in the order of each kind's best-ranked row, so the order changes with the query, as it does on YouTube Music.
 - Songs and videos are track lists. Albums, playlists and artists are cards, the same `Card` and `Shelf` the home and artist pages use, with the same menus.
-- Under a chip: the full list for songs and videos, a grid of cards for the rest.
+- Under a chip: a list for songs and videos, a grid of cards for the rest. Scrolling to within a screen of the end loads the next 20, as YouTube Music does, with no button. A chip stops after ten pages: YouTube keeps offering more long after the rows stop matching the query.
 - Local files only show under All, as their own section with its own "Show all".
 
 ## What a result does
@@ -46,8 +46,12 @@ This follows YouTube Music's search page:
 - An album, playlist or artist opens its page. Featured and community playlists both open the playlist page.
 - Playing or opening a result records the query in recent searches.
 
-Profiles, podcasts and episodes are dropped, since the app has no page for them. A chip shows its first 20 rows; the continuation for more is not loaded yet.
+Profiles, podcasts and episodes are dropped, since the app has no page for them. Podcasts are in the [plan](../PLAN.md).
+
+## Pages past the first
+
+The continuation is a youtubei.js closure, which cannot cross from the worker to the UI. The engine keeps it under a handle, the same way it keeps a long playlist's next page, and `engine.searchMore(handle)` fetches that page and hands back the next handle. The hook appends each page to the chip's cached answer, so a chip that was scrolled keeps its rows when you come back to it. A page that arrives after the query or chip changed still goes into the cache, but is not shown.
 
 ## Tests
 
-`search.test.ts` parses recorded answers in `packages/youtube/src/fixtures/search-*.json`: two unfiltered searches and one per filter. They are real responses with tracking, menus and overlays pruned out, and filtered shelves cut to three rows, so a change in YouTube's shape fails against a known answer. The network tests in `live.test.ts` run an unfiltered and a featured-playlists search against YouTube.
+`search.test.ts` parses recorded answers in `packages/youtube/src/fixtures/search-*.json`: two unfiltered searches, one per filter, and a second page of videos. They are real responses with tracking, menus and overlays pruned out, and filtered shelves cut to three rows, so a change in YouTube's shape fails against a known answer. The network tests in `live.test.ts` run an unfiltered and a featured-playlists search against YouTube.

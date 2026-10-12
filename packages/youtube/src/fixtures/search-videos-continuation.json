@@ -1,0 +1,255 @@
+{
+ "continuationContents": {
+  "musicShelfContinuation": {
+   "contents": [
+    {
+     "musicResponsiveListItemRenderer": {
+      "thumbnail": {
+       "musicThumbnailRenderer": {
+        "thumbnail": {
+         "thumbnails": [
+          {
+           "url": "https://i.ytimg.com/vi/DJFfS8NwBts/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3nLOEbtHDqI1qAg-gSJTzfpIAiR2w",
+           "width": 400,
+           "height": 225
+          }
+         ]
+        },
+        "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+        "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+       }
+      },
+      "flexColumns": [
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "Booba x Daft Punk - Touch (Remix)",
+            "navigationEndpoint": {
+             "watchEndpoint": {
+              "videoId": "DJFfS8NwBts",
+              "watchEndpointMusicSupportedConfigs": {
+               "watchEndpointMusicConfig": {
+                "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+               }
+              }
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "Veridis Project",
+            "navigationEndpoint": {
+             "browseEndpoint": {
+              "browseId": "UC2rpRj3VqEMaT7vgtiBnQoQ",
+              "browseEndpointContextSupportedConfigs": {
+               "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+               }
+              }
+             }
+            }
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "548K views"
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "4:16"
+           }
+          ]
+         }
+        }
+       }
+      ],
+      "playlistItemData": {
+       "videoId": "DJFfS8NwBts"
+      }
+     }
+    },
+    {
+     "musicResponsiveListItemRenderer": {
+      "thumbnail": {
+       "musicThumbnailRenderer": {
+        "thumbnail": {
+         "thumbnails": [
+          {
+           "url": "https://i.ytimg.com/vi/nzDavdVHlu0/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mbax0gmx2KYiXoxSLLzXWRDGoPbw",
+           "width": 400,
+           "height": 225
+          }
+         ]
+        },
+        "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+        "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+       }
+      },
+      "flexColumns": [
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "Daft Punk x Booba - Love2I",
+            "navigationEndpoint": {
+             "watchEndpoint": {
+              "videoId": "nzDavdVHlu0",
+              "watchEndpointMusicSupportedConfigs": {
+               "watchEndpointMusicConfig": {
+                "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+               }
+              }
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "Veridis Project",
+            "navigationEndpoint": {
+             "browseEndpoint": {
+              "browseId": "UC2rpRj3VqEMaT7vgtiBnQoQ",
+              "browseEndpointContextSupportedConfigs": {
+               "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+               }
+              }
+             }
+            }
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "191K views"
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "4:17"
+           }
+          ]
+         }
+        }
+       }
+      ],
+      "playlistItemData": {
+       "videoId": "nzDavdVHlu0"
+      }
+     }
+    },
+    {
+     "musicResponsiveListItemRenderer": {
+      "thumbnail": {
+       "musicThumbnailRenderer": {
+        "thumbnail": {
+         "thumbnails": [
+          {
+           "url": "https://i.ytimg.com/vi/9JmlKZMsfNk/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kgDjYQeH9OUFRPIQ38m0B0XJ2-Gg",
+           "width": 400,
+           "height": 225
+          }
+         ]
+        },
+        "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+        "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+       }
+      },
+      "flexColumns": [
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "Daft Punk - Alive 2007 Encore (Ableton Remake)",
+            "navigationEndpoint": {
+             "watchEndpoint": {
+              "videoId": "9JmlKZMsfNk",
+              "watchEndpointMusicSupportedConfigs": {
+               "watchEndpointMusicConfig": {
+                "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+               }
+              }
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "musicResponsiveListItemFlexColumnRenderer": {
+         "text": {
+          "runs": [
+           {
+            "text": "giux",
+            "navigationEndpoint": {
+             "browseEndpoint": {
+              "browseId": "UCqm5MBbG1uZ-VTEyvUxd3lg",
+              "browseEndpointContextSupportedConfigs": {
+               "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+               }
+              }
+             }
+            }
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "1.3K views"
+           },
+           {
+            "text": " • "
+           },
+           {
+            "text": "7:19"
+           }
+          ]
+         }
+        }
+       }
+      ],
+      "playlistItemData": {
+       "videoId": "9JmlKZMsfNk"
+      }
+     }
+    }
+   ],
+   "continuations": [
+    {
+     "nextContinuationData": {
+      "continuation": "EpIDEglkYWZ0IHB1bmsahANFZ1dLQVFJUUFVZ29hZ0NDQVF0YVNXRnNNbVZ2TVdaR09JSUJDMFJLUm1aVE9FNTNRblJ6Z2dFTGJucEVZWFprVmtoc2RUQ0NBUXM1U20xc1MxcE5jMlpPYTRJQkMxOW9VRVJvV25sWk1sSTBnZ0VMY0Vabk4wVXlVWFl5UzJPQ0FRczBhMmhEYkdOQk1WVklUWUlCQzJ3MVUxQTBPVWxoVDB0TmdnRUxWM2xRTFU1MmJHaEpWRTJDQVF0cmNYa3dia3d4V1Rkalk0SUJDMmx4YlZSWFp6QjZPWFl3Z2dFTFdqSTNRMjlhZUdoS2JuT0NBUXRIVGtSa1VtSTRjVWRDVVlJQkMzRlFTRkZMY0VsRVRXcHpnZ0VMYTBKTmRWVkJRbVZJY2tXQ0FRdDBlVnBoYm1wTVZHUkhhNElCQzNVeFMwdzVTbU5TU3pBNGdnRUxZMVF0T0dNM1UyWmhVM09DQVF0U05VTktVMVJGZUMxRU1JSUJDelpwYURKak1WOUJSMUV3GPHq0C4%3D"
+     }
+    }
+   ],
+   "shelfDivider": {
+    "musicShelfDividerRenderer": {
+     "hidden": true
+    }
+   },
+   "autoReloadWhenEmpty": false
+  }
+ }
+}

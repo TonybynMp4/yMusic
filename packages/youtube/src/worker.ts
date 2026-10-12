@@ -43,6 +43,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     renewCookie: (cookie) => engine.renewCookie(cookie),
     account: () => engine.account(),
     search: (query, options) => engine.search(query, options),
+    searchMore: (handle) => engine.searchMore(handle),
     searchHistory: () => engine.searchHistory(),
     removeSearchHistory: (token) => engine.removeSearchHistory(token),
     radio: (videoId) => engine.radio(videoId),

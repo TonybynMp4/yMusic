@@ -1,5 +1,7 @@
 ### WebKit cache model
 
+These runs used `DOCUMENT_VIEWER`, the model this branch first shipped. It now ships `DOCUMENT_BROWSER`, which has not been measured, so these numbers show the most the change could save, not what it saves.
+
 Scenario, 3 runs of `pr6-small-maps` (52b3ee3) and 3 of `cachemodel` (5b6607d+dirty), on 2026-10-11. Medians, with the lowest and highest run in brackets. "End" is the mean over the last 60 s of idle; "held" is anonymous memory (PSS_Anon) plus swap, which leaves out shared libraries; PSS counts them too.
 
 End of run, held (MB):

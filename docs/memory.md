@@ -58,6 +58,8 @@ wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps imag
 
 `DOCUMENT_VIEWER` keeps nothing nobody shows, and saves more: all processes held 40 MB less at the end of browsing and 52 MB less once the long playlist had loaded, with every run below every run of the build before (`docs/memory/cache-model/`, measured with that model). It made browsing worse, though. Going back to a page asked the `img` scheme for every thumbnail again, a round trip through the core and the disk cache, and artwork appeared a moment after the page did, where with the default it was already there. `DOCUMENT_BROWSER` keeps the recent pages' artwork in memory, so it draws with the page. Its saving sits between the two and has not been measured yet.
 
+The core's PSS rose 28 MB in those runs while the memory it holds did not move, so the rise is in shared pages (libraries and other mapped files), not memory the core allocated. PSS splits a shared page between the processes that have it resident, and which process gets charged shifts when another one stops touching those pages. The change does not touch the core.
+
 Playback climbs to the same level with both models, so the memory that grows while a song plays is somewhere else.
 
 ## Measuring

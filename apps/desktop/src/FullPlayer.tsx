@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { QueueState, Track, TrackId } from "@ymusic/core";
+import type { QueueState, StreamLease, Track, TrackId } from "@ymusic/core";
 
 import { Art } from "@/components/Art";
 import { cn } from "@/lib/utils";
+import { DegradedBadge } from "./DegradedBadge.tsx";
 import { Queue } from "./Queue.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
 import { StatsForNerds } from "./StatsForNerds.tsx";
@@ -25,6 +26,8 @@ export interface PlayerPanelTab {
 
 interface Props {
   track: Track | null;
+  /** The playing song's stream, once mpv has it. */
+  lease: StreamLease | null;
   queue: QueueState;
   filling: boolean;
   autoplay: boolean;
@@ -54,6 +57,7 @@ interface Props {
  */
 export function FullPlayer({
   track,
+  lease,
   onCollapse,
   onOpen,
   stats,
@@ -83,18 +87,14 @@ export function FullPlayer({
       <div className="flex min-h-0 flex-1 gap-8 p-8">
         <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
           <div className="relative w-full max-w-md">
-            {stats && <StatsForNerds key={track?.id} onClose={onCloseStats} />}
+            {stats && <StatsForNerds key={track?.id} lease={lease} onClose={onCloseStats} />}
             <CoverArt track={track} />
           </div>
           {track && (
             <div className="min-w-0 max-w-full text-center">
-              <h1>
-                <TitleLink
-                  track={track}
-                  onOpen={onOpen}
-                  // A block button shrinks to its text, so it is centred here.
-                  className="mx-auto text-xl font-medium"
-                />
+              <h1 className="flex items-center justify-center gap-1.5">
+                <TitleLink track={track} onOpen={onOpen} className="min-w-0 text-xl font-medium" />
+                <DegradedBadge reason={lease?.degraded ?? null} size={18} />
               </h1>
               <Byline track={track} onOpen={onOpen} year={year} className="text-sm" />
             </div>

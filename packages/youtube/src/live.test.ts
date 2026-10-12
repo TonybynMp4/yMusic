@@ -2,13 +2,22 @@ import { expect, it } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
-import { createPlayer, createYouTube } from "./client.ts";
+import { createPlayer as createPlayerWith, createYouTube, type YouTubeOptions } from "./client.ts";
 import { getPlaybackTracking } from "./history.ts";
+import { inProcessPlayerScript, LIBRARY_VERSION } from "./player-extract.ts";
+import { currentPlayerId } from "./player-script.ts";
 import { getRadio, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
 import { searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
+
+/** The `VISIONOS` player client, with the player script analysed in place. */
+async function createPlayer(options: YouTubeOptions) {
+  const playerId = await currentPlayerId(options.fetch);
+  const script = await inProcessPlayerScript(options.fetch)(playerId, LIBRARY_VERSION);
+  return createPlayerWith({ ...options, script });
+}
 
 // The half the offline tests cannot cover: that InnerTube still answers, and
 // that what it sends still fits the shapes `parse.ts` describes.

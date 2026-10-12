@@ -121,6 +121,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Stable volume: YouTube's loudness value per track, ReplayGain for local files
 - [x] Audio output device
 - [x] Stats for nerds: stream, gain, loudness, peaks and limiter over the artwork
+- [x] Premium playback: signed-in `WEB_REMIX` resolves itag 774 or 141, with a degraded badge when a fallback plays less
+- [x] Player script parsed in a short-lived worker and cached, not in the engine worker
 - [x] Pause watch history
 - [x] Pause search history
 - [x] Music folders: add, remove, rescan

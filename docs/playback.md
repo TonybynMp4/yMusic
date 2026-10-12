@@ -8,8 +8,46 @@ The engine resolves an audio-only stream URL and mpv streams it over HTTP range 
 
 Two details that each cost a day if missed:
 
-- googlevideo binds a stream to the session that resolved it, so mpv gets the same `User-Agent`, cookies and PO token through `http-header-fields`.
+- The lease's `headers` go to mpv through `http-header-fields`. YouTube's leases carry none: every URL the player clients below hand out plays for any client that asks, and gapless depends on that (see below).
 - Stream URLs expire after about six hours, so the player re-resolves a track whose lease is stale.
+
+## Player clients
+
+A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next. The log records each resolution (`resolved <id> as itag 774 through WEB_REMIX`).
+
+- Signed in: `WEB_REMIX`, then `VISIONOS`, then `TV_SIMPLY`.
+- Signed out: `VISIONOS`, then `TV_SIMPLY`.
+
+`WEB_REMIX` is music.youtube.com's own client, with the session cookie and the player script's signature timestamp. It is the only client that hands out Premium's formats (itag 774, Opus, and 141, AAC, both about 256 kbps) as plain URLs. Its formats are ciphered, signature and `n` both, and the URLs need both deciphered (the signature alone gets a 403), with the same evaluator `TV_SIMPLY` uses (see [The player script](#the-player-script)). Once deciphered they need no cookie and no PO token. `VISIONOS` needs no token and no evaluator. `TV_SIMPLY` needs a PO token bound to its visitor id, and is there for when `VISIONOS` stops working. A web cookie on either of those gets HTTP 400, so they stay anonymous.
+
+When mpv refuses a stream that resolved (a 403 shows up only in mpv), the player retries it once, starting on the client after the one that resolved it.
+
+On "high", a Premium format wins whenever one is offered, Opus before AAC, then the highest bitrate. "normal" and "low" pick by bitrate as before. There is no level above "high": 256 kbps is the most YouTube serves.
+
+**Degraded.** A song is degraded when a signed-in account on "high" gets less than its best because `WEB_REMIX` did not serve it: anything but a Premium format for a Premium account, anything below Opus 251 for a free one. A badge (a Tabler warning icon) sits beside the title in the player bar and the full player, with the reason in its tooltip. Whether the account has Premium comes from `IS_SUBSCRIBER` in music.youtube.com's page config, fetched once per sign-in and only when a fallback needs judging, or from a `WEB_REMIX` lease that was a Premium format. "normal" and "low" pick the same formats on every client, so a fallback there is never degraded. Stats for nerds shows each YouTube song's itag and player client.
+
+### The player script
+
+Every player client deciphers with YouTube's player script (`base.js`, about 2.6 MB). youtubei.js parses it to pull out the `n` and signature transforms, about 180 KB of source, and keeps only that. The parse is the expensive part: it takes the heap to about 200 MB, and the process keeps that as resident memory after the syntax tree is collected (in Node, 120 MB resident without the script and 344 MB with it, of which 18 MB is live heap).
+
+So the engine worker never parses it. It reads the current player id from the iframe API and asks the main thread for the analysed script. The main thread downloads `base.js`, hands it to a worker started for the job (`player-script.worker.ts`), and ends that worker once it has the result, which takes the memory with it. The result is plain data and is kept in `localStorage` under the player id and the youtubei.js version, so the next launch on the same script skips the download and the parse. YouTube moves to a new script every week or so.
+
+`WEB_REMIX`, `VISIONOS` and `TV_SIMPLY` each get their own youtubei.js `Player` over the one analysed script, since only `TV_SIMPLY`'s carries a PO token. Signing in costs no second parse. The engine fetches the script once for its life, as the clients were before. Outside the app (tests, Node), the engine analyses it in place.
+
+SABR would not avoid this: its streaming URL carries an `n` too, deciphered with the same script.
+
+### Why not SABR
+
+YouTube's own web players mostly stream over SABR, a protocol of UMP-framed segments over POSTs, and the `TVHTML5` client offers 774 and 141 that way signed in. music.youtube.com doesn't use it. A HAR of the site playing a Premium song (2026-10-12) shows `/player` answering `useServerDrivenAbr: false` and 141 fetched from its deciphered format URL. The site's media requests are POSTs with `range`, `ump=1` and a `pot` in the query, but mpv's plain range GET without them answers 206 too. SABR on `WEB_REMIX` signed in is refused for Premium formats: the first response asks for a player reload, and after it, `sabr.no_audio_selected`. That happened on googlevideo 4.1.1 and on its main branch's SabrStream rewrite alike, with every request change yt-dlp's SABR branch makes.
+
+If `WEB_REMIX` ever stops handing out URLs, the way back is `TVHTML5` plus SABR. What was measured, with googlevideo's main branch (`01d5b091a6`, applied as a pnpm patch over 4.1.1's `dist/` until a release has it):
+
+- A signed-in `TVHTML5` `/player` call with the web cookie and the signature timestamp returns `serverAbrStreamingUrl` and the ustreamer config. The streaming URL carries an `n` to decipher. Signed out, the TV client answers "The page needs to be reloaded".
+- `SabrStream` with that URL, the config, `clientInfo` of `TVHTML5` and its version, the adaptive formats (with `isVb` read from `xtags`: a base64url protobuf, where the pair `vb=1` marks voice boost), `EnabledTrackTypes.AUDIO_ONLY` and the chosen itag downloads a whole song in under 10 s. No GVS PO token and no cookie on the media requests were needed.
+- The server can ask for a fresh `/player` response mid-stream; answer `onReloadPlayerResponse` with a call carrying its token.
+- mpv can't speak SABR, so this needs a local SABR-to-HTTP proxy in front of it.
+
+Prior art: googlevideo#42 and #54 (the reload loop on voice-boost formats, and the rewrite that fixed it), yt-dlp#13515 (coletdjnz's SABR downloader), and NotArandomGUY/browser-utils for the protos as YouTube's web player defines them.
 
 **Gapless.** While a song plays, the queue resolves the next one's lease and calls `player_queue_next`, and Rust appends it to mpv's playlist with `loadfile <url> append`. With `gapless-audio=yes` and `prefetch-playlist=yes`, mpv opens it ahead of time and joins the two with no gap. A song loaded with `replace` drops whatever was appended.
 

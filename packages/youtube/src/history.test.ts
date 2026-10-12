@@ -130,6 +130,27 @@ describe("fetchSignatureTimestamp", () => {
     await expect(fetchSignatureTimestamp(fetch)).rejects.toThrow("no signature timestamp");
   });
 
+  it("stops at iframe_api when it cannot name the player script", async () => {
+    const asked: string[] = [];
+    const answer =
+      (body: string, status = 200) =>
+      async (input: RequestInfo | URL) => {
+        asked.push(String(input));
+        return new Response(body, { status });
+      };
+    await expect(fetchSignatureTimestamp(answer("", 503))).rejects.toThrow("503");
+    await expect(fetchSignatureTimestamp(answer("var x = 1;"))).rejects.toThrow("id");
+    expect(asked).toEqual([
+      "https://www.youtube.com/iframe_api",
+      "https://www.youtube.com/iframe_api",
+    ]);
+  });
+
+  it("ignores numbers that are not a five-digit timestamp", () => {
+    expect(signatureTimestampFrom("{sts:123,x:1}")).toBeNull();
+    expect(signatureTimestampFrom("var b={sts:1},a={signatureTimestamp:20732}")).toBe(20732);
+  });
+
   it("accepts the short sts spelling and rejects ids it cannot find", () => {
     expect(signatureTimestampFrom("{sts: 19876}")).toBe(19876);
     expect(playerIdFrom("no player here")).toBeNull();

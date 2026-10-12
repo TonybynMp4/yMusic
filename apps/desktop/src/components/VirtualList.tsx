@@ -8,6 +8,8 @@ interface Props {
   rowHeight: number;
   getKey: (index: number) => string;
   renderRow: (index: number) => ReactNode;
+  /** Rows kept mounted past each edge of the viewport, so a quick scroll lands on rows already drawn. */
+  overscan?: number;
   className?: string;
 }
 
@@ -16,7 +18,15 @@ interface Props {
  * costs what a screenful does. Rows are one fixed height, which is what lets
  * the list skip measuring them.
  */
-export function VirtualList({ count, scroller, rowHeight, getKey, renderRow, className }: Props) {
+export function VirtualList({
+  count,
+  scroller,
+  rowHeight,
+  getKey,
+  renderRow,
+  overscan = 8,
+  className,
+}: Props) {
   const list = useRef<HTMLUListElement>(null);
   // Where the list starts inside the scrolled content. It moves when anything
   // above it changes height, such as a description being expanded.
@@ -40,7 +50,7 @@ export function VirtualList({ count, scroller, rowHeight, getKey, renderRow, cla
     count,
     getScrollElement: () => scroller,
     estimateSize: () => rowHeight,
-    overscan: 8,
+    overscan,
     scrollMargin: offset,
     getItemKey: getKey,
   });

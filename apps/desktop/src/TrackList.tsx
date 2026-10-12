@@ -1,6 +1,6 @@
 import { IconDots, IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react";
 import type { Track, TrackId } from "@ymusic/core";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useMemo, useRef, type ReactNode } from "react";
 
 import { Art } from "@/components/Art";
 import { VirtualList } from "@/components/VirtualList";
@@ -29,11 +29,42 @@ interface Props {
 const ROW_HEIGHT = 48;
 /** Below this, rendering every row is cheaper than keeping track of which to render. */
 const VIRTUAL_FROM = 60;
+/**
+ * Rows drawn past each edge of the viewport: about two screenfuls, so a
+ * quick scroll lands on rows (and covers) already there.
+ */
+const OVERSCAN = 25;
 
 export function TrackList(props: Props) {
   const scroller = useScrollParent();
-  const { tracks } = props;
+  const { tracks, currentId, playing, hideAlbum } = props;
+  // Rows get handlers that never change and read the latest props when
+  // called, so a memoized row re-renders only when its own song or state does.
+  const latest = useRef(props);
+  latest.current = props;
+  const onPlay = useCallback((id: TrackId) => latest.current.onPlay(id), []);
+  const onToggle = useCallback(() => latest.current.onToggle(), []);
+  const linked = props.onOpen !== undefined;
+  const onOpen = useMemo(
+    () => (linked ? (route: Route) => latest.current.onOpen?.(route) : undefined),
+    [linked],
+  );
   if (tracks.length === 0) return null;
+
+  const row = (track: Track) => {
+    const isCurrent = track.id === currentId;
+    return (
+      <Row
+        track={track}
+        isCurrent={isCurrent}
+        playing={isCurrent && playing}
+        onPlay={onPlay}
+        onToggle={onToggle}
+        onOpen={onOpen}
+        hideAlbum={hideAlbum}
+      />
+    );
+  };
 
   if (scroller && tracks.length >= VIRTUAL_FROM) {
     return (
@@ -41,33 +72,42 @@ export function TrackList(props: Props) {
         count={tracks.length}
         scroller={scroller}
         rowHeight={ROW_HEIGHT}
+        overscan={OVERSCAN}
         // By position too: a playlist can hold the same track twice.
         getKey={(index) => `${index}:${tracks[index]!.id}`}
-        renderRow={(index) => <Row {...props} track={tracks[index]!} />}
+        renderRow={(index) => row(tracks[index]!)}
       />
     );
   }
   return (
     <ul>
       {tracks.map((track, index) => (
-        <li key={`${index}:${track.id}`}>
-          <Row {...props} track={track} />
-        </li>
+        <li key={`${index}:${track.id}`}>{row(track)}</li>
       ))}
     </ul>
   );
 }
 
-function Row({
+interface RowProps {
+  track: Track;
+  isCurrent: boolean;
+  /** Whether this row's song is playing: false on every row but the current one. */
+  playing: boolean;
+  onPlay: (id: TrackId) => void;
+  onToggle: () => void;
+  onOpen: ((route: Route) => void) | undefined;
+  hideAlbum: boolean | undefined;
+}
+
+const Row = memo(function Row({
   track,
-  currentId,
+  isCurrent,
   playing,
   onPlay,
   onToggle,
   onOpen,
   hideAlbum,
-}: Props & { track: Track }) {
-  const isCurrent = track.id === currentId;
+}: RowProps) {
   const dimmed = useDisliked(track) && !isCurrent;
   const play = () => (isCurrent ? onToggle() : onPlay(track.id));
   return (
@@ -113,7 +153,7 @@ function Row({
       </span>
     </InteractionArea>
   );
-}
+});
 
 /**
  * The cover, and over it what YouTube Music shows there: bars moving while
@@ -284,6 +324,9 @@ export function Artwork({ track, size = 36 }: { track: Track; size?: number }) {
       className="max-w-none shrink-0 rounded text-xs"
       style={{ width: size, height: size }}
       fallback={track.title.slice(0, 1).toUpperCase()}
+      // Song rows are virtualized, so one that exists is near the viewport
+      // already; the browser's own lazy loading would only hold its cover back.
+      lazy={false}
     />
   );
 }

@@ -53,13 +53,18 @@ export function VirtualList({
     overscan,
     scrollMargin: offset,
     getItemKey: getKey,
+    // Rows come in a render React schedules, not one forced inside the scroll
+    // event: the overscan keeps them ahead of the viewport, and the scroll
+    // itself never waits on React.
+    useFlushSync: false,
   });
 
   return (
     <ul
       ref={list}
       className={className}
-      style={{ position: "relative", height: virtualizer.getTotalSize() }}
+      // Contained, so mounting rows lays out and repaints only the list.
+      style={{ position: "relative", height: virtualizer.getTotalSize(), contain: "layout paint" }}
     >
       {virtualizer.getVirtualItems().map((item) => (
         <li
@@ -70,6 +75,8 @@ export function VirtualList({
             left: 0,
             width: "100%",
             height: item.size,
+            // A row's size never depends on what is inside it.
+            contain: "strict",
             transform: `translateY(${item.start - offset}px)`,
           }}
         >

@@ -8,6 +8,7 @@ import {
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
 import type { QueueFrom } from "@ymusic/ipc";
 import {
+  memo,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -27,6 +28,8 @@ import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.
 import { Artwork } from "./TrackList.tsx";
 
 const ROW_HEIGHT = 48;
+/** Rows drawn past each edge of the viewport, as in `TrackList`. */
+const OVERSCAN = 25;
 /** How close to the list's top or bottom edge a drag starts scrolling it. */
 const SCROLL_EDGE = 40;
 
@@ -211,6 +214,19 @@ export function Queue({
     queue.cursor === null ? null : positionOf(queue.cursor, drag),
     drag !== null,
   );
+  // Rows get handlers that never change and call the latest ones, so a
+  // memoized row re-renders only when its own song or state does.
+  const latest = useRef<{
+    onJump: (id: TrackId) => void;
+    onRemove: (id: TrackId) => void;
+    startDrag: (source: number, event: ReactPointerEvent) => void;
+  }>({ onJump, onRemove, startDrag: () => {} });
+  const jump = useCallback((id: TrackId) => latest.current.onJump(id), []);
+  const remove = useCallback((id: TrackId) => latest.current.onRemove(id), []);
+  const dragFrom = useCallback(
+    (source: number, event: ReactPointerEvent) => latest.current.startDrag(source, event),
+    [],
+  );
 
   if (queue.items.length === 0) {
     return (
@@ -286,6 +302,7 @@ export function Queue({
     setDrag({ from, to });
     frame = requestAnimationFrame(scroll);
   };
+  latest.current = { onJump, onRemove, startDrag };
 
   return (
     <div className="flex h-full flex-col">
@@ -323,6 +340,7 @@ export function Queue({
               count={count}
               scroller={viewport}
               rowHeight={ROW_HEIGHT}
+              overscan={OVERSCAN}
               getKey={(position) =>
                 position < queued
                   ? `${position}:${queue.order[sourceOf(position, drag)]}`
@@ -345,7 +363,7 @@ export function Queue({
                 if (position > queued) {
                   const track = queue.suggestions[position - queued - 1];
                   if (!track) return null;
-                  return <Row track={track} onJump={onJump} suggestion />;
+                  return <Row track={track} onJump={jump} suggestion />;
                 }
                 const source = sourceOf(position, drag);
                 const itemIndex = queue.order[source]!;
@@ -355,11 +373,12 @@ export function Queue({
                   <Row
                     track={track}
                     current={itemIndex === current}
-                    onJump={onJump}
-                    onRemove={onRemove}
-                    onDragStart={(event) => startDrag(source, event)}
+                    onJump={jump}
+                    onRemove={remove}
+                    source={source}
+                    onDragStart={dragFrom}
                     dragging={drag?.from === source}
-                    className={cn(drag && "pointer-events-none")}
+                    inert={drag !== null}
                   />
                 );
               }}
@@ -386,26 +405,30 @@ export function Queue({
   );
 }
 
-function Row({
+const Row = memo(function Row({
   track,
   current = false,
   onJump,
   onRemove,
+  source = 0,
   onDragStart,
   dragging = false,
+  inert = false,
   suggestion = false,
-  className,
 }: {
   track: Track;
   current?: boolean;
   onJump: (id: TrackId) => void;
   onRemove?: (id: TrackId) => void;
-  onDragStart?: (event: ReactPointerEvent) => void;
+  /** The row's place in the queue, handed back when a drag starts on it. */
+  source?: number;
+  onDragStart?: (source: number, event: ReactPointerEvent) => void;
   /** Picked up and following the pointer. */
   dragging?: boolean;
+  /** A drag is in progress: rows let the pointer through. */
+  inert?: boolean;
   /** An autoplay suggestion, faded unless hovered. A disliked one fades as far as a queued one does. */
   suggestion?: boolean;
-  className?: string;
 }) {
   const remove = onRemove && (() => onRemove(track.id));
   const dimmed = useDisliked(track) && !current;
@@ -418,13 +441,13 @@ function Row({
         current ? "bg-accent" : "hover:bg-accent/60",
         dragging && "bg-accent shadow-lg ring-1 ring-foreground/10",
         suggestion && !dimmed && "opacity-70 hover:opacity-100",
-        className,
+        inert && "pointer-events-none",
       )}
     >
       {onDragStart && (
         <span
           aria-hidden
-          onPointerDown={onDragStart}
+          onPointerDown={(event) => onDragStart(source, event)}
           className={cn(
             "-mx-1 grid h-full w-5 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 group-hover:opacity-100",
             dragging && "opacity-100",
@@ -468,4 +491,4 @@ function Row({
       )}
     </InteractionArea>
   );
-}
+});

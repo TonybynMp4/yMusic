@@ -13,8 +13,7 @@ function answering(loggedIn: string): typeof fetch {
       ],
     },
   });
-  return async () =>
-    new Response(body, { headers: { "content-type": "application/json" } });
+  return async () => new Response(body, { headers: { "content-type": "application/json" } });
 }
 
 describe("watchSession", () => {
@@ -43,8 +42,7 @@ describe("watchSession", () => {
 
   it("ignores calls that answer signed out whatever the session", async () => {
     const onSignedOut = vi.fn<() => void>();
-    const url =
-      "https://music.youtube.com/youtubei/v1/config?prettyPrint=false";
+    const url = "https://music.youtube.com/youtubei/v1/config?prettyPrint=false";
     await (await watchSession(answering("0"), onSignedOut)(url)).text();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onSignedOut).not.toHaveBeenCalled();

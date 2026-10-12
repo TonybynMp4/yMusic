@@ -373,16 +373,23 @@ export function Shelf({
 }) {
   return (
     <section className="mb-6">
-      <div className="flex items-baseline justify-between px-3">
-        <h2 className="mb-2 text-xl font-semibold">{title}</h2>
-        {action}
-      </div>
+      <ShelfHeader title={title} action={action} />
       <div className="flex gap-4 overflow-x-auto px-3 pb-2">
         {cards.map((card) => (
           <Card key={`${card.kind}:${card.id}`} card={card} onOpen={onOpen} />
         ))}
       </div>
     </section>
+  );
+}
+
+/** A shelf's title, with an action such as "Show all" at the other end. */
+export function ShelfHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between px-3">
+      <h2 className="mb-2 text-xl font-semibold">{title}</h2>
+      {action}
+    </div>
   );
 }
 

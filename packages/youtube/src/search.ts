@@ -1,7 +1,7 @@
 import { YTMusic, type Innertube } from "youtubei.js";
 import {
   BrowseCard,
-  type SearchFilter,
+  SearchFilter,
   type SearchResults,
   type SearchShelf,
   type Track,
@@ -26,16 +26,6 @@ const FILTERS: Record<SearchFilter, { params: string; chip: string }> = {
   "community-playlists": { params: "EgeKAQQoAEAB", chip: "EgeKAQQoAEAB" },
   artists: { params: "EgWKAQIgAQ%3D%3D", chip: "EgWKAQIgA" },
 };
-
-/** The chips' order on YouTube Music, which is also the order they show here. */
-const FILTER_ORDER: readonly SearchFilter[] = [
-  "songs",
-  "videos",
-  "albums",
-  "featured-playlists",
-  "community-playlists",
-  "artists",
-];
 
 /** The next page of a chip's results. */
 export type SearchMore = () => Promise<{ results: SearchResults; more: SearchMore | null }>;
@@ -180,7 +170,8 @@ export function resultsFrom(search: RawSearch): SearchResults {
   }
 
   const offered = (search.header?.chips ?? []).map((chip) => chip?.endpoint?.payload?.params);
-  const filters = FILTER_ORDER.filter((filter) =>
+  // The enum is in YouTube Music's chip order, which is the order they show here.
+  const filters = SearchFilter.options.filter((filter) =>
     offered.some((params) => typeof params === "string" && params.startsWith(FILTERS[filter].chip)),
   );
   return { top, shelves, filters };
@@ -267,11 +258,13 @@ function unknownVideo(row: RawRow): Track | null {
     id: videoId,
     title: run?.text,
     thumbnails: row.thumbnails ?? null,
-    artists: artistsFromRuns(byline?.title).map((artist) => ({
-      name: artist.name,
-      channel_id: artist.channelId,
-    })),
+    artists: rawArtists(byline?.title),
   });
+}
+
+/** A byline's artists, in the raw shape `toTrack` reads. */
+function rawArtists(byline: RawText | null | undefined): NonNullable<RawSong["artists"]> {
+  return artistsFromRuns(byline).map(({ name, channelId }) => ({ name, channel_id: channelId }));
 }
 
 function cardFrom(row: RawRow, kind: BrowseCard["kind"]): BrowseCard | null {
@@ -318,10 +311,7 @@ function topFrom(shelf: RawCardShelf): SearchResults["top"] {
       id: payload.videoId,
       title,
       thumbnails: shelf.thumbnail?.contents ?? null,
-      artists: artistsFromRuns(shelf.subtitle).map((artist) => ({
-        name: artist.name,
-        channel_id: artist.channelId,
-      })),
+      artists: rawArtists(shelf.subtitle),
     });
     return track && { item: { kind: "track", track }, tracks };
   }

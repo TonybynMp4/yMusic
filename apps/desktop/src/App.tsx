@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AccountMenu } from "./AccountMenu.tsx";
-import { BrowseView, type BrowseActions } from "./Browse.tsx";
+import { BrowseView, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LocalView } from "./Local.tsx";
@@ -513,8 +513,8 @@ function SearchResults(props: {
   const [showAll, setShowAll] = useState(false);
   if (query.trim().length === 0) {
     return props.recent ? (
-      <section className="pt-1">
-        <h2 className="mb-1 px-3 text-sm font-semibold">Recent searches</h2>
+      <section className="mb-6">
+        <ShelfHeader title="Recent searches" />
         {props.recent}
       </section>
     ) : (
@@ -533,19 +533,21 @@ function SearchResults(props: {
       <SearchChips youtube={youtube} />
       {withLocal && (
         <section className="mb-6">
-          <div className="flex items-baseline justify-between px-3">
-            <h2 className="mb-2 text-xl font-semibold">In your files</h2>
-            {local.length > LOCAL_PREVIEW && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full"
-                onClick={() => setShowAll((all) => !all)}
-              >
-                {showAll ? "Show fewer" : `Show all ${local.length}`}
-              </Button>
-            )}
-          </div>
+          <ShelfHeader
+            title="In your files"
+            action={
+              local.length > LOCAL_PREVIEW && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setShowAll((all) => !all)}
+                >
+                  {showAll ? "Show fewer" : `Show all ${local.length}`}
+                </Button>
+              )
+            }
+          />
           <TrackList
             tracks={shown}
             currentId={actions.currentId}

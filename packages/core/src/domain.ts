@@ -130,7 +130,10 @@ export const ArtistPage = z.object({
 });
 export type ArtistPage = z.infer<typeof ArtistPage>;
 
-/** What a YouTube Music search can be narrowed to, as its chips do. */
+/**
+ * What a YouTube Music search can be narrowed to, as its chips do, in the
+ * chips' order on YouTube Music. The app shows them in this order too.
+ */
 export const SearchFilter = z.enum([
   "songs",
   "videos",

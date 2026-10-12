@@ -54,9 +54,11 @@ Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/
 
 ### WebKit's memory cache
 
-wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps images, scripts and stylesheets in memory after no page uses them, up to a cap sized from the machine's RAM. Every thumbnail of every page opened stayed decoded in the web process. `lib.rs` switches the model to `DOCUMENT_VIEWER` through `with_webview`, which drops a resource once nothing shows it. Going back to a page draws its thumbnails again from the `img` scheme's disk cache, not the network.
+wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps images, scripts and stylesheets in memory after no page uses them: up to 64 MB of them on any machine with 2 GB of RAM or more, with their decoded pixels kept for a minute (`calculateMemoryCacheSizes` in WebKit's `CacheModel.cpp`). Every thumbnail of every page opened stayed in the web process. `lib.rs` switches the model to `DOCUMENT_BROWSER` through `with_webview`, which caps what nothing shows at 24 MB and drops decoded pixels first, keeping the compressed bytes.
 
-All processes now hold 40 MB less at the end of browsing and 52 MB less once the long playlist has loaded, with every run below every run of the build before (`docs/memory/cache-model/`). Playback climbs to the same level in both builds, and the end of the run is within noise, so the memory that grows while a song plays is somewhere else.
+`DOCUMENT_VIEWER` keeps nothing nobody shows, and saves more: all processes held 40 MB less at the end of browsing and 52 MB less once the long playlist had loaded, with every run below every run of the build before (`docs/memory/cache-model/`, measured with that model). It made browsing worse, though. Going back to a page asked the `img` scheme for every thumbnail again, a round trip through the core and the disk cache, and artwork appeared a moment after the page did, where with the default it was already there. `DOCUMENT_BROWSER` keeps the recent pages' artwork in memory, so it draws with the page. Its saving sits between the two and has not been measured yet.
+
+Playback climbs to the same level with both models, so the memory that grows while a song plays is somewhere else.
 
 ## Measuring
 

@@ -148,8 +148,10 @@ export class MpvPlaybackEngine implements PlaybackEngine {
         return;
       }
       const event = toCoreEvent(parsed.data);
-      if (event.type === "status") {
-        this.#playing = event.status === "playing";
+      // A failed stream gets an error and no status after it, so the error
+      // has to stop the polling too.
+      if (event.type === "status" || event.type === "error") {
+        this.#playing = event.type === "status" && event.status === "playing";
         if (this.#playing) this.#pollIn(0);
         else this.#stopPolling();
       }
@@ -186,10 +188,11 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     } catch (error) {
       console.error("could not read the playback position", error);
     }
-    if (!this.#playing) return;
-    if (position) this.#deliver({ type: "position", ...position });
+    // Nothing loaded: the next "playing" status starts the polling again.
+    if (!this.#playing || !position) return;
+    this.#deliver({ type: "position", ...position });
     // Just after the next whole second, so the time label ticks on time.
-    this.#pollIn(position ? 1000 - (position.positionMs % 1000) + 20 : 1000);
+    this.#pollIn(1000 - (position.positionMs % 1000) + 20);
   }
 }
 

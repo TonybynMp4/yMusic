@@ -20,6 +20,7 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { keepLease } from "./leases.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
@@ -53,15 +54,6 @@ function radioSeed(queue: QueueState): TrackId | null {
     if (track && sourceOf(track.id) === "youtube") return track.id;
   }
   return null;
-}
-
-/** Stores a lease, dropping the expired ones: a long session resolves hundreds. */
-function keepLease(leases: Map<TrackId, StreamLease>, id: TrackId, lease: StreamLease): void {
-  const now = Date.now();
-  for (const [other, old] of leases) {
-    if (!isLeaseUsable(old, now)) leases.delete(other);
-  }
-  leases.set(id, lease);
 }
 
 /**

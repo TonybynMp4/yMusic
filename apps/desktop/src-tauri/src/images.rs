@@ -15,7 +15,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use sha2::{Digest, Sha256};
@@ -23,8 +23,14 @@ use tauri::http::{header, Request, Response, StatusCode};
 
 pub const SCHEME: &str = "img";
 
+/// Attempts at the URL the page asked for. The WebP copy gets one: when it
+/// fails, the original is the next try, not a backoff.
 const ATTEMPTS: u32 = 3;
 const BACKOFF: Duration = Duration::from_millis(400);
+/// Per attempt. A stalled request holds its image back for this long, and
+/// every image waiting on the same connection with it.
+const TIMEOUT: Duration = Duration::from_secs(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const ALLOWED_HOSTS: [&str; 3] = [".googleusercontent.com", ".ggpht.com", ".ytimg.com"];
 /// The cache trims itself back to `TRIM_TO_BYTES` once it passes this.
 const CAP_BYTES: u64 = 100 * 1024 * 1024;
@@ -40,19 +46,32 @@ pub struct Images {
     dir: PathBuf,
     written: Arc<AtomicU64>,
     trimming: Arc<AtomicBool>,
+    store: Arc<Store>,
+}
+
+/// What lets a clear and the writes in flight agree. A write holds `lock` for
+/// reading only while it writes and renames its file, never across the fetch,
+/// and lands only if no clear happened since its fetch began. A clear holds it
+/// for writing while it bumps the generation and empties the folder.
+#[derive(Default)]
+struct Store {
+    lock: RwLock<()>,
+    generation: AtomicU64,
 }
 
 impl Images {
     pub fn new(dir: PathBuf) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(20))
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(TIMEOUT)
             .build()
-            .expect("a client with only a timeout set");
+            .expect("a client with only timeouts set");
         let images = Self {
             client,
             dir,
             written: Arc::new(AtomicU64::new(0)),
             trimming: Arc::new(AtomicBool::new(false)),
+            store: Arc::default(),
         };
         // A cache left over the cap by an older version, or a crash mid-trim.
         images.trim_in_background();
@@ -72,20 +91,10 @@ impl Images {
             tauri::async_runtime::spawn_blocking(move || touch(&path));
             return image(bytes);
         }
-        let webp = match as_webp(&url) {
-            Some(webp) => self.fetch(&webp).await,
-            None => None,
-        };
-        let fetched = match webp {
-            Some(bytes) => Some(bytes),
-            None => self.fetch(&url).await,
-        };
-        match fetched {
+        let generation = self.store.generation.load(Ordering::Acquire);
+        match self.fetch_preferring(as_webp(&url).as_deref(), &url).await {
             Some(bytes) => {
-                match write_cache(&self.dir, &path, &bytes) {
-                    Ok(()) => self.wrote(bytes.len() as u64),
-                    Err(err) => log::warn!("could not cache artwork: {err}"),
-                }
+                self.cache_in_background(path, bytes.clone(), generation);
                 image(bytes)
             }
             None => {
@@ -93,6 +102,32 @@ impl Images {
                 status(StatusCode::BAD_GATEWAY)
             }
         }
+    }
+
+    /// The webview gets the bytes straight away: the disk write is blocking
+    /// work and would hold an async worker, which the page's own requests to
+    /// YouTube run on too.
+    fn cache_in_background(&self, path: PathBuf, bytes: Vec<u8>, generation: u64) {
+        let images = self.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            match store(&images.store, generation, &images.dir, &path, &bytes) {
+                Ok(true) => images.wrote(bytes.len() as u64),
+                Ok(false) => {}
+                Err(err) => log::warn!("could not cache artwork: {err}"),
+            }
+        });
+    }
+
+    /// Deletes every cached image. Writes still in flight from before land nowhere.
+    pub fn clear(&self) -> std::io::Result<()> {
+        clear(&self.store, &self.dir)?;
+        self.written.store(0, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// The bytes the cache takes on disk.
+    pub fn size(&self) -> std::io::Result<u64> {
+        size(&self.dir)
     }
 
     fn wrote(&self, bytes: u64) {
@@ -116,8 +151,20 @@ impl Images {
         });
     }
 
-    async fn fetch(&self, url: &str) -> Option<Vec<u8>> {
-        for attempt in 0..ATTEMPTS {
+    /// The WebP copy if there is one and it comes on the first try, else the
+    /// original with its retries. Retrying the WebP copy as well would hold the
+    /// image back by two backoffs before the original was even asked for.
+    async fn fetch_preferring(&self, webp: Option<&str>, url: &str) -> Option<Vec<u8>> {
+        if let Some(webp) = webp {
+            if let Some(bytes) = self.fetch(webp, 1).await {
+                return Some(bytes);
+            }
+        }
+        self.fetch(url, ATTEMPTS).await
+    }
+
+    async fn fetch(&self, url: &str, attempts: u32) -> Option<Vec<u8>> {
+        for attempt in 0..attempts {
             if attempt > 0 {
                 tokio::time::sleep(BACKOFF * 2u32.pow(attempt - 1)).await;
             }
@@ -136,7 +183,7 @@ impl Images {
                 Err(err) => log::debug!("artwork request failed: {err}"),
             }
         }
-        log::debug!("gave up on artwork after {ATTEMPTS} attempts: {url}");
+        log::debug!("gave up on artwork after {attempts} attempts: {url}");
         None
     }
 }
@@ -261,6 +308,64 @@ fn write_cache(dir: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     written
 }
 
+/// Writes an image fetched under `generation`, unless a clear came since.
+/// Returns whether it was written.
+fn store(
+    store: &Store,
+    generation: u64,
+    dir: &Path,
+    path: &Path,
+    bytes: &[u8],
+) -> std::io::Result<bool> {
+    let _writing = store
+        .lock
+        .read()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if store.generation.load(Ordering::Acquire) != generation {
+        return Ok(false);
+    }
+    write_cache(dir, path, bytes).map(|()| true)
+}
+
+/// Empties the folder, temporary files included: no write is mid-way while
+/// the lock is held.
+fn clear(store: &Store, dir: &Path) -> std::io::Result<()> {
+    let _clearing = store
+        .lock
+        .write()
+        .unwrap_or_else(|poison| poison.into_inner());
+    store.generation.fetch_add(1, Ordering::AcqRel);
+    for (_, _, path) in files(dir)? {
+        let _ = std::fs::remove_file(&path);
+    }
+    Ok(())
+}
+
+fn size(dir: &Path) -> std::io::Result<u64> {
+    Ok(files(dir)?.iter().map(|(_, len, _)| len).sum())
+}
+
+/// The files in the folder with their modification time and size. A folder
+/// not created yet is empty, and an entry that cannot be read (a write
+/// renaming it away, say) is skipped.
+fn files(dir: &Path) -> std::io::Result<Vec<(SystemTime, u64, PathBuf)>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(err),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_file() {
+            let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            files.push((modified, meta.len(), entry.path()));
+        }
+    }
+    Ok(files)
+}
+
 fn touch(path: &Path) {
     if let Ok(file) = std::fs::File::options().append(true).open(path) {
         let _ = file.set_modified(SystemTime::now());
@@ -269,35 +374,19 @@ fn touch(path: &Path) {
 
 /// Deletes the least recently drawn images until the folder holds `to` bytes,
 /// if it holds more than `cap`. Temporary files a crash left behind go too.
-/// A folder not created yet counts as empty, and an entry that cannot be read
-/// (a write renaming it away, say) is skipped.
 fn trim(dir: &Path, cap: u64, to: u64) -> std::io::Result<()> {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(err) => return Err(err),
-    };
-    let mut files = Vec::new();
-    let mut total = 0;
-    for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let Ok(meta) = entry.metadata() else { continue };
-        if !meta.is_file() {
-            continue;
-        }
-        let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-        let path = entry.path();
+    let mut files = files(dir)?;
+    files.retain(|(modified, _, path)| {
         let stale_partial = path.extension().is_some_and(|ext| ext == "part")
             && modified
                 .elapsed()
                 .is_ok_and(|age| age > Duration::from_secs(3600));
         if stale_partial {
-            let _ = std::fs::remove_file(&path);
-            continue;
+            let _ = std::fs::remove_file(path);
         }
-        total += meta.len();
-        files.push((modified, meta.len(), path));
-    }
+        !stale_partial
+    });
+    let mut total: u64 = files.iter().map(|(_, len, _)| len).sum();
     if total <= cap {
         return Ok(());
     }
@@ -541,7 +630,7 @@ mod tests {
         let dir = scratch("fetch-404");
         let images = Images::new(dir.join("images"));
         let started = std::time::Instant::now();
-        let fetched = tauri::async_runtime::block_on(images.fetch(&url));
+        let fetched = tauri::async_runtime::block_on(images.fetch(&url, ATTEMPTS));
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(fetched, None);
         assert_eq!(served.load(Ordering::SeqCst), 1);
@@ -560,10 +649,70 @@ mod tests {
         ]);
         let dir = scratch("fetch-retry");
         let images = Images::new(dir.join("images"));
-        let fetched = tauri::async_runtime::block_on(images.fetch(&url));
+        let fetched = tauri::async_runtime::block_on(images.fetch(&url, ATTEMPTS));
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(fetched.as_deref(), Some(JPEG));
         assert_eq!(served.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn falls_back_to_the_original_at_once_when_the_webp_copy_fails() {
+        let (webp, webp_served) = serve(vec![("503 Service Unavailable", b"")]);
+        let (url, served) = serve(vec![("200 OK", JPEG)]);
+        let dir = scratch("fetch-webp-fails");
+        let images = Images::new(dir.join("images"));
+        let started = std::time::Instant::now();
+        let fetched = tauri::async_runtime::block_on(images.fetch_preferring(Some(&webp), &url));
+        let elapsed = started.elapsed();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(fetched.as_deref(), Some(JPEG));
+        assert_eq!(
+            webp_served.load(Ordering::SeqCst),
+            1,
+            "the WebP copy is not retried"
+        );
+        assert_eq!(served.load(Ordering::SeqCst), 1);
+        assert!(
+            elapsed < BACKOFF,
+            "no backoff before the original: {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn a_write_fetched_before_a_clear_lands_nowhere() {
+        let dir = scratch("clear-race");
+        let path = dir.join("abc");
+        let state = Store::default();
+        let before = state.generation.load(Ordering::Acquire);
+        clear(&state, &dir).unwrap();
+        let late = store(&state, before, &dir, &path, JPEG).unwrap();
+        let landed_late = path.exists();
+        let after = state.generation.load(Ordering::Acquire);
+        let fresh = store(&state, after, &dir, &path, JPEG).unwrap();
+        let left = names(&dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(!late && !landed_late);
+        assert!(fresh);
+        assert_eq!(left, ["abc"]);
+    }
+
+    #[test]
+    fn clears_every_file_and_counts_the_size() {
+        let dir = scratch("clear");
+        std::fs::write(dir.join("a"), [0u8; 100]).unwrap();
+        std::fs::write(dir.join("b.3.part"), [0u8; 50]).unwrap();
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub").join("c"), [0u8; 1000]).unwrap();
+        let before = size(&dir).unwrap();
+        clear(&Store::default(), &dir).unwrap();
+        let after = size(&dir).unwrap();
+        let left = names(&dir);
+        let missing = size(&dir.join("missing")).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(before, 150);
+        assert_eq!(after, 0);
+        assert_eq!(left, ["sub"]);
+        assert_eq!(missing, 0);
     }
 
     #[test]

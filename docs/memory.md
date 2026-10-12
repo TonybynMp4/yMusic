@@ -64,7 +64,7 @@ In the `DOCUMENT_VIEWER` runs, the core's PSS rose 28 MB while the memory it hol
 
 ### The playback position
 
-mpv reports `time-pos` many times a second, and the core used to send each one to the page over a Tauri channel. Each message runs as a script in the page and updates its state. Now the core sends the page only the first position after a song starts or a seek. While a song plays, `MpvPlaybackEngine` in `packages/ipc` asks for it with the `player_position` command just after each whole second, so the time label still ticks on the second. A command's reply comes back over Tauri's `ipc://` protocol, not as a script. Rust code that watches playback, such as MPRIS, still gets every position.
+mpv reports `time-pos` many times a second, and the core used to send each one to the page over a Tauri channel. Each message runs as a script in the page and updates its state. Now the core sends the page the position only when mpv restarts playback: when a song starts, and after a seek, including one while paused. While a song plays, `MpvPlaybackEngine` in `packages/ipc` asks for it with the `player_position` command just after each whole second, so the time label still ticks on the second. A command's reply comes back over Tauri's `ipc://` protocol, not as a script. Rust code that watches playback, such as MPRIS, still gets every position.
 
 The web process ends the scenario 81 MB lower, 199 MB against 280, and all processes 75 MB lower (`docs/memory/position-pull/`). The peak doesn't move: the gain is what the web process used to keep building up during playback and the last idle minutes. Its three runs also land within 5 MB of each other, where the build before spread over 42 MB.
 

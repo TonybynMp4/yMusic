@@ -4,6 +4,8 @@ import type {
   ArtistPage,
   BrowseCard,
   PlaylistPage,
+  SearchFilter,
+  SearchResults,
   StreamLease,
   Track,
   VideoId,
@@ -42,7 +44,7 @@ import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
-import { searchSongs } from "./search.ts";
+import { searchMusic } from "./search.ts";
 import {
   getSearchHistory,
   removeSearchHistory,
@@ -163,10 +165,10 @@ export class YouTubeEngine {
    */
   async search(
     query: string,
-    { signedOut = false }: { signedOut?: boolean } = {},
-  ): Promise<Track[]> {
+    { signedOut = false, filter = null }: { signedOut?: boolean; filter?: SearchFilter | null } = {},
+  ): Promise<SearchResults> {
     const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
-    return searchSongs(youtube, query);
+    return searchMusic(youtube, query, filter);
   }
 
   /** The account's recent searches, newest first. Empty when signed out. */

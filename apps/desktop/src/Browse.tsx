@@ -359,18 +359,24 @@ function PlayButtons({
 }
 
 /** A horizontally scrolling row of cards, as YouTube Music lays out a shelf. */
-function Shelf({
+export function Shelf({
   title,
   cards,
   onOpen,
+  action,
 }: {
   title: string;
   cards: BrowseCard[];
   onOpen: (route: Route) => void;
+  /** Beside the title, such as search's "Show all". */
+  action?: React.ReactNode;
 }) {
   return (
     <section className="mb-6">
-      <h2 className="mb-2 px-3 text-xl font-semibold">{title}</h2>
+      <div className="flex items-baseline justify-between px-3">
+        <h2 className="mb-2 text-xl font-semibold">{title}</h2>
+        {action}
+      </div>
       <div className="flex gap-4 overflow-x-auto px-3 pb-2">
         {cards.map((card) => (
           <Card key={`${card.kind}:${card.id}`} card={card} onOpen={onOpen} />
@@ -380,7 +386,7 @@ function Shelf({
   );
 }
 
-function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
+export function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
   // Artists are round, everything else square: YouTube Music's own cue.
   const round = card.kind === "artist";
   const route: Route = { kind: card.kind, id: card.id };

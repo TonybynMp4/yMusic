@@ -32,6 +32,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] Data engine in a Web Worker over Comlink, with fetch sent through Rust
 - [x] Search, with YouTube Music and local files in one box
+- [x] Search shows videos, albums, playlists and artists, with YouTube Music's chips
 - [x] Stream resolution on `VISIONOS`
 - [x] PO-token fallback on `TV_SIMPLY`, with BotGuard in an isolated frame
 - [x] Sign-in through Google's page, session sealed with a keyring-held key

@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { YTMusic } from "youtubei.js";
+import type { SearchResults } from "@ymusic/core";
 
-import { songsFrom } from "./search.ts";
+import { resultsFrom } from "./search.ts";
 import { toTrack, type RawSong } from "./parse.ts";
 import { toThumbnails } from "./thumbnails.ts";
 
@@ -111,29 +114,154 @@ describe("toThumbnails", () => {
   });
 });
 
-describe("songsFrom", () => {
-  it("picks the song shelf by type, not by being the first with contents", () => {
-    // A real response leads with a notice section. Taking the first populated
-    // shelf would return that instead of any songs.
-    const tracks = songsFrom({
+/**
+ * A recorded `/search` response (signed out, trimmed of tracking fields), run
+ * through youtubei.js's own parser as the engine does, so these tests catch a
+ * youtubei.js upgrade that renames what `resultsFrom` reads.
+ */
+function recorded(name: string, filtered: boolean): SearchResults {
+  const data: unknown = JSON.parse(
+    readFileSync(new URL(`./fixtures/search-${name}.json`, import.meta.url), "utf8"),
+  );
+  return resultsFrom(new YTMusic.Search({ data } as never, null as never, filtered));
+}
+
+const shelfOf = (results: SearchResults, filter: string) =>
+  results.shelves.find((shelf) => shelf.filter === filter);
+const titles = (results: SearchResults, filter: string) => {
+  const shelf = shelfOf(results, filter);
+  if (!shelf) return [];
+  return shelf.kind === "tracks" ? shelf.tracks.map((t) => t.title) : shelf.cards.map((c) => c.title);
+};
+
+describe("resultsFrom, unfiltered", () => {
+  const boc = recorded("all-boards-of-canada", false);
+  const daft = recorded("all-daft-punk", false);
+
+  it("reads the top result card and the songs it lists", () => {
+    expect(boc.top?.item).toMatchObject({
+      kind: "card",
+      card: { kind: "artist", id: "UCidyEq0ZC6rcqZmwKt_g_2g", title: "Boards of Canada" },
+    });
+    expect(boc.top?.tracks.map((t) => t.id)).toEqual([
+      "yt:9Fnb7APrAeo",
+      "yt:Dj11Y1cVnAs",
+      "yt:ArCrT2mOOuE",
+    ]);
+  });
+
+  it("sorts the mixed rows into shelves, each where its best row ranked", () => {
+    expect(boc.shelves.map((s) => s.filter)).toEqual([
+      "albums",
+      "songs",
+      "videos",
+      "community-playlists",
+    ]);
+    expect(titles(boc, "albums")).toEqual(["Inferno", "Music Has The Right To Children", "Geogaddi"]);
+    expect(titles(daft, "featured-playlists")).toEqual([
+      "Presenting Daft Punk",
+      "Indie Sleaze",
+      "Best Of French Touch",
+    ]);
+    expect(titles(daft, "artists")).toEqual(["The Weeknd", "Pharrell", "Pentatonix"]);
+  });
+
+  it("plays videos as tracks, by their uploader", () => {
+    const videos = shelfOf(boc, "videos");
+    expect(videos?.kind).toBe("tracks");
+    if (videos?.kind !== "tracks") return;
+    expect(videos.tracks[0]).toMatchObject({
+      id: "yt:EDq9rJKHx0s",
+      title: "Boards Of Canada Mix (Focus/ Driving)",
+      artists: [{ name: "INADRM", channelId: "UCD2YR-hsMQaQKT6O6isoWFA" }],
+      album: null,
+    });
+    // Every row has art; a thumbnail getter lost in a copy would leave none.
+    expect(videos.tracks.every((t) => t.thumbnails.length > 0)).toBe(true);
+  });
+
+  it("keeps an official video youtubei.js does not recognise", () => {
+    // MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC comes back as item_type "unknown",
+    // with the id only on the title's play link.
+    expect(titles(boc, "videos")).toContain("Hi Scores (Trailer)");
+  });
+
+  it("drops profiles, podcasts and episodes, which have no page here", () => {
+    const all = boc.shelves.flatMap((s) => (s.kind === "cards" ? s.cards.map((c) => c.id) : []));
+    expect(all.some((id) => id.startsWith("MPSP"))).toBe(false);
+    expect(titles(daft, "artists")).not.toContain("why daftpunk!!!!");
+    expect(titles(boc, "videos").some((t) => t.startsWith("Episode"))).toBe(false);
+  });
+
+  it("opens playlists by their bare id and keeps the owner, not the kind, in the subtitle", () => {
+    const community = shelfOf(boc, "community-playlists");
+    if (community?.kind !== "cards") throw new Error("no community playlists");
+    expect(community.cards[0]).toMatchObject({
+      kind: "playlist",
+      id: "PL_oay1OMaE2bcuKlfqRwNK0qQg0Xhhtjt",
+      title: "Best of Boards of Canada",
+    });
+    expect(community.cards[0]!.subtitle).toMatch(/^Seanothan • /);
+    const featured = shelfOf(daft, "featured-playlists");
+    if (featured?.kind !== "cards") throw new Error("no featured playlists");
+    expect(featured.cards[0]!.id).toBe("RDCLAK5uy_n20FRYQXNt1p1wS55Nj2r14IouO5weaYU");
+    expect(featured.cards[0]!.subtitle).toMatch(/^YouTube Music • \d+ songs$/);
+  });
+
+  it("keeps the album kind in an album's subtitle", () => {
+    const albums = shelfOf(boc, "albums");
+    if (albums?.kind !== "cards") throw new Error("no albums");
+    expect(albums.cards[0]!.subtitle).toMatch(/^Album • Boards of Canada • \d{4}$/);
+  });
+
+  it("offers the chips YouTube offered, in YouTube Music's order", () => {
+    expect(boc.filters).toEqual(["songs", "videos", "albums", "community-playlists", "artists"]);
+    expect(daft.filters).toEqual([
+      "songs",
+      "videos",
+      "albums",
+      "featured-playlists",
+      "community-playlists",
+      "artists",
+    ]);
+  });
+});
+
+describe("resultsFrom, filtered", () => {
+  it.each([
+    ["songs", "songs", "Melissa Juice"],
+    ["videos", "videos", "Boards Of Canada Mix (Focus/ Driving)"],
+    ["albums", "albums", "Inferno"],
+    ["artists", "artists", "Boards of Canada"],
+    ["community-playlists", "community-playlists", "ALL OF BOARDS OF CANADA"],
+    ["featured-playlists", "featured-playlists", "Presenting Daft Punk"],
+  ])("reads the %s shelf", (fixture, filter, first) => {
+    const results = recorded(fixture, true);
+    expect(results.top).toBeNull();
+    expect(results.shelves.map((s) => s.filter)).toEqual([filter]);
+    expect(titles(results, filter)[0]).toBe(first);
+  });
+
+  it("has the duration and album a filtered song row carries", () => {
+    const songs = shelfOf(recorded("songs", true), "songs");
+    if (songs?.kind !== "tracks") throw new Error("no songs");
+    expect(songs.tracks[0]).toMatchObject({ durationMs: 93_000, album: expect.any(String) });
+  });
+});
+
+describe("resultsFrom, malformed", () => {
+  it("returns nothing for a response with no contents", () => {
+    expect(resultsFrom({})).toEqual({ top: null, shelves: [], filters: [] });
+    expect(resultsFrom({ contents: null })).toEqual({ top: null, shelves: [], filters: [] });
+  });
+
+  it("skips rows that are not list items, and keeps the rest", () => {
+    const results = resultsFrom({
       contents: [
         { type: "ItemSection", contents: [{ type: "Message" }] },
-        { type: "MusicShelf", contents: [song] },
+        { type: "MusicShelf", contents: [{ type: "MusicResponsiveListItem", item_type: "song", id: "a", title: "A" }] },
       ],
     });
-    expect(tracks.map((t) => t.id)).toEqual(["yt:SM4tQcUt_mQ"]);
-  });
-
-  it("returns nothing when the response carries no song shelf", () => {
-    expect(songsFrom({ contents: [{ type: "ItemSection", contents: [] }] })).toEqual([]);
-    expect(songsFrom({ contents: null })).toEqual([]);
-    expect(songsFrom({})).toEqual([]);
-  });
-
-  it("drops unplayable rows but keeps the rest of the shelf", () => {
-    const tracks = songsFrom({
-      contents: [{ type: "MusicShelf", contents: [song, { type: "Message" }, song] }],
-    });
-    expect(tracks).toHaveLength(2);
+    expect(titles(results, "songs")).toEqual(["A"]);
   });
 });

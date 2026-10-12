@@ -6,7 +6,7 @@ import { createPlayer, createYouTube } from "./client.ts";
 import { fetchSignatureTimestamp, getPlaybackTracking } from "./history.ts";
 import { getRadio, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
-import { searchSongs } from "./search.ts";
+import { searchMusic, searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -32,6 +32,25 @@ live("search against the real InnerTube", () => {
     expect(withArtist.length).toBeGreaterThan(tracks.length / 2);
     expect(withDuration.length).toBeGreaterThan(tracks.length / 2);
     expect(withArt.length).toBeGreaterThan(tracks.length / 2);
+  });
+
+  it("sorts an unfiltered search into kinds and offers its chips", { timeout: 30_000 }, async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const results = await searchMusic(youtube, "daft punk");
+    // The rows come mixed, one per section; if YouTube regroups them into
+    // shelves again, or youtubei.js renames a kind, this is where it shows.
+    const kinds = results.shelves.map((shelf) => shelf.filter);
+    expect(kinds).toEqual(expect.arrayContaining(["songs", "videos", "albums"]));
+    expect(results.filters).toEqual(expect.arrayContaining(["songs", "videos", "albums", "artists"]));
+    expect(results.top).not.toBeNull();
+  });
+
+  it("finds YouTube Music's own playlists apart from the community's", { timeout: 30_000 }, async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const featured = await searchMusic(youtube, "daft punk", "featured-playlists");
+    const [shelf] = featured.shelves;
+    expect(shelf?.filter).toBe("featured-playlists");
+    expect(shelf?.kind === "cards" && shelf.cards.length).toBeGreaterThan(0);
   });
 
   it("returns nothing for a blank query without calling out", async () => {

@@ -130,6 +130,54 @@ export const ArtistPage = z.object({
 });
 export type ArtistPage = z.infer<typeof ArtistPage>;
 
+/** What a YouTube Music search can be narrowed to, as its chips do. */
+export const SearchFilter = z.enum([
+  "songs",
+  "videos",
+  "albums",
+  "featured-playlists",
+  "community-playlists",
+  "artists",
+]);
+export type SearchFilter = z.infer<typeof SearchFilter>;
+
+/** One kind of result. Songs and videos play, the rest open a page. */
+export const SearchShelf = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("tracks"),
+    filter: z.enum(["songs", "videos"]),
+    tracks: z.array(Track),
+  }),
+  z.object({
+    kind: z.literal("cards"),
+    filter: z.enum(["albums", "featured-playlists", "community-playlists", "artists"]),
+    cards: z.array(BrowseCard),
+  }),
+]);
+export type SearchShelf = z.infer<typeof SearchShelf>;
+
+export const SearchResults = z.object({
+  /**
+   * YouTube Music's top result card: an artist, album, playlist, song or
+   * video, with the songs the card lists under it. Only an unfiltered search
+   * has one.
+   */
+  top: z
+    .object({
+      item: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("track"), track: Track }),
+        z.object({ kind: z.literal("card"), card: BrowseCard }),
+      ]),
+      tracks: z.array(Track),
+    })
+    .nullable(),
+  /** In the order YouTube ranked their best result. */
+  shelves: z.array(SearchShelf),
+  /** The chips YouTube offered for this query. Empty for a filtered search. */
+  filters: z.array(SearchFilter),
+});
+export type SearchResults = z.infer<typeof SearchResults>;
+
 export const AudioCodec = z.enum([
   "opus",
   "aac",

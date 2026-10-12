@@ -21,12 +21,12 @@ import { squareCrop, toThumbnails, type RawThumbnail } from "./thumbnails.ts";
  */
 
 /** Anything youtubei.js renders as text: a `Text` with runs, or a plain string. */
-interface RawText {
+export interface RawText {
   toString(): string;
   runs?: readonly { text?: unknown; endpoint?: RawEndpoint | null }[] | null;
 }
 
-interface RawEndpoint {
+export interface RawEndpoint {
   payload?: { browseId?: unknown; playlistId?: unknown; videoId?: unknown } | null;
 }
 
@@ -396,7 +396,7 @@ function browseId(endpoint: RawEndpoint | null | undefined): string | null {
 }
 
 /** An album's byline: each run that links to a channel is an artist. */
-function artistsFromRuns(raw: RawText | null | undefined): Artist[] {
+export function artistsFromRuns(raw: RawText | null | undefined): Artist[] {
   const runs = raw?.runs ?? [];
   const linked = runs
     .map((run) => ({ name: run.text, channel_id: browseId(run.endpoint) }))

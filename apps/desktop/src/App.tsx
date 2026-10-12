@@ -15,6 +15,7 @@ import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LocalView } from "./Local.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { ScrollParent } from "./scroll.ts";
+import { isEmpty, SearchChips, YouTubeResults } from "./Search.tsx";
 import { SettingsView } from "./Settings.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { TitleBar } from "./TitleBar.tsx";
@@ -517,19 +518,30 @@ function SearchResults(props: {
         {props.recent}
       </section>
     ) : (
-      <Empty title="Search" detail="Find songs on YouTube Music and in your local files." />
+      <Empty
+        title="Search"
+        detail="Find songs, videos, albums, playlists and artists on YouTube Music, and songs in your files."
+      />
     );
   }
   const shown = showAll ? local : local.slice(0, LOCAL_PREVIEW);
-  const nothing = local.length === 0 && youtube.tracks.length === 0;
+  // Local files belong with everything, not with one kind of YouTube result.
+  const withLocal = youtube.filter === null && local.length > 0;
+  const nothing = !withLocal && isEmpty(youtube.results);
   return (
     <>
-      {local.length > 0 && (
-        <section className="mb-4">
-          <div className="flex items-baseline justify-between px-3 pt-1">
-            <h2 className="mb-1 text-sm font-semibold">In your files</h2>
+      <SearchChips youtube={youtube} />
+      {withLocal && (
+        <section className="mb-6">
+          <div className="flex items-baseline justify-between px-3">
+            <h2 className="mb-2 text-xl font-semibold">In your files</h2>
             {local.length > LOCAL_PREVIEW && (
-              <Button variant="ghost" size="sm" onClick={() => setShowAll((all) => !all)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setShowAll((all) => !all)}
+              >
                 {showAll ? "Show fewer" : `Show all ${local.length}`}
               </Button>
             )}
@@ -548,20 +560,7 @@ function SearchResults(props: {
       ) : nothing && !youtube.loading ? (
         <Empty title="No matches" detail={`Nothing matches “${query}”.`} />
       ) : (
-        youtube.tracks.length > 0 && (
-          <section>
-            {local.length > 0 && <h2 className="mb-1 px-3 text-sm font-semibold">YouTube Music</h2>}
-            <TrackList
-              tracks={youtube.tracks}
-              currentId={actions.currentId}
-              playing={actions.playing}
-              onToggle={actions.onToggle}
-              // As in YouTube Music: a song from search starts its radio.
-              onPlay={(id) => actions.onPlay(youtube.tracks, id, { kind: "radio" })}
-              onOpen={actions.onOpen}
-            />
-          </section>
-        )
+        <YouTubeResults youtube={youtube} actions={actions} />
       )}
     </>
   );

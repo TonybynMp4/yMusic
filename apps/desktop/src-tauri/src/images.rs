@@ -141,12 +141,11 @@ impl Images {
     }
 }
 
-/// Whether an error answer may go away if asked again. A client error is
-/// definite (a missing WebP copy answers 404), except for a timeout or a rate limit.
+/// Whether an error answer may go away if asked again. Only "not there" is
+/// final (a missing WebP copy answers 404): the CDN may block a burst with
+/// other client errors, such as a 403, that clear on a later try.
 fn retryable(status: StatusCode) -> bool {
-    !status.is_client_error()
-        || status == StatusCode::REQUEST_TIMEOUT
-        || status == StatusCode::TOO_MANY_REQUESTS
+    status != StatusCode::NOT_FOUND && status != StatusCode::GONE
 }
 
 /// The remote URL, if the request names one on an allowed host.
@@ -493,10 +492,10 @@ mod tests {
 
     #[test]
     fn retries_only_answers_that_may_change() {
-        for code in [400, 403, 404, 410] {
+        for code in [404, 410] {
             assert!(!retryable(StatusCode::from_u16(code).unwrap()), "{code}");
         }
-        for code in [408, 429, 500, 502, 503] {
+        for code in [400, 403, 408, 429, 500, 502, 503] {
             assert!(retryable(StatusCode::from_u16(code).unwrap()), "{code}");
         }
     }

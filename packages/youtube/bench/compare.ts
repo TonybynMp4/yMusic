@@ -24,6 +24,9 @@ const after = loadResult(afterLabel, values.scenario as Scenario);
 if (before.recording !== after.recording) {
   console.warn(`different recordings: ${before.recording} and ${after.recording}\n`);
 }
+if ((before.scenario ?? "quick") !== (after.scenario ?? "quick")) {
+  console.warn(`different scenarios: ${before.scenario ?? "quick"} and ${after.scenario ?? "quick"}\n`);
+}
 
 console.log(
   `${before.label} (${before.commit}) against ${after.label} (${after.commit}), medians in MB\n`,
@@ -40,16 +43,19 @@ for (const a of after.phases) {
   if (a.got !== b.got) console.log(`|  | got: ${b.got} → ${a.got} | | | |`);
 }
 
-const last = (r: typeof before) => new Map(r.phases[r.phases.length - 1]!.types);
-const typesBefore = last(before);
-const typesAfter = last(after);
+// The last phase both ran, so the counts come from the same point of the session.
+const shared = after.phases.findLast((a) => before.phases.some((b) => b.phase === a.phase));
+const typesAt = (r: typeof before) =>
+  new Map(r.phases.find((p) => p.phase === shared?.phase)?.types ?? []);
+const typesBefore = typesAt(before);
+const typesAfter = typesAt(after);
 const moved = [...new Set([...typesBefore.keys(), ...typesAfter.keys()])]
   .map((type) => [type, (typesAfter.get(type) ?? 0) - (typesBefore.get(type) ?? 0)] as const)
   .filter(([, delta]) => delta !== 0)
   .sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))
   .slice(0, 10);
 if (moved.length > 0) {
-  console.log("\nLive objects at the end, largest changes in count:\n");
+  console.log(`\nLive objects after ${shared!.phase}, largest changes in count:\n`);
   for (const [type, delta] of moved) console.log(`- ${type}: ${delta > 0 ? "+" : ""}${delta}`);
 }
 

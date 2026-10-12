@@ -88,14 +88,17 @@ export function useAccount(): AccountState {
     const rotate = () => {
       void accountRotate()
         .then(async (cookie) => {
-          if (cookie !== null) await adopt(cookie);
+          if (cookie === null) return;
+          // The same account, so neither a new client nor a new account check.
+          current.current = cookie;
+          await engine.renewCookie(cookie);
         })
         .catch(() => {});
     };
     rotate();
     const timer = setInterval(rotate, ROTATE_EVERY);
     return () => clearInterval(timer);
-  }, [signedIn, adopt]);
+  }, [signedIn]);
 
   useEffect(() => {
     let cancelled = false;

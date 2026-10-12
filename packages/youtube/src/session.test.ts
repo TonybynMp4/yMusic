@@ -6,23 +6,19 @@ function answering(loggedIn: string): typeof fetch {
   const body = JSON.stringify({
     responseContext: {
       serviceTrackingParams: [
-        {
-          service: "GFEEDBACK",
-          params: [{ key: "logged_in", value: loggedIn }],
-        },
+        { service: "GFEEDBACK", params: [{ key: "logged_in", value: loggedIn }] },
       ],
     },
   });
   return async () => new Response(body, { headers: { "content-type": "application/json" } });
 }
 
+const BROWSE = "https://music.youtube.com/youtubei/v1/browse";
+
 describe("watchSession", () => {
   it("reports an answer YouTube gave as if nobody were signed in", async () => {
     const onSignedOut = vi.fn<() => void>();
-    const response = await watchSession(
-      answering("0"),
-      onSignedOut,
-    )("https://music.youtube.com/youtubei/v1/browse");
+    const response = await watchSession(answering("0"), onSignedOut)(BROWSE);
     // The caller still gets the whole body: the check reads a clone.
     expect(await response.json()).toHaveProperty("responseContext");
     await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalledOnce());
@@ -30,12 +26,7 @@ describe("watchSession", () => {
 
   it("stays quiet while the session holds", async () => {
     const onSignedOut = vi.fn<() => void>();
-    await (
-      await watchSession(
-        answering("1"),
-        onSignedOut,
-      )("https://music.youtube.com/youtubei/v1/browse")
-    ).text();
+    await (await watchSession(answering("1"), onSignedOut)(BROWSE)).text();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onSignedOut).not.toHaveBeenCalled();
   });

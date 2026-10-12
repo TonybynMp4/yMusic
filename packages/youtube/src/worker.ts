@@ -40,6 +40,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
       if (hasBotGuard) engine = new YouTubeEngine(fetch, botguard, sessionExpired);
     },
     setCookie: (cookie) => engine.setCookie(cookie),
+    renewCookie: (cookie) => engine.renewCookie(cookie),
     account: () => engine.account(),
     search: (query, options) => engine.search(query, options),
     radio: (videoId) => engine.radio(videoId),

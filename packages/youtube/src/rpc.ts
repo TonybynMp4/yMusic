@@ -30,6 +30,7 @@ export interface EngineWorkerApi {
    */
   connect(host: Remote<EngineHost & ProxyMarked>, hasBotGuard: boolean): void;
   setCookie: YouTubeEngine["setCookie"];
+  renewCookie: YouTubeEngine["renewCookie"];
   account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];
   radio: YouTubeEngine["radio"];

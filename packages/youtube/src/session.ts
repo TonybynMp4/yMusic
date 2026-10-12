@@ -14,15 +14,16 @@ import type { FetchLike } from "./client.ts";
  * youtubei.js fetches `/config` when it starts, and that answer always says
  * `logged_in` 0.
  */
-export function watchSession(fetch: FetchLike, onSignedOut: (url: string) => void): FetchLike {
+export function watchSession(fetch: FetchLike, onSignedOut: (path: string) => void): FetchLike {
   return async (input, init) => {
     const response = await fetch(input, init);
-    if (response.ok && WATCHED.test(new URL(urlOf(input), "https://music.youtube.com").pathname)) {
+    const path = new URL(urlOf(input), "https://music.youtube.com").pathname;
+    if (response.ok && WATCHED.test(path)) {
       void response
         .clone()
         .text()
         .then((body) => {
-          if (SIGNED_OUT.test(body)) onSignedOut(urlOf(input));
+          if (SIGNED_OUT.test(body)) onSignedOut(path);
         })
         .catch(() => {});
     }

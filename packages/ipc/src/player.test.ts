@@ -23,6 +23,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
 const { MpvPlaybackEngine } = await import("./player.ts");
 
+let engine: InstanceType<typeof MpvPlaybackEngine>;
 let events: PlaybackEvent[];
 
 function push(message: unknown): void {
@@ -41,7 +42,8 @@ beforeEach(async () => {
   tauri.channel = null;
   tauri.position.mockReset();
   events = [];
-  new MpvPlaybackEngine().subscribe((event) => events.push(event));
+  engine = new MpvPlaybackEngine();
+  engine.subscribe((event) => events.push(event));
   // The channel opens behind a dynamic import.
   while (!tauri.channel) await new Promise((resolve) => setTimeout(resolve, 0));
   vi.useFakeTimers();
@@ -128,5 +130,45 @@ describe("MpvPlaybackEngine position polling", () => {
     push({ type: "position", positionMs: 42_000, durationMs: 200_000 });
     expect(positions()).toEqual([42_000]);
     expect(tauri.position).not.toHaveBeenCalled();
+  });
+
+  it("drops a reply asked for before a seek", async () => {
+    let answer!: (value: unknown) => void;
+    tauri.position
+      .mockReturnValueOnce(reply(10_000))
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      .mockReturnValue(reply(60_100));
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_020);
+    await engine.seek(60_000);
+    answer({ positionMs: 11_020, durationMs: 200_000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(positions()).toEqual([10_000]);
+  });
+
+  it("waits for playback to restart before asking again after a seek", async () => {
+    tauri.position.mockReturnValueOnce(reply(10_000)).mockReturnValue(reply(60_100));
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    await engine.seek(60_000);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(tauri.position).toHaveBeenCalledTimes(1);
+
+    push({ type: "position", positionMs: 60_000, durationMs: 200_000 });
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(positions()).toEqual([10_000, 60_000, 60_100]);
+  });
+
+  it("asks again when a seek fails", async () => {
+    tauri.position.mockReturnValueOnce(reply(10_000)).mockReturnValue(reply(11_000));
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("seek failed"));
+    await expect(engine.seek(60_000)).rejects.toThrow("seek failed");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(positions()).toEqual([10_000, 11_000]);
   });
 });

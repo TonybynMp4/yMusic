@@ -78,6 +78,9 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
   #playing = false;
+  #seeking = false;
+  // Bumped whenever a reply in flight would be stale, so it gets dropped.
+  #asked = 0;
   #poll: ReturnType<typeof setTimeout> | null = null;
 
   async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
@@ -114,8 +117,22 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     return invokeVoid("player_pause");
   }
 
-  seek(positionMs: number): Promise<void> {
-    return invokeVoid("player_seek", { positionMs: Math.max(0, Math.round(positionMs)) });
+  /**
+   * mpv only moves `time-pos` once the seek lands, so a reply asked for before
+   * then still holds the old position and would pull the bar back for a
+   * second. Polling waits for the status the core sends when playback
+   * restarts, which comes with the new position.
+   */
+  async seek(positionMs: number): Promise<void> {
+    this.#seeking = true;
+    this.#stopPolling();
+    try {
+      await invokeVoid("player_seek", { positionMs: Math.max(0, Math.round(positionMs)) });
+    } catch (error) {
+      this.#seeking = false;
+      if (this.#playing) this.#pollIn(0);
+      throw error;
+    }
   }
 
   setVolume(volume: number): Promise<void> {
@@ -151,6 +168,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
       // A failed stream gets an error and no status after it, so the error
       // has to stop the polling too.
       if (event.type === "status" || event.type === "error") {
+        this.#seeking = false;
         this.#playing = event.type === "status" && event.status === "playing";
         if (this.#playing) this.#pollIn(0);
         else this.#stopPolling();
@@ -178,10 +196,12 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #stopPolling(): void {
     if (this.#poll !== null) clearTimeout(this.#poll);
     this.#poll = null;
+    this.#asked++;
   }
 
   async #askPosition(): Promise<void> {
     this.#poll = null;
+    const asked = this.#asked;
     let position: z.infer<typeof PlayerPosition> = null;
     try {
       position = await invokeParsed("player_position", PlayerPosition);
@@ -189,7 +209,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
       console.error("could not read the playback position", error);
     }
     // Nothing loaded: the next "playing" status starts the polling again.
-    if (!this.#playing || !position) return;
+    if (!this.#playing || this.#seeking || asked !== this.#asked || !position) return;
     this.#deliver({ type: "position", ...position });
     // Just after the next whole second, so the time label ticks on time.
     this.#pollIn(1000 - (position.positionMs % 1000) + 20);

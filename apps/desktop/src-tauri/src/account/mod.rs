@@ -91,11 +91,15 @@ pub struct Account {
 }
 
 /// What is sealed on disk. `browser` is the id `import::browsers` gave the
-/// profile the session came from, and None for the sign-in window.
+/// profile the session came from, and None for the sign-in window. `device`
+/// is Google's own cookies from the sign-in window, kept for the next one,
+/// and so outlives the session expiring but not signing out.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Session {
     pub cookie: String,
     pub browser: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub device: Vec<sign_in::DeviceCookie>,
 }
 
 impl Session {
@@ -107,6 +111,7 @@ impl Session {
             return Ok(Self {
                 cookie: plaintext,
                 browser: None,
+                device: Vec::new(),
             });
         }
         serde_json::from_str(&plaintext).map_err(|_| "the saved session is malformed".into())
@@ -261,6 +266,7 @@ mod tests {
         Session {
             cookie: cookie.into(),
             browser: None,
+            device: Vec::new(),
         }
     }
 
@@ -278,6 +284,7 @@ mod tests {
         let session = Session {
             cookie: "SAPISID=abc/def; __Secure-3PAPISID=abc/def".into(),
             browser: Some("/home/me/.mozilla/firefox/x.default/cookies.sqlite".into()),
+            device: Vec::new(),
         };
 
         Account::open(path.clone(), keys.clone()).save(session.clone());
@@ -301,7 +308,8 @@ mod tests {
             session,
             Some(Session {
                 cookie: "SAPISID=x".into(),
-                browser: None
+                browser: None,
+                device: Vec::new(),
             })
         );
     }

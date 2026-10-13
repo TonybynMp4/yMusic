@@ -37,8 +37,12 @@ const CAP_BYTES: u64 = 100 * 1024 * 1024;
 const TRIM_TO_BYTES: u64 = 90 * 1024 * 1024;
 /// How much is written between two checks of the cache's size.
 const CHECK_EVERY_BYTES: u64 = 4 * 1024 * 1024;
-/// Above this width Google's WebP is larger than its JPEG at the same quality.
-const WEBP_MAX_WIDTH: u32 = 800;
+/// WebP quality for Google's image hosts. Rows and cards draw images up to
+/// `SMALL_WIDTH` wide at a fraction of their size, where the lower quality
+/// does not show. Below 80, full-size covers lose fine detail.
+const SMALL_WIDTH: u32 = 226;
+const SMALL_QUALITY: u32 = 70;
+const QUALITY: u32 = 80;
 
 #[derive(Clone)]
 pub struct Images {
@@ -223,11 +227,12 @@ fn percent_decode(input: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-/// The same image as WebP, when the host can send it smaller than the URL asked for.
+/// The same image as WebP.
 ///
 /// Google's image hosts take their options after the last `=`, separated by
-/// `-`: `rj` asks for JPEG and `rw` for WebP. YouTube's video thumbnails have
-/// a WebP copy under `vi_webp`, unless the URL is signed with a query.
+/// `-`: `rj` asks for JPEG, `rw` for WebP and `l90` for quality 90. The format
+/// and quality options are replaced, the rest kept. YouTube's video thumbnails
+/// have a WebP copy under `vi_webp`, unless the URL is signed with a query.
 fn as_webp(url: &str) -> Option<String> {
     if let Some(rest) = url.strip_prefix("https://i.ytimg.com/vi/") {
         let (id, name) = rest.split_once('/')?;
@@ -241,21 +246,31 @@ fn as_webp(url: &str) -> Option<String> {
     if base.contains('?') || options.contains(['/', '?']) {
         return None;
     }
-    let options: Vec<&str> = options.split('-').collect();
-    let width = options.iter().find_map(|option| {
+    let width = options.split('-').find_map(|option| {
         let number = option
             .strip_prefix('w')
             .or_else(|| option.strip_prefix('s'))?;
         number.parse::<u32>().ok()
-    })?;
-    if width > WEBP_MAX_WIDTH || !options.contains(&"rj") {
-        return None;
-    }
-    let options: Vec<&str> = options
-        .into_iter()
-        .map(|option| if option == "rj" { "rw" } else { option })
+    });
+    let quality = match width {
+        Some(width) if width <= SMALL_WIDTH => SMALL_QUALITY,
+        _ => QUALITY,
+    };
+    let is_quality = |option: &str| {
+        option
+            .strip_prefix('l')
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|byte| byte.is_ascii_digit()))
+    };
+    let mut kept: Vec<String> = options
+        .split('-')
+        .filter(|option| {
+            !option.is_empty() && !matches!(*option, "rj" | "rp" | "rw") && !is_quality(option)
+        })
+        .map(str::to_owned)
         .collect();
-    Some(format!("{base}={}", options.join("-")))
+    kept.push(format!("l{quality}"));
+    kept.push("rw".to_owned());
+    Some(format!("{base}={}", kept.join("-")))
 }
 
 fn cache_name(url: &str) -> String {
@@ -407,22 +422,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn asks_google_for_webp_up_to_the_width_where_it_is_smaller() {
+    fn asks_google_for_webp_at_a_quality_for_the_width() {
         assert_eq!(
             as_webp("https://lh3.googleusercontent.com/abc=w120-h120-l90-rj").as_deref(),
-            Some("https://lh3.googleusercontent.com/abc=w120-h120-l90-rw")
+            Some("https://lh3.googleusercontent.com/abc=w120-h120-l70-rw")
         );
         assert_eq!(
             as_webp("https://yt3.ggpht.com/abc=s800-c-k-rj").as_deref(),
-            Some("https://yt3.ggpht.com/abc=s800-c-k-rw")
+            Some("https://yt3.ggpht.com/abc=s800-c-k-l80-rw")
         );
         assert_eq!(
-            as_webp("https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj"),
-            None
+            as_webp("https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj").as_deref(),
+            Some("https://lh3.googleusercontent.com/abc=w1200-h1200-l80-rw")
         );
         assert_eq!(
-            as_webp("https://lh3.googleusercontent.com/abc=w120-h120"),
-            None
+            as_webp("https://lh3.googleusercontent.com/abc=w120-h120").as_deref(),
+            Some("https://lh3.googleusercontent.com/abc=w120-h120-l70-rw")
         );
         assert_eq!(as_webp("https://lh3.googleusercontent.com/abc"), None);
     }

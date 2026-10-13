@@ -4,7 +4,7 @@
 //! macros beside each function, and those collide with the crate root once the
 //! functions are public enough for `ymusic_commands!` to name them.
 
-use crate::account::{import, sign_in, Account};
+use crate::account::{import, rotate, sign_in, Account, Session};
 use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
@@ -219,7 +219,10 @@ pub async fn account_sign_in<R: Runtime>(
 ) -> Result<Option<String>, String> {
     let cookie = sign_in::sign_in(&app).await?;
     if let Some(cookie) = &cookie {
-        account.save(cookie.clone());
+        account.save(Session {
+            cookie: cookie.clone(),
+            browser: None,
+        });
     }
     Ok(cookie)
 }
@@ -235,12 +238,81 @@ pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
 /// Takes the YouTube session from a browser profile listed by `account_browsers`.
 #[tauri::command]
 pub async fn account_import(account: State<'_, Account>, id: String) -> Result<String, String> {
-    // Reading the keyring can wait on an unlock prompt.
-    let cookie = tauri::async_runtime::spawn_blocking(move || import::import(&id))
-        .await
-        .map_err(|error| error.to_string())??;
-    account.save(cookie.clone());
+    let cookie = import_from(id.clone()).await?;
+    account.save(Session {
+        cookie: cookie.clone(),
+        browser: Some(id),
+    });
     Ok(cookie)
+}
+
+/// A fresher copy of the session, once YouTube has stopped accepting `stale`,
+/// the cookie the engine had. A rotation can land while a request with the
+/// old copy is out, so a session saved since is the answer. Otherwise an
+/// imported session is read again from its browser, which rotates the session
+/// it shares with us, so its copy is the live one, and a sign-in window
+/// session is rotated here. None when nothing gives anything newer.
+#[tauri::command]
+pub async fn account_refresh(
+    account: State<'_, Account>,
+    stale: String,
+) -> Result<Option<String>, String> {
+    let Some(Session { cookie, browser }) = account.session() else {
+        return Ok(None);
+    };
+    if cookie != stale {
+        return Ok(Some(cookie));
+    }
+    let Some(id) = browser else {
+        return rotated(&account, &stale).await;
+    };
+    let cookie = import_from(id.clone()).await?;
+    let session = Session {
+        cookie: cookie.clone(),
+        browser: Some(id),
+    };
+    // Reading the browser can wait on a keyring prompt, long enough to sign
+    // out or in again meanwhile.
+    if cookie == stale || !account.replace(&stale, session) {
+        return Ok(None);
+    }
+    Ok(Some(cookie))
+}
+
+/// Rotates a sign-in window session, which the app has to keep alive itself.
+/// None for an imported session, which its browser keeps alive, or when the
+/// rotation did not take.
+#[tauri::command]
+pub async fn account_rotate(account: State<'_, Account>) -> Result<Option<String>, String> {
+    match account.session() {
+        Some(Session {
+            cookie,
+            browser: None,
+        }) => rotated(&account, &cookie).await,
+        _ => Ok(None),
+    }
+}
+
+async fn rotated(account: &Account, cookie: &str) -> Result<Option<String>, String> {
+    let Some(fresh) = rotate::rotate(cookie).await? else {
+        return Ok(None);
+    };
+    let session = Session {
+        cookie: fresh.clone(),
+        browser: None,
+    };
+    // Signed out or signed in again while the request was out.
+    if !account.replace(cookie, session) {
+        return Ok(None);
+    }
+    Ok(Some(fresh))
+}
+
+async fn import_from(id: String) -> Result<String, String> {
+    // Reading the keyring can wait on an unlock prompt.
+    tauri::async_runtime::spawn_blocking(move || import::import(&id))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

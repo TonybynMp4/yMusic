@@ -32,6 +32,23 @@ export async function accountImport(id: string): Promise<string> {
   return invokeParsed("account_import", z.string(), { id });
 }
 
+/**
+ * A fresher copy of the session, for when YouTube stops accepting `stale`: one
+ * saved since, read again from its browser if imported, or rotated if not.
+ * Null when none of those gives anything newer.
+ */
+export async function accountRefresh(stale: string): Promise<string | null> {
+  return invokeParsed("account_refresh", Cookie, { stale });
+}
+
+/**
+ * Rotates a session from the sign-in window, which nothing else keeps alive.
+ * Null for an imported session, or when the rotation did not take.
+ */
+export async function accountRotate(): Promise<string | null> {
+  return invokeParsed("account_rotate", Cookie);
+}
+
 export async function accountSignOut(): Promise<void> {
   return invokeVoid("account_sign_out");
 }

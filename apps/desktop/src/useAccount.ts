@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { accountCookie, accountImport, accountSignIn, accountSignOut } from "@ymusic/ipc";
+import {
+  accountCookie,
+  accountImport,
+  accountRefresh,
+  accountRotate,
+  accountSignIn,
+  accountSignOut,
+} from "@ymusic/ipc";
 import type { AccountSummary } from "@ymusic/youtube";
 
 import { engine, onSessionExpired } from "./engine.ts";
@@ -28,11 +35,14 @@ export function useAccount(): AccountState {
   // the expiry is read from a copy of a response and can land before the
   // answer to `engine.account()` does.
   const expiries = useRef(0);
+  // The cookie the engine has, which is the one an expiry is about.
+  const current = useRef<string | null>(null);
 
   const adopt = useCallback(async (cookie: string | null) => {
     const expiry = expiries.current;
     let summary: AccountSummary | null;
     try {
+      current.current = cookie;
       await engine.setCookie(cookie);
       summary = cookie === null ? null : await engine.account();
     } catch (e) {
@@ -44,17 +54,51 @@ export function useAccount(): AccountState {
     setError(null);
   }, []);
 
-  // The saved session stays on disk: signing in again replaces it, and a
-  // session imported from a browser can come back to life there.
+  // A fresher copy is looked for (see `accountRefresh`). Without one, the
+  // saved session stays on disk until signing in again replaces it. Signed
+  // out in between, so the library reloads either way.
   useEffect(
     () =>
       onSessionExpired(() => {
+        const stale = current.current;
         expiries.current += 1;
         setAccount(null);
-        setError("Your YouTube session has expired. Sign in again");
+        setBusy(true);
+        void (async () => {
+          try {
+            const cookie = stale === null ? null : await accountRefresh(stale);
+            if (cookie === null) throw new Error("no newer session to read");
+            await adopt(cookie);
+          } catch {
+            setError("Your YouTube session has expired. Sign in again");
+          } finally {
+            setBusy(false);
+          }
+        })();
       }),
-    [],
+    [adopt],
   );
+
+  // A session from the sign-in window has no browser rotating it, so it is
+  // rotated here while signed in, as a browser would, starting at launch since
+  // a saved session can be days old. An imported one is left to its browser.
+  const signedIn = account !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const rotate = () => {
+      void accountRotate()
+        .then(async (cookie) => {
+          if (cookie === null) return;
+          // The same account, so neither a new client nor a new account check.
+          current.current = cookie;
+          await engine.renewCookie(cookie);
+        })
+        .catch(() => {});
+    };
+    rotate();
+    const timer = setInterval(rotate, ROTATE_EVERY);
+    return () => clearInterval(timer);
+  }, [signedIn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +164,9 @@ export function useAccount(): AccountState {
 
   return { account, busy, error, signIn, importFrom, signOut };
 }
+
+/** Browsers rotate about every ten minutes; Google refuses more than about once a minute. */
+const ROTATE_EVERY = 10 * 60 * 1000;
 
 function describe(prefix: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);

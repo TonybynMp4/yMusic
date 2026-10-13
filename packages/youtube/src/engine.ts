@@ -93,6 +93,8 @@ export class YouTubeEngine {
   readonly #continuations = new Map<string, PlaylistMore>();
   readonly #plays = new Map<string, Play>();
   #handles = 0;
+  /** The cookie the signed-in browsing client sends, which `renewCookie` updates. */
+  #sending: { cookie: string } | null = null;
 
   /**
    * Without `botguard` there is no fallback, and resolving uses `VISIONOS` only.
@@ -115,6 +117,18 @@ export class YouTubeEngine {
     if (cookie === this.#cookie) return;
     this.#cookie = cookie;
     this.#browse = null;
+    this.#sending = null;
+  }
+
+  /**
+   * Swaps in a rotated copy of the session signed in with: the same account,
+   * so the browsing client is kept and only the cookie it sends changes.
+   * Ignored while signed out.
+   */
+  renewCookie(cookie: string): void {
+    if (this.#cookie === null) return;
+    this.#cookie = cookie;
+    if (this.#sending) this.#sending.cookie = cookie;
   }
 
   /** None when signed out. Rejects when the saved session has expired. */
@@ -356,13 +370,26 @@ export class YouTubeEngine {
 
   #createBrowseClient(cookie: string | null): Promise<Innertube> {
     if (cookie === null) return createYouTube({ fetch: this.#fetch });
-    const fetch = watchSession(this.#fetch, () => this.#expired(cookie));
+    // Each request carries the client's cookie as it is now: a rotation
+    // changes it under a client built with an older copy.
+    const sending = { cookie };
+    this.#sending = sending;
+    const fetch: FetchLike = (input, init) => {
+      const sent = sending.cookie;
+      const headers = new Headers(init?.headers);
+      if (headers.has("cookie")) headers.set("cookie", sent);
+      return watchSession(this.#fetch, (path) => this.#expired(sent, path))(input, {
+        ...init,
+        headers,
+      });
+    };
     return createYouTube({ fetch, cookie });
   }
 
-  /** Only for the cookie YouTube refused, not one signed in since. */
-  #expired(cookie: string): void {
+  /** Only for the cookie YouTube refused, not one rotated or signed in since. */
+  #expired(cookie: string, path: string): void {
     if (cookie !== this.#cookie) return;
+    console.warn(`YouTube answered ${path} as signed out`);
     this.setCookie(null);
     this.#onSessionExpired();
   }

@@ -9,16 +9,21 @@ import type { FetchLike } from "./client.ts";
  * was and the signed-out version of a playlist, music videos where the songs
  * were. Every InnerTube answer says which it was in its `responseContext`, so
  * the body is read on the side, from a clone, and never holds up the caller.
+ *
+ * Only pages are checked. Some calls answer signed out whatever the session:
+ * youtubei.js fetches `/config` when it starts, and that answer always says
+ * `logged_in` 0.
  */
-export function watchSession(fetch: FetchLike, onSignedOut: () => void): FetchLike {
+export function watchSession(fetch: FetchLike, onSignedOut: (path: string) => void): FetchLike {
   return async (input, init) => {
     const response = await fetch(input, init);
-    if (response.ok) {
+    const path = new URL(urlOf(input), "https://music.youtube.com").pathname;
+    if (response.ok && WATCHED.test(path)) {
       void response
         .clone()
         .text()
         .then((body) => {
-          if (SIGNED_OUT.test(body)) onSignedOut();
+          if (SIGNED_OUT.test(body)) onSignedOut(path);
         })
         .catch(() => {});
     }
@@ -26,4 +31,10 @@ export function watchSession(fetch: FetchLike, onSignedOut: () => void): FetchLi
   };
 }
 
+function urlOf(input: Parameters<FetchLike>[0]): string {
+  if (typeof input === "string") return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
+const WATCHED = /^\/youtubei\/v1\/(browse|next)$/;
 const SIGNED_OUT = /"key":\s*"logged_in",\s*"value":\s*"0"/;

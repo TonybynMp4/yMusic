@@ -13,10 +13,12 @@ function answering(loggedIn: string): typeof fetch {
   return async () => new Response(body, { headers: { "content-type": "application/json" } });
 }
 
+const BROWSE = "https://music.youtube.com/youtubei/v1/browse";
+
 describe("watchSession", () => {
   it("reports an answer YouTube gave as if nobody were signed in", async () => {
     const onSignedOut = vi.fn<() => void>();
-    const response = await watchSession(answering("0"), onSignedOut)("https://music.youtube.com");
+    const response = await watchSession(answering("0"), onSignedOut)(BROWSE);
     // The caller still gets the whole body: the check reads a clone.
     expect(await response.json()).toHaveProperty("responseContext");
     await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalledOnce());
@@ -24,7 +26,15 @@ describe("watchSession", () => {
 
   it("stays quiet while the session holds", async () => {
     const onSignedOut = vi.fn<() => void>();
-    await (await watchSession(answering("1"), onSignedOut)("https://music.youtube.com")).text();
+    await (await watchSession(answering("1"), onSignedOut)(BROWSE)).text();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
+  it("ignores calls that answer signed out whatever the session", async () => {
+    const onSignedOut = vi.fn<() => void>();
+    const url = "https://music.youtube.com/youtubei/v1/config?prettyPrint=false";
+    await (await watchSession(answering("0"), onSignedOut)(url)).text();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onSignedOut).not.toHaveBeenCalled();
   });

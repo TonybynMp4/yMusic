@@ -39,6 +39,7 @@ export function useWatchHistory(
   status: PlaybackStatus,
   position: PositionStore,
   paused: boolean,
+  playlistOf: (id: TrackId) => string | null,
 ): void {
   const play = useRef<Play | null>(null);
   const playing = useRef(false);
@@ -86,7 +87,7 @@ export function useWatchHistory(
     if (status === "playing" && play.current === null && !paused) {
       play.current = {
         trackId,
-        handle: youtube.played(videoId).catch((error: unknown) => {
+        handle: youtube.played(videoId, playlistOf(trackId)).catch((error: unknown) => {
           logFailure(error);
           return null;
         }),
@@ -102,7 +103,7 @@ export function useWatchHistory(
       current.listened.pause();
       report(current, false);
     }
-  }, [trackId, status, paused, report, finish]);
+  }, [trackId, status, paused, report, finish, playlistOf]);
 
   useEffect(
     () =>

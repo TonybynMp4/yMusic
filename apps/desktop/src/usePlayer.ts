@@ -126,7 +126,12 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
   };
-  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
+  /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
+  const playlistOf = useCallback((id: TrackId) => {
+    const from = source.current;
+    return from?.ids.has(id) ? from.playlistId : null;
+  }, []);
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory, playlistOf);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -477,8 +482,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     const videoId = videoIdFromTrackId(trackId);
     if (videoId === null) return;
     sharedId.current = trackId;
-    const from = source.current;
-    const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
+    const playlistId = playlistOf(trackId);
     const asked = now();
     void youtube
       .shareQueue(videoId, playlistId)
@@ -494,7 +498,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         }
       })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId, learn, now, account]);
+  }, [playing, trackId, learn, now, account, playlistOf]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.

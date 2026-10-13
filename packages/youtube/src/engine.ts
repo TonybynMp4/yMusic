@@ -24,6 +24,7 @@ import {
   getLibraryPlaylists,
   getPlaylistTargets,
   openPlaylist,
+  playlistIdFromBrowseId,
   type NewPlaylist,
   type PlaylistMore,
   type PlaylistTarget,
@@ -209,14 +210,16 @@ export class YouTubeEngine {
    * history. Returns a handle for the watch-time reports that follow, or null
    * when signed out or YouTube gave nothing to report to.
    */
-  async played(videoId: VideoId): Promise<string | null> {
+  async played(videoId: VideoId, playlistId: string | null = null): Promise<string | null> {
     if (this.#cookie === null) return null;
     const player = (await this.#playerClient()).session.player;
     if (!player) throw new Error("the player script is not loaded");
+    const list = playlistId ? playlistIdFromBrowseId(playlistId) : null;
     const tracking = await getPlaybackTracking(
       await this.#browseClient(),
       videoId,
       player.signature_timestamp,
+      list,
     );
     if (tracking === null) return null;
     const play: Play = {
@@ -224,6 +227,7 @@ export class YouTubeEngine {
       client: { name: Constants.CLIENTS.YTMUSIC.NAME, version: Constants.CLIENTS.YTMUSIC.VERSION },
       cpn: newCpn(),
       startedAt: Date.now(),
+      playlistId: list,
     };
     await this.#stats(playbackPing(play, Date.now()));
     const handle = String(++this.#handles);

@@ -9,6 +9,7 @@
 //! Only Google's image hosts are fetched: the scheme is not a general proxy.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
@@ -140,16 +141,42 @@ fn status(code: StatusCode) -> Response<Vec<u8>> {
 }
 
 /// Written to a temporary name and renamed, so a crash mid-write leaves no half image.
+/// Each write gets its own temporary name: the webview can ask for the same image
+/// again while the first download is still being written, and two writers
+/// sharing one name would see the second rename fail.
 fn write_cache(dir: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    static WRITES: AtomicU64 = AtomicU64::new(0);
     std::fs::create_dir_all(dir)?;
-    let partial = path.with_extension("part");
-    std::fs::write(&partial, bytes)?;
-    std::fs::rename(partial, path)
+    let partial = path.with_extension(format!("{}.part", WRITES.fetch_add(1, Ordering::Relaxed)));
+    let written = std::fs::write(&partial, bytes).and_then(|()| std::fs::rename(&partial, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    written
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concurrent_writes_of_one_image_all_succeed() {
+        let dir = std::env::temp_dir().join(format!("ymusic-images-race-{}", std::process::id()));
+        let path = dir.join(cache_name("https://lh3.googleusercontent.com/abc"));
+        let writers: Vec<_> = (0..8)
+            .map(|_| {
+                let (dir, path) = (dir.clone(), path.clone());
+                std::thread::spawn(move || {
+                    (0..50).all(|_| write_cache(&dir, &path, &[0xFF, 0xD8, 0xFF, 0xE0]).is_ok())
+                })
+            })
+            .collect();
+        let all_ok = writers.into_iter().all(|writer| writer.join().unwrap());
+        let leftovers = std::fs::read_dir(&dir).unwrap().count();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(all_ok);
+        assert_eq!(leftovers, 1, "only the image itself, no temporary files");
+    }
 
     fn request(uri: &str) -> Request<Vec<u8>> {
         Request::builder()

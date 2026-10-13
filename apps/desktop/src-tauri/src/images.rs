@@ -6,10 +6,9 @@
 //! through one pooled client, is retried with a backoff, and is cached by URL,
 //! so a second visit draws from disk.
 //!
-//! Images are asked for as WebP where Google's hosts can send it at a smaller
-//! size than the JPEG, and the cache is capped at `CAP_BYTES`, least recently
-//! drawn first. Files are named after the URL the page asked for, so a JPEG
-//! cached before still answers it.
+//! Images are asked for as WebP, and the cache is capped at `CAP_BYTES`, least
+//! recently drawn first. Files are named after the URL the page asked for, so a
+//! JPEG cached before still answers it.
 //!
 //! Only Google's image hosts are fetched: the scheme is not a general proxy.
 

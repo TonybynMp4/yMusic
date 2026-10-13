@@ -24,12 +24,14 @@ export type EngineClient = Remote<Omit<EngineWorkerApi, "connect">>;
  * Wraps a worker running `exposeEngine()`, serving its network through `fetch`
  * and, when given one, BotGuard through `botguard`. Comlink delivers messages
  * in order, so the `connect` sent here arrives before any call the caller
- * makes with the returned client.
+ * makes with the returned client. `onSessionExpired` hears when YouTube stops
+ * accepting the saved session, which the engine has already dropped by then.
  */
 export function connectEngine(
   worker: Endpoint,
   fetch: FetchLike,
   botguard?: BotGuardVm,
+  onSessionExpired: () => void = () => {},
 ): EngineClient {
   const remote = wrap<EngineWorkerApi>(worker);
   const host: EngineHost = {
@@ -40,6 +42,7 @@ export function connectEngine(
     botguardLoad: (challenge) => withBotGuard().load(challenge),
     botguardCreateMinter: (integrityToken) => withBotGuard().createMinter(integrityToken),
     botguardMint: (binding) => withBotGuard().mint(binding),
+    sessionExpired: () => onSessionExpired(),
   };
   const withBotGuard = (): BotGuardVm => {
     if (!botguard) throw new Error("this engine host has no BotGuard");

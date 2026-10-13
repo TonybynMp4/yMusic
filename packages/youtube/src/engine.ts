@@ -41,6 +41,7 @@ import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchSongs } from "./search.ts";
+import { watchSession } from "./session.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
 /**
@@ -87,15 +88,21 @@ export class YouTubeEngine {
   #anonymous: Promise<Innertube> | null = null;
   #player: Promise<Innertube> | null = null;
   readonly #minter: PoTokenMinter | null;
+  readonly #onSessionExpired: () => void;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
   readonly #continuations = new Map<string, PlaylistMore>();
   readonly #plays = new Map<string, Play>();
   #handles = 0;
 
-  /** Without `botguard` there is no fallback, and resolving uses `VISIONOS` only. */
-  constructor(fetch: FetchLike, botguard?: BotGuardVm) {
+  /**
+   * Without `botguard` there is no fallback, and resolving uses `VISIONOS` only.
+   * `onSessionExpired` is called once when YouTube stops accepting the cookie;
+   * the engine is signed out by then.
+   */
+  constructor(fetch: FetchLike, botguard?: BotGuardVm, onSessionExpired: () => void = () => {}) {
     this.#fetch = fetch;
     this.#minter = botguard ? new PoTokenMinter(fetch, botguard) : null;
+    this.#onSessionExpired = onSessionExpired;
   }
 
   /**
@@ -341,13 +348,23 @@ export class YouTubeEngine {
    * context, so one per search would cost more than the search.
    */
   #browseClient(): Promise<Innertube> {
-    this.#browse ??= retryable(
-      createYouTube({ fetch: this.#fetch, cookie: this.#cookie ?? undefined }),
-      () => {
-        this.#browse = null;
-      },
-    );
+    this.#browse ??= retryable(this.#createBrowseClient(this.#cookie), () => {
+      this.#browse = null;
+    });
     return this.#browse;
+  }
+
+  #createBrowseClient(cookie: string | null): Promise<Innertube> {
+    if (cookie === null) return createYouTube({ fetch: this.#fetch });
+    const fetch = watchSession(this.#fetch, () => this.#expired(cookie));
+    return createYouTube({ fetch, cookie });
+  }
+
+  /** Only for the cookie YouTube refused, not one signed in since. */
+  #expired(cookie: string): void {
+    if (cookie !== this.#cookie) return;
+    this.setCookie(null);
+    this.#onSessionExpired();
   }
 
   /** The browsing client without the cookie. The same one while signed out. */

@@ -1,4 +1,4 @@
-import { Track, VideoId } from "@ymusic/core";
+import { Track, TrackId, VideoId } from "@ymusic/core";
 import { z } from "zod";
 
 import { invokeParsed, invokeVoid, isTauri } from "./tauri.ts";
@@ -13,8 +13,12 @@ export const SavedQueue = z.object({
   cursor: z.number().int().nonnegative(),
   repeat: z.enum(["off", "all", "one"]),
   shuffle: z.boolean(),
-  /** The YouTube playlist the queue was started from, which sharing names. */
-  playlistId: z.string().nullable(),
+  /**
+   * The YouTube playlist the queue was started from, which sharing names,
+   * and the songs that came from it: one added to the queue since is shared
+   * on its own, not as part of the playlist.
+   */
+  source: z.object({ playlistId: z.string(), ids: z.array(TrackId).readonly() }).nullable(),
   /**
    * What this device last wrote to the account's server queue, and which
    * account it was. Kept when the queue changes without playing anything.

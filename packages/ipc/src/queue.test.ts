@@ -20,7 +20,7 @@ const saved = {
   cursor: 0,
   repeat: "off",
   shuffle: false,
-  playlistId: "VLPLabc",
+  source: { playlistId: "VLPLabc", ids: [song.id] },
   shared: { account: "Tony", videoId: "dQw4w9WgXcQ", playlistId: "VLPLabc" },
 };
 

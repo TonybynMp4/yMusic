@@ -458,8 +458,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       cued.current = first.id;
       resumeAt.current =
         at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
-      source.current = saved.playlistId
-        ? { playlistId: saved.playlistId, ids: new Set(saved.items.map((t) => t.id)) }
+      source.current = saved.source
+        ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
         : null;
       setShared(saved.shared);
       return true;
@@ -467,8 +467,11 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     [stopFollowing],
   );
 
-  /** The YouTube playlist the queue was started from, if any, for saving it. */
-  const sourcePlaylist = useCallback(() => source.current?.playlistId ?? null, []);
+  /** The YouTube playlist the queue was started from and the songs it gave, for saving. */
+  const savedSource = useCallback((): SavedQueue["source"] => {
+    const from = source.current;
+    return from ? { playlistId: from.playlistId, ids: [...from.ids] } : null;
+  }, []);
 
   // Once a YouTube song is playing, make it the account's queue, so YouTube
   // Music on other devices offers to resume it. Only once playing: a queue
@@ -622,7 +625,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     cue,
     restore,
     shared,
-    sourcePlaylist,
+    savedSource,
     play,
     pause,
     toggle,

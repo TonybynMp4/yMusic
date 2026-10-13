@@ -43,3 +43,16 @@ export function updateCheck(): Promise<Update | null> {
 export function openLogsFolder(): Promise<void> {
   return invokeVoid("open_logs_folder");
 }
+
+/** How many bytes the artwork cache takes on disk, the only cache with a size to show. */
+export function cacheSize(): Promise<number> {
+  return invokeParsed("cache_size", z.number().int().nonnegative());
+}
+
+/**
+ * Deletes the cached artwork and empties the webview's memory and disk caches.
+ * Cookies, storage, settings and the account stay.
+ */
+export function cacheClear(): Promise<void> {
+  return invokeVoid("cache_clear");
+}

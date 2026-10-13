@@ -4,6 +4,8 @@ import {
   accountBrowsers,
   type AudioDevice,
   type Browser,
+  cacheClear,
+  cacheSize,
   isTauri,
   openLogsFolder,
   platformSummary,
@@ -18,6 +20,7 @@ import {
   IconFolderPlus,
   IconLogout,
   IconRefresh,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -35,6 +38,8 @@ import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { AccountState } from "./useAccount.ts";
 import type { Library } from "./useLibrary.ts";
+import { clearBrowseCache } from "./useBrowse.ts";
+import { clearSongYears } from "./useSongYear.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
 
@@ -232,6 +237,7 @@ export function SettingsView({
             />
           }
         />
+        {isTauri && <CacheRow />}
         <div className="flex items-center gap-6 px-4 py-3">
           <span className="flex-1 text-sm text-muted-foreground">
             {updates.status ?? "Find out whether a newer version is out."}
@@ -363,6 +369,55 @@ function AccountSection({ state }: { state: AccountState }) {
       />
     </Section>
   );
+}
+
+/**
+ * Every cache the app keeps, with the artwork's size and a way to empty them
+ * all, so the app fetches and draws as on a cold start.
+ */
+function CacheRow() {
+  const [size, setSize] = useState<number | null>(null);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    cacheSize()
+      .then(setSize)
+      .catch((error: unknown) => console.warn("could not read the cache size", error));
+  }, []);
+  const clear = () => {
+    setClearing(true);
+    clearBrowseCache();
+    clearSongYears();
+    cacheClear()
+      .catch((error: unknown) => console.warn("could not clear the cache", error))
+      .then(cacheSize)
+      .then(setSize)
+      .catch((error: unknown) => console.warn("could not read the cache size", error))
+      .finally(() => setClearing(false));
+  };
+  return (
+    <Row
+      label="Cache"
+      action
+      description={cacheDescription(size)}
+      control={
+        <Button variant="outline" disabled={clearing} onClick={clear}>
+          <IconTrash />
+          Clear
+        </Button>
+      }
+    />
+  );
+}
+
+function cacheDescription(bytes: number | null): string {
+  const kept = "Sign-in, settings and history stay.";
+  const memory = "the pages and song years kept in memory this session";
+  if (bytes === 0) return `No album art on disk yet. Clearing still empties ${memory}. ${kept}`;
+  const what = `album art and thumbnails kept on this computer. Clearing deletes them, along with ${memory}. ${kept}`;
+  if (bytes === null) return `The ${what}`;
+  const mb = bytes / (1024 * 1024);
+  const size = mb >= 10 ? `${Math.round(mb)} MB` : mb >= 0.1 ? `${mb.toFixed(1)} MB` : "Under 0.1 MB";
+  return `${size} of ${what}`;
 }
 
 function useBrowsers(enabled: boolean): Browser[] {

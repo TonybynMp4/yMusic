@@ -411,7 +411,7 @@ function CacheRow() {
 
 function cacheDescription(bytes: number | null): string {
   const kept = "Sign-in, settings and history stay.";
-  const memory = "the pages and images kept in memory this session";
+  const memory = "the pages and song years kept in memory this session";
   if (bytes === 0) return `No album art on disk yet. Clearing still empties ${memory}. ${kept}`;
   const what = `album art and thumbnails kept on this computer. Clearing deletes them, along with ${memory}. ${kept}`;
   if (bytes === null) return `The ${what}`;

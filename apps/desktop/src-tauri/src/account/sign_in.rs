@@ -124,9 +124,15 @@ pub async fn sign_in<R: Runtime>(
                 log::warn!("sign-in: could not restore {}: {error}", cookie.name());
             }
         }
-        window
-            .navigate(SIGN_IN_URL.parse().expect("a valid URL"))
-            .map_err(|error| format!("could not open sign-in: {error}"))?;
+        if let Err(error) = window.navigate(SIGN_IN_URL.parse().expect("a valid URL")) {
+            // Closed while the cookies were going in: a cancel, not a failure.
+            if matches!(rx.try_recv(), Ok(Step::Closed)) {
+                return Ok(None);
+            }
+            // A blank window left open would refuse every later sign-in.
+            let _ = window.destroy();
+            return Err(format!("could not open sign-in: {error}"));
+        }
 
         loop {
             match rx.recv() {

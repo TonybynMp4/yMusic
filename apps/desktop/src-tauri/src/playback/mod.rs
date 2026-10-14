@@ -791,7 +791,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         // message runs a script in the page and updates its
                         // state. At that rate the web process held about 80 MB
                         // more by the end of a session, so the page asks for
-                        // the position itself (`Player::position`) while a
+                        // the position itself (`Player::progress`) while a
                         // song plays. It only hears it from here when a song
                         // starts or after a seek, which also covers a scrub
                         // while paused, when the page is not asking.

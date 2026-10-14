@@ -96,6 +96,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const [shared, setShared] = useState<SavedQueue["shared"]>(null);
   /** What the queue plays from, for "Playing from". Replaced with the queue. */
   const [playingFrom, setPlayingFrom] = useState<QueueFrom | null>(null);
+  // Removing the last song empties the queue without a `clear`, and a song
+  // added after that plays from nothing.
+  if (queue.items.length === 0 && playingFrom !== null) setPlayingFrom(null);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;

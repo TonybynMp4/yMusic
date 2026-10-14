@@ -40,6 +40,12 @@ The same runs show where the web process's big swings come from. Signed out, the
 
 The web process no longer climbs during the first song (`docs/memory/no-player-script/`). Signed out, its peak anonymous memory drops from 522 to 320 MB and it ends 45 MB lower. Signed in, the app resolves a stream within its first minute, so before this change the script was parsed before any browsing: all processes held 471 MB at the end of the first idle minute and now hold 193 MB. The peak across processes is 42 MB lower. The signed-in end of run is 65 MB lower, but the web process's runs overlap, so that part is within noise. The fallback variant resolves every stream through the PO-token client, which still parses the script, and its web process is unchanged.
 
+### The fallback path
+
+youtubei.js hands the fallback's decipher code over with a call appended that has the URL's `n` and signature written into it, so the source was new for every URL and JavaScriptCore compiled the whole extract again each time. `installEvaluator` in `client.ts` now compiles the part before that call once per player script, keeps only the latest, and passes the values in. `botguard.ts` removes the BotGuard frame after five minutes with no calls, which frees its VM and the challenge it ran. The minter goes with the frame, so `PoTokenMinter.mint` builds a new one and tries once more when a mint fails.
+
+The scenario cannot see either change (`docs/memory/fallback-resident/`). Every number in the fallback variant ends within noise of the build before. The frame only closes after five idle minutes and the scenario's last idle phase lasts two, so the runs never reach it. Each compiled extract used to be garbage once its call returned, so caching saves compile time, not memory. It does keep one compiled extract in the engine worker until the next player script replaces it, on purpose: that is not a leak. The change is for a fallback session that plays a few songs and then sits for hours with BotGuard loaded.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

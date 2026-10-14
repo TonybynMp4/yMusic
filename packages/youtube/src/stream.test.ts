@@ -124,8 +124,46 @@ describe("expiryFromUrl", () => {
   });
 });
 
+describe("bestAudioFormat with Premium formats", () => {
+  const formats = [
+    format({ itag: 251, bitrate: 160_000 }),
+    format({ itag: 141, mime_type: 'audio/mp4; codecs="mp4a.40.2"', bitrate: 286_000 }),
+    format({ itag: 774, bitrate: 284_000 }),
+    format({ itag: 140, mime_type: 'audio/mp4; codecs="mp4a.40.2"', bitrate: 130_000 }),
+  ];
+
+  // 141 reports the higher bitrate, so the order has to be explicit.
+  it("picks Opus 774 on high, over a higher-bitrate 141", () => {
+    expect(bestAudioFormat(formats, "high")?.itag).toBe(774);
+  });
+
+  it("falls back to 141, then to the highest bitrate", () => {
+    expect(bestAudioFormat(formats.filter((f) => f.itag !== 774), "high")?.itag).toBe(141);
+    expect(bestAudioFormat(formats.filter((f) => f.itag !== 774 && f.itag !== 141))?.itag).toBe(
+      251,
+    );
+  });
+
+  it("leaves normal and low as they were", () => {
+    expect(bestAudioFormat(formats, "normal")?.itag).toBe(140);
+    expect(bestAudioFormat(formats, "low")?.itag).toBe(140);
+  });
+});
+
 describe("leaseFrom", () => {
   const trackId = "yt:SM4tQcUt_mQ" as TrackId;
+
+  it("flags 774 and 141 as Premium formats and nothing else", () => {
+    expect(leaseFrom(trackId, format({ itag: 774 }), URL_WITH_EXPIRY).isPremiumFormat).toBe(true);
+    expect(leaseFrom(trackId, format({ itag: 141 }), URL_WITH_EXPIRY).isPremiumFormat).toBe(true);
+    expect(leaseFrom(trackId, format({ itag: 251 }), URL_WITH_EXPIRY).isPremiumFormat).toBe(false);
+  });
+
+  it("names the player client and is not degraded by itself", () => {
+    const lease = leaseFrom(trackId, format(), URL_WITH_EXPIRY, "WEB_REMIX");
+    expect(lease.playerClient).toBe("WEB_REMIX");
+    expect(lease.degraded).toBeNull();
+  });
 
   it("carries the format's identity onto the lease", () => {
     const lease = leaseFrom(trackId, format(), URL_WITH_EXPIRY);

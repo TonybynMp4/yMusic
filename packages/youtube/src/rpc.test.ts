@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
 import { YouTubeEngine } from "./engine.ts";
-import { connectEngine } from "./host.ts";
+import { exposeExtractor } from "./extractor.ts";
+import { connectEngine, extractInWorker, type ExtractorWorker } from "./host.ts";
 import { live, unlessBotChecked } from "./live.ts";
 import { exposeEngine } from "./worker.ts";
 
@@ -37,9 +38,25 @@ live("the engine across a message port", () => {
     const { port1, port2 } = new MessageChannel();
     exposeEngine(port1);
     let requests = 0;
-    const engine = connectEngine(port2, (input, init) => {
+    let extractors = 0;
+    const fetch: typeof globalThis.fetch = (input, init) => {
       requests += 1;
       return globalThis.fetch(input, init);
+    };
+    // The player script is analysed on the host's side, as the app does it.
+    const startExtractor = (): ExtractorWorker => {
+      extractors += 1;
+      const channel = new MessageChannel();
+      exposeExtractor(channel.port1);
+      return Object.assign(channel.port2, {
+        terminate: () => {
+          channel.port1.close();
+          channel.port2.close();
+        },
+      });
+    };
+    const engine = connectEngine(port2, fetch, {
+      playerScript: extractInWorker(fetch, startExtractor),
     });
 
     const tracks = await engine.search("boards of canada roygbiv");
@@ -54,6 +71,7 @@ live("the engine across a message port", () => {
     );
     expect(lease.trackId).toBe(first.id);
     expect(lease.url).toMatch(/^https:\/\/.*googlevideo\.com\//);
+    expect(extractors).toBe(1);
 
     port1.close();
     port2.close();

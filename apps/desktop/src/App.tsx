@@ -267,6 +267,7 @@ export function App(props: { settings: Settings }) {
               {expanded && (
                 <FullPlayer
                   track={player.track}
+                  lease={player.lease}
                   queue={player.queue}
                   filling={player.filling}
                   autoplay={player.autoplay}
@@ -304,6 +305,7 @@ export function App(props: { settings: Settings }) {
           onToggleExpanded={() => setExpanded((open) => !open)}
           rating={rating}
           onOpen={go}
+          degraded={player.lease?.degraded ?? null}
         />
         <UpdateNotice updates={updates} />
         {notice.message && (

@@ -49,7 +49,7 @@ live("the PO-token fallback", () => {
     const engine = new YouTubeEngine(globalThis.fetch, frameVm());
     const lease = await unlessBotChecked(
       context,
-      engine.resolve("SM4tQcUt_mQ" as VideoId, { fallback: true }),
+      engine.resolve("SM4tQcUt_mQ" as VideoId, { refused: "VISIONOS" }),
     );
 
     const url = new URL(lease.url);

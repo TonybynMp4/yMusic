@@ -255,3 +255,38 @@ describe("queueReducer", () => {
     expect(state.suggestions).toEqual([]);
   });
 });
+
+describe("restoring a saved queue", () => {
+  const saved = {
+    items: tracks,
+    order: [2, 0, 3, 1],
+    cursor: 1,
+    repeat: "all" as const,
+    shuffle: true,
+  };
+
+  it("comes back with its order, song, shuffle and repeat", () => {
+    const state = queueReducer(emptyQueue, { type: "restore", queue: saved });
+    expect(titles(state)).toEqual(["c", "a", "d", "b"]);
+    expect(currentTrack(state)?.id).toBe("local:a");
+    expect(state.shuffle).toBe(true);
+    expect(state.repeat).toBe("all");
+    // Turning shuffle off still finds the song in the order it was added.
+    const unshuffled = queueReducer(state, { type: "setShuffle", shuffle: false });
+    expect(titles(unshuffled)).toEqual(["a", "b", "c", "d"]);
+    expect(currentTrack(unshuffled)?.id).toBe("local:a");
+  });
+
+  it("is ignored when it does not hold together", () => {
+    for (const broken of [
+      { ...saved, cursor: null },
+      { ...saved, cursor: 4 },
+      { ...saved, order: [0, 1, 2] },
+      { ...saved, order: [0, 0, 1, 2] },
+      { ...saved, order: [0, 1, 2, 7] },
+      { ...saved, items: [], order: [], cursor: 0 },
+    ]) {
+      expect(queueReducer(emptyQueue, { type: "restore", queue: broken })).toBe(emptyQueue);
+    }
+  });
+});

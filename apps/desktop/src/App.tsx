@@ -26,6 +26,7 @@ import { useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
+import { useSavedQueue } from "./useSavedQueue.ts";
 import { useSettings } from "./useSettings.ts";
 import { useUpdates } from "./useUpdates.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
@@ -58,7 +59,8 @@ export function App(props: { settings: Settings }) {
   const player = usePlayer(settings, account.account?.name ?? null);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
-  useResume(player, account.account?.name ?? null);
+  const resumed = useResume(player, account.account?.name ?? null, !account.busy);
+  useSavedQueue(player, resumed);
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
 

@@ -71,7 +71,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
 
-  async load(lease: StreamLease, paused = false): Promise<void> {
+  async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
     await this.#ensureSubscribed();
     await invokeVoid("player_load", {
       request: {
@@ -80,6 +80,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
         headers: lease.headers,
         loudnessDb: lease.loudnessDb,
         startPaused: paused,
+        startMs: startMs === undefined ? null : Math.max(0, Math.round(startMs)),
       },
     });
   }

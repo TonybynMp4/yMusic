@@ -45,9 +45,11 @@ export async function getPlaybackTracking(
   youtube: Innertube,
   videoId: VideoId,
   signatureTimestamp: number,
+  playlistId: string | null = null,
 ): Promise<PlaybackTracking | null> {
   const response = await youtube.actions.execute("/player", {
     videoId,
+    ...(playlistId ? { playlistId } : {}),
     client: "YTMUSIC",
     playbackContext: { contentPlaybackContext: { signatureTimestamp } },
   });
@@ -78,6 +80,12 @@ export interface Play {
   cpn: string;
   /** When the play started, for the elapsed time each report carries. */
   startedAt: number;
+  /**
+   * The playlist the song plays from, bare (no `VL`). The account takes a
+   * report without one as the song playing on its own, and makes its queue
+   * that song alone.
+   */
+  playlistId: string | null;
 }
 
 /** The "this song started" report. */
@@ -107,6 +115,7 @@ function statsUrl(play: Play, base: string, params: Record<string, string>): str
   url.searchParams.set("c", play.client.name);
   url.searchParams.set("cver", play.client.version);
   url.searchParams.set("cpn", play.cpn);
+  if (play.playlistId) url.searchParams.set("list", play.playlistId);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.toString();
 }

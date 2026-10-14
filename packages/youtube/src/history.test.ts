@@ -10,6 +10,7 @@ const play: Play = {
   client: { name: "WEB_REMIX", version: "1.2" },
   cpn: "cpn0123456789abc",
   startedAt: 1_000_000,
+  playlistId: null,
 };
 
 describe("trackingFrom", () => {
@@ -33,6 +34,14 @@ describe("trackingFrom", () => {
 });
 
 describe("reports", () => {
+  it("name the playlist a song plays from, so the account's queue stays that playlist", () => {
+    const from: Play = { ...play, playlistId: "PLabc" };
+    expect(new URL(playbackPing(from, 1_000_000)).searchParams.get("list")).toBe("PLabc");
+    const watch = { segments: [], positionMs: 0, playing: true, final: false };
+    expect(new URL(watchtimePing(from, watch, 1_000_000)).searchParams.get("list")).toBe("PLabc");
+    expect(new URL(playbackPing(play, 1_000_000)).searchParams.has("list")).toBe(false);
+  });
+
   it("sends the start to music.youtube.com, keeping YouTube's own parameters", () => {
     const url = new URL(playbackPing(play, 1_002_500));
     expect(url.host).toBe("music.youtube.com");

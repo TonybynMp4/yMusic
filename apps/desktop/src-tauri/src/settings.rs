@@ -140,15 +140,9 @@ impl SettingsStore {
     }
 }
 
-fn save(path: &PathBuf, settings: &Settings) -> Result<(), String> {
+fn save(path: &std::path::Path, settings: &Settings) -> Result<(), String> {
     let json = serde_json::to_vec_pretty(settings).expect("settings serialize");
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).map_err(|error| format!("could not save settings: {error}"))?;
-    }
-    // Written aside and renamed over, so a crash mid-write leaves the old file.
-    let partial = path.with_extension("json.partial");
-    fs::write(&partial, json)
-        .and_then(|()| fs::rename(&partial, path))
+    crate::files::write_atomically(path, &json)
         .map_err(|error| format!("could not save settings: {error}"))
 }
 

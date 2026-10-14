@@ -88,7 +88,7 @@ pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), St
 
 #[tauri::command]
 pub fn player_position(player: State<'_, Player>) -> Option<Position> {
-    player.position()
+    player.progress()
 }
 
 #[tauri::command]

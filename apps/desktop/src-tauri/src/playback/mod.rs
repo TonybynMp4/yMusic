@@ -443,7 +443,7 @@ impl Player {
 
     /// Where the playing song is, for the page to ask once a second. None when
     /// nothing is loaded.
-    pub fn position(&self) -> Option<Position> {
+    pub fn progress(&self) -> Option<Position> {
         read_position(&self.mpv)
     }
 

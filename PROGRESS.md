@@ -161,6 +161,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Skip the player script on `VISIONOS`
 - [x] Stop the fallback path keeping code resident
 - [x] Prune stream leases and the song-year cache
+- [x] Drop unused resources from WebKit's memory cache
 
 ## Known issues
 

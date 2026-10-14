@@ -52,6 +52,16 @@ Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved
 
 Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/memory/small-maps/`): every web and total number ends within noise of the build before. Signed in, the core reads 6 MB higher, but this change does not touch the core, and the before runs were so close together (121 MB each) that any difference clears the noise line. This is about a session that runs for days, not a saving an 11 minute run shows.
 
+### WebKit's memory cache
+
+wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps images, scripts and stylesheets in memory after no page uses them: up to 64 MB of them on any machine with 2 GB of RAM or more, with their decoded pixels kept for a minute (`calculateMemoryCacheSizes` in WebKit's `CacheModel.cpp`). Every thumbnail of every page opened stayed in the web process. `lib.rs` switches the model to `DOCUMENT_BROWSER` through `with_webview`, which caps what nothing shows at 24 MB and drops decoded pixels first, keeping the compressed bytes.
+
+`DOCUMENT_VIEWER` keeps nothing nobody shows, and saves more: all processes held 40 MB less at the end of browsing and 52 MB less once the long playlist had loaded, with every run below every run of the build before (`docs/memory/cache-model/`, measured with that model). It made browsing worse, though. Going back to a page asked the `img` scheme for every thumbnail again, a round trip through the core and the disk cache, and artwork appeared a moment after the page did, where with the default it was already there. `DOCUMENT_BROWSER` keeps the recent pages' artwork in memory, so it draws with the page.
+
+Measured against `main` with all of the stack before it merged (`docs/memory/cache-model-browser/`), `DOCUMENT_BROWSER` saves less than `DOCUMENT_VIEWER` and only while browsing. All processes held 17 MB less at the end of browsing, within noise, and 24 MB less once the long playlist had loaded. The web process's peak dropped 31 MB, from 349 to 318 MB, with every run below every run of the build before. By the end of the run the saving is gone: the web process ends 8 MB higher and all processes 10 MB higher, the second within noise. Playback and the idle minutes after it climb to the same level with either model, so the cap trims the browsing peak, not what a long session settles at.
+
+In the `DOCUMENT_VIEWER` runs, the core's PSS rose 28 MB while the memory it holds did not move, so the rise is in shared pages (libraries and other mapped files), not memory the core allocated. PSS splits a shared page between the processes that have it resident, and which process gets charged shifts when another one stops touching those pages. The change does not touch the core, and with `DOCUMENT_BROWSER` the core's PSS ends within noise.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

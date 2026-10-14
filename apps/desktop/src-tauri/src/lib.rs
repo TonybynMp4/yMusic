@@ -115,6 +115,18 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            // WebKitGTK's default cache model keeps up to 64 MB of images no
+            // page shows any more. DOCUMENT_BROWSER caps that at 24 MB: enough
+            // that going back to a page draws its artwork from memory at once,
+            // where DOCUMENT_VIEWER keeps none and every visit waits on the
+            // `img` scheme again (docs/memory.md).
+            #[cfg(target_os = "linux")]
+            let _ = window.with_webview(|webview| {
+                use webkit2gtk::{CacheModel, WebContextExt, WebViewExt};
+                if let Some(context) = webview.inner().context() {
+                    context.set_cache_model(CacheModel::DocumentBrowser);
+                }
+            });
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);

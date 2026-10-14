@@ -11,4 +11,5 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Artwork](artwork.md): the `img` scheme, WebP requests and the capped disk cache.
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.
+- [Memory](memory.md): where memory goes, and what has been cut.
 - [Testing](testing.md): unit tests and the opt-in network tests.

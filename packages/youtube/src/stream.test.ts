@@ -6,6 +6,7 @@ import {
   codecFromMimeType,
   expiryFromUrl,
   leaseFrom,
+  streamUrl,
   type RawFormat,
 } from "./stream.ts";
 
@@ -149,5 +150,25 @@ describe("leaseFrom", () => {
   it("reports an unknown bitrate as null rather than zero", () => {
     expect(leaseFrom(trackId, format({ bitrate: 0 }), URL_WITH_EXPIRY).bitrate).toBeNull();
     expect(leaseFrom(trackId, format({ bitrate: undefined }), URL_WITH_EXPIRY).bitrate).toBeNull();
+  });
+});
+
+describe("streamUrl", () => {
+  const PLAIN = "https://rr5.googlevideo.com/videoplayback?expire=1789969190&itag=251";
+
+  it("passes a plain URL through without the player script", async () => {
+    await expect(streamUrl({ decipher: () => PLAIN }, undefined)).resolves.toBe(PLAIN);
+  });
+
+  it("refuses a URL that still needs the player script", async () => {
+    const ciphered = { decipher: () => "" };
+    const throttled = { decipher: () => `${PLAIN}&n=abc` };
+    await expect(streamUrl(ciphered, undefined)).rejects.toThrow("player script");
+    await expect(streamUrl(throttled, undefined)).rejects.toThrow("player script");
+  });
+
+  it("trusts the URL when the player script deciphered it", async () => {
+    const url = `${PLAIN}&n=transformed`;
+    await expect(streamUrl({ decipher: () => url }, {})).resolves.toBe(url);
   });
 });

@@ -12,7 +12,7 @@ The app is three processes on Linux:
 
 v0.3.0, after 4.5 hours of playback, held 603 MB in RAM and 158 MB in swap across the three. The core held 279 MB (peak 357 MB, 52 threads) and the web process 321 MB (peak 647 MB). Use was flat over the last minutes measured, so this is a plateau and not a leak that grows by the minute.
 
-In the core, most of it was glibc malloc fragmentation. glibc gives each thread that allocates its own arena, up to eight per core, and frees memory back to the arena rather than to the system. 63 arenas held 281 MB of anonymous memory between them. In the web process, the suspects were the browse page cache, which never evicted, youtubei.js parsing YouTube's player script, and the BotGuard frame with its decipher code staying resident. The page cache turned out to be small (below).
+In the core, most of it was glibc malloc fragmentation. glibc gives each thread that allocates its own arena, up to eight per core, and frees memory back to the arena rather than to the system. 63 arenas held 281 MB of anonymous memory between them. In the web process, the suspects were the browse page cache, which never evicted, youtubei.js parsing YouTube's player script, and the BotGuard frame with its decipher code staying resident. The page cache turned out to be small and the player script large (below).
 
 ## What has been cut
 
@@ -33,6 +33,12 @@ The web process did not measurably change. It ends near 330 MB or near 480 to 57
 The cache was smaller than it looked. Parsed in Node, the scenario's 30 artist, album and playlist pages come to 1.3 MB as JSON and its two thousand-row playlists to 1 MB, so the 20 pages the cap drops held one to three megabytes, and each page opened past ten adds roughly 50 to 150 KB. That is too small to show against the run-to-run spread (`docs/memory/browse-lru/`): the core ends within noise of the build before and the web process's peak does not move. The cap is there so an evening of browsing cannot grow without end, not for a saving the scenario can see.
 
 The same runs show where the web process's big swings come from. Signed out, the build before ended at 314 to 566 MB of anonymous memory and this change's at 302 to 313 MB. Signed in it went the other way: 326 to 332 MB before, 442 to 486 MB after. The peaks are the same in both builds, about 490 to 520 MB, so the end of a run only shows whether JavaScriptCore had released what the long playlist used yet.
+
+### The player script on `VISIONOS`
+
+`createPlayer` in `client.ts` now passes `retrieve_player: false`, like the search client. youtubei.js no longer downloads and interprets YouTube's player JavaScript to resolve a stream, which it did once per engine worker and then kept. `VISIONOS` formats carry a plain URL with no signature cipher and no `n` parameter, so the URL is the same either way. The play reports still need the player script's signature timestamp, and `fetchSignatureTimestamp` reads that one number from the script's text without running it, cached for 12 hours. The PO-token fallback still interprets the script, because its `TV_SIMPLY` URLs do need deciphering.
+
+The web process no longer climbs during the first song (`docs/memory/no-player-script/`). Signed out, its peak anonymous memory drops from 522 to 320 MB and it ends 45 MB lower. Signed in, the app resolves a stream within its first minute, so before this change the script was parsed before any browsing: all processes held 471 MB at the end of the first idle minute and now hold 193 MB. The peak across processes is 42 MB lower. The signed-in end of run is 65 MB lower, but the web process's runs overlap, so that part is within noise. The fallback variant resolves every stream through the PO-token client, which still parses the script, and its web process is unchanged.
 
 ## Measuring
 

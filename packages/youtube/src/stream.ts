@@ -184,6 +184,23 @@ export async function resolveStream(
   const format = bestAudioFormat(info.streaming_data?.adaptive_formats ?? [], quality);
   if (format === null) throw new NotPlayableError("NO_AUDIO_FORMAT", null);
 
-  const url = await format.decipher(youtube.session.player);
+  const url = await streamUrl(format, youtube.session.player);
   return leaseFrom(trackIdForVideo(videoId), format, url);
+}
+
+/**
+ * The format's URL, deciphered when the client loaded the player script.
+ *
+ * `createPlayer` skips the script because `VISIONOS` URLs come plain. Without
+ * it youtubei.js hands back whatever URL the format carries, so a ciphered
+ * format would come out empty and one needing `n` would only fail once mpv
+ * asked for it. This throws instead, as a plain error, so the engine falls
+ * back to the PO-token client rather than calling the song gone.
+ */
+export async function streamUrl(format: RawFormat, player: unknown): Promise<string> {
+  const url = await format.decipher(player);
+  if (player == null && (url === "" || new URL(url).searchParams.has("n"))) {
+    throw new Error("this client's stream URL needs the player script to decipher it");
+  }
+  return url;
 }

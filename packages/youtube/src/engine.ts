@@ -30,6 +30,7 @@ import {
   type PlaylistTarget,
 } from "./browse.ts";
 import {
+  fetchSignatureTimestamp,
   getPlaybackTracking,
   newCpn,
   playbackPing,
@@ -56,6 +57,9 @@ const MAX_CONTINUATIONS = 16;
 
 /** Plays still being reported on. Two is typical: the one ending and the next. */
 const MAX_PLAYS = 4;
+
+/** YouTube ships a new player script every few days; this is well inside that. */
+const SIGNATURE_TIMESTAMP_MS = 12 * 60 * 60 * 1000;
 
 export interface ResolveOptions {
   /**
@@ -91,6 +95,7 @@ export class YouTubeEngine {
   readonly #minter: PoTokenMinter | null;
   readonly #onSessionExpired: () => void;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
+  #signatureTimestamp: { value: Promise<number>; expiresAt: number } | null = null;
   readonly #continuations = new Map<string, PlaylistMore>();
   readonly #plays = new Map<string, Play>();
   #handles = 0;
@@ -212,13 +217,11 @@ export class YouTubeEngine {
    */
   async played(videoId: VideoId, playlistId: string | null = null): Promise<string | null> {
     if (this.#cookie === null) return null;
-    const player = (await this.#playerClient()).session.player;
-    if (!player) throw new Error("the player script is not loaded");
     const list = playlistId ? playlistIdFromBrowseId(playlistId) : null;
     const tracking = await getPlaybackTracking(
       await this.#browseClient(),
       videoId,
-      player.signature_timestamp,
+      await this.#currentSignatureTimestamp(),
       list,
     );
     if (tracking === null) return null;
@@ -408,15 +411,26 @@ export class YouTubeEngine {
   }
 
   /**
-   * Also created once, and more importantly so: it downloads and interprets
-   * YouTube's player JavaScript, the slowest step on the whole path. Held as a
-   * promise so two tracks resolving together share one creation.
+   * Also created once, and held as a promise so two tracks resolving together
+   * share one creation.
    */
   #playerClient(): Promise<Innertube> {
     this.#player ??= retryable(createPlayer({ fetch: this.#fetch }), () => {
       this.#player = null;
     });
     return this.#player;
+  }
+
+  #currentSignatureTimestamp(): Promise<number> {
+    if (this.#signatureTimestamp === null || this.#signatureTimestamp.expiresAt <= Date.now()) {
+      this.#signatureTimestamp = {
+        value: retryable(fetchSignatureTimestamp(this.#fetch), () => {
+          this.#signatureTimestamp = null;
+        }),
+        expiresAt: Date.now() + SIGNATURE_TIMESTAMP_MS,
+      };
+    }
+    return this.#signatureTimestamp.value;
   }
 
   #fallbackClient(minter: PoTokenMinter): Promise<Innertube> {

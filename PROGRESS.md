@@ -139,11 +139,14 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] The queue saved across restarts
 - [ ] The volume saved across restarts
 - [ ] Search history, local or the account's
+- [ ] Playback errors shown in a better place than red text over the player bar (prototype the options first)
+- [ ] Song and video switch
 - [ ] Home and Explore pages
 - [ ] Saved albums and artists in the library
 - [ ] Local playlists
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
+- [ ] Canvas from Spotify, as a plugin
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots
 - [ ] Plugin backends on Deno over tRPC
 - [ ] Flatpak

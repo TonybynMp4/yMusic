@@ -1,4 +1,4 @@
-import { YTNodes, type Innertube } from "youtubei.js";
+import { Parser, YTNodes, type Innertube } from "youtubei.js";
 import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import { playlistIdFromBrowseId } from "./browse.ts";
@@ -18,6 +18,14 @@ export interface ServerQueue {
   index: number;
   /** The playlist or radio the queue plays, when it is one. */
   playlistId: string | null;
+  /** What the queue plays from, as YouTube Music names it under "Playing from". */
+  title: string | null;
+  /**
+   * Where the queue was left, in the account's own words ("From your
+   * Android device"), when another device played it. Null when it was this
+   * kind of client, or the answer does not say.
+   */
+  device: string | null;
 }
 
 interface RawPanel {
@@ -38,10 +46,70 @@ export async function getServerQueue(youtube: Innertube): Promise<ServerQueue | 
     queueContextParams: "",
     isAudioOnly: true,
     client: "YTMUSIC",
-    parse: true,
   });
-  const panel = response.contents_memo?.getType(YTNodes.PlaylistPanel)[0];
-  return panel ? serverQueueFrom(panel as unknown as RawPanel) : null;
+  // Parsed by hand: the parsed answer drops the queue's name and origin,
+  // which are read from the raw one.
+  const parsed = Parser.parseResponse(response.data);
+  const panel = parsed.contents_memo?.getType(YTNodes.PlaylistPanel)[0];
+  const queue = panel ? serverQueueFrom(panel as unknown as RawPanel) : null;
+  return queue && { ...queue, ...queueOriginFrom(response.data) };
+}
+
+interface RawRuns {
+  runs?: readonly { text?: unknown }[] | null;
+}
+
+interface RawQueueRenderer {
+  header?: { musicQueueHeaderRenderer?: { subtitle?: RawRuns | null } | null } | null;
+  musicQueueConfig?: {
+    musicQueueRestorationInfo?: {
+      isCrossDeviceQueue?: unknown;
+      onQueueRestoredCommand?: {
+        miniplayerAnnouncementCommand?: {
+          miniPlayerBylineRenderer?: {
+            miniPlayerBylineRenderer?: { text?: RawRuns | null } | null;
+          } | null;
+        } | null;
+      } | null;
+    } | null;
+  } | null;
+}
+
+interface RawQueueResponse {
+  contents?: {
+    singleColumnMusicWatchNextResultsRenderer?: {
+      tabbedRenderer?: {
+        watchNextTabbedResultsRenderer?: {
+          tabs?: readonly {
+            tabRenderer?: { content?: { musicQueueRenderer?: RawQueueRenderer | null } | null };
+          }[];
+        };
+      };
+    };
+  };
+}
+
+function textOf(raw: RawRuns | null | undefined): string | null {
+  const text = (raw?.runs ?? []).map((run) => (typeof run.text === "string" ? run.text : "")).join("");
+  return text === "" ? null : text;
+}
+
+/**
+ * The queue's name and the device it was left on, which the parsed answer
+ * drops. Exported for tests.
+ */
+export function queueOriginFrom(raw: unknown): Pick<ServerQueue, "title" | "device"> {
+  const queue = (raw as RawQueueResponse | null)?.contents?.singleColumnMusicWatchNextResultsRenderer
+    ?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+    ?.musicQueueRenderer;
+  const restoration = queue?.musicQueueConfig?.musicQueueRestorationInfo;
+  const byline =
+    restoration?.onQueueRestoredCommand?.miniplayerAnnouncementCommand?.miniPlayerBylineRenderer
+      ?.miniPlayerBylineRenderer?.text;
+  return {
+    title: textOf(queue?.header?.musicQueueHeaderRenderer?.subtitle),
+    device: restoration?.isCrossDeviceQueue === true ? textOf(byline) : null,
+  };
 }
 
 /** Exported for tests. */
@@ -59,7 +127,7 @@ export function serverQueueFrom(panel: RawPanel): ServerQueue | null {
   }
   const index = tracks.findIndex((t) => videoIdFromTrackId(t.id) === selected);
   const playlistId = typeof panel.playlist_id === "string" ? panel.playlist_id : null;
-  return { tracks, index: Math.max(0, index), playlistId };
+  return { tracks, index: Math.max(0, index), playlistId, title: null, device: null };
 }
 
 /**

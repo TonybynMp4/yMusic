@@ -14,11 +14,13 @@ Local files have their own items. A folder's menu opens it in the file manager, 
 
 The player bar and the full player show the song's byline as YouTube Music's bar does: artists, album and release year. The title opens the album, as do the album's name and each artist with a channel. Following one of these links collapses the full player. The full player covers the page only: the sidebar and the bar with search and the account menu stay, as in YouTube Music. Back, the mouse's back button, Alt+Left, Escape or the arrow on the player bar close it and leave you on the page under it.
 
+The player bar gives way on narrow windows without anything overlapping: only the title and byline shrink. Below 768 px the song takes the spare room and the volume slider becomes a vertical popup over its button. Below 640 px the thumbs are hidden, and below 520 px the song is its cover alone, which still opens the full player.
+
 The year comes with a song from an album page (the header's subtitle), from an up-next panel (radio, mix, the resumed queue, where youtubei.js reads it off the byline's last run) and from a local file's tags. A YouTube song from a search or a playlist has none, so `useSongYear` asks for it with a plain `/next` for that song and reads its own panel row. The answer is kept for the session (a failed lookup is not, and is tried again the next time the song shows), and a song with no album on YouTube, such as a music video, shows no year.
 
 ## Liking and disliking
 
-The thumbs down and up sit beside the song in the player bar and under the artwork in the full player, for a YouTube song while signed in. Pressing the one already on clears it. Liking a song adds it to Liked Music, which is YouTube's doing, not the app's.
+The thumbs down and up sit beside the volume in the player bar and under the artwork in the full player, for a YouTube song while signed in. Pressing the one already on clears it. Liking a song adds it to Liked Music, which is YouTube's doing, not the app's.
 
 A song's menu has the same two, as "Add to liked songs" and "Dislike", for any YouTube song while signed in. They show the rating as last seen: a song liked elsewhere and never played here reads as unrated until it plays. Liking it again does no harm. Disliking the song playing from its menu skips it, as the player bar does.
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { queueLoad } from "@ymusic/ipc";
+import type { QueueFrom } from "@ymusic/ipc";
 import { isSharedQueue, type ServerQueue } from "@ymusic/youtube/host";
 
 import { engine } from "./engine.ts";
@@ -61,7 +62,7 @@ export function useResume(
         local.shared.account === account &&
         isSharedQueue(server, local.shared);
       if (local && (server === null || ours) && restore(local, saved.position)) return;
-      if (server) cue(server.tracks, server.index, server.playlistId);
+      if (server) cue(server.tracks, server.index, server.playlistId, fromOf(server));
     })().finally(() => setSettled(true));
   }, [accountReady, account, cue, restore]);
 
@@ -72,10 +73,17 @@ export function useResume(
     void engine
       .serverQueue()
       .then((queue) => {
-        if (queue && stillEmpty.current) cue(queue.tracks, queue.index, queue.playlistId);
+        if (queue && stillEmpty.current) {
+          cue(queue.tracks, queue.index, queue.playlistId, fromOf(queue));
+        }
       })
       .catch((error: unknown) => console.error("could not load the queue to resume", error));
   }, [account, cue]);
 
   return settled;
+}
+
+/** What the account's queue is named, and the device it was left on. */
+function fromOf(queue: ServerQueue): QueueFrom | null {
+  return queue.title === null ? null : { title: queue.title, device: queue.device };
 }

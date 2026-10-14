@@ -55,27 +55,32 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     );
   }
   const { page } = state;
+  /** Every play on the page queues from it, which also names the queue. */
+  const playingFrom = (from: PlayFrom): BrowseActions => ({
+    ...actions,
+    onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
+  });
   switch (page.kind) {
-    case "album":
-      return <Album page={page.page} actions={actions} route={route} />;
+    case "album": {
+      const from: PlayFrom = { kind: "list", title: page.page.title };
+      return <Album page={page.page} actions={playingFrom(from)} route={route} />;
+    }
     case "playlist": {
       // Queue the whole playlist, including the rows still loading.
-      const from: PlayFrom = { kind: "playlist", id: route.id };
-      const following = {
-        ...actions,
-        onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
-      };
+      const from: PlayFrom = { kind: "playlist", id: route.id, title: page.page.title };
       return (
         <Playlist
           page={page.page}
           loadingMore={state.loadingMore}
-          actions={following}
+          actions={playingFrom(from)}
           route={route}
         />
       );
     }
-    case "artist":
-      return <Artist page={page.page} actions={actions} route={route} />;
+    case "artist": {
+      const from: PlayFrom = { kind: "list", title: page.page.name };
+      return <Artist page={page.page} actions={playingFrom(from)} route={route} />;
+    }
   }
 }
 

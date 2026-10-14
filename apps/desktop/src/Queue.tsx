@@ -6,6 +6,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
+import type { QueueFrom } from "@ymusic/ipc";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -15,6 +16,7 @@ import {
   useState,
 } from "react";
 
+import { FromDevice } from "@/components/FromDevice";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,6 +32,8 @@ const SCROLL_EDGE = 40;
 
 interface Props {
   queue: QueueState;
+  /** What the queue plays from, named above it as YouTube Music does. */
+  playingFrom: QueueFrom | null;
   /** The queue's source is still loading, so more tracks are on the way. */
   filling: boolean;
   autoplay: boolean;
@@ -187,6 +191,7 @@ function useFollowPlaying(
  */
 export function Queue({
   queue,
+  playingFrom,
   filling,
   autoplay,
   onAutoplay,
@@ -284,6 +289,15 @@ export function Queue({
 
   return (
     <div className="flex h-full flex-col">
+      {playingFrom && (
+        <div className="px-4 pt-3">
+          <p className="text-xs text-muted-foreground">Playing from</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <span className="truncate">{playingFrom.title}</span>
+            {playingFrom.device && <FromDevice device={playingFrom.device} />}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {queue.items.length} tracks

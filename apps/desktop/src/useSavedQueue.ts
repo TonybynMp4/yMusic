@@ -18,7 +18,7 @@ function logSaveFailure(error: unknown): void {
  * is once the launch has decided what to bring back.
  */
 export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boolean): void {
-  const { queue, shared, savedSource, position, loadedTrack, track } = player;
+  const { queue, playingFrom, shared, savedSource, position, loadedTrack, track } = player;
   const { items, order, cursor, repeat, shuffle } = queue;
 
   useEffect(() => {
@@ -28,11 +28,11 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
       const saved =
         cursor === null
           ? null
-          : { items, order, cursor, repeat, shuffle, source: savedSource(), shared };
+          : { items, order, cursor, repeat, shuffle, source: savedSource(), from: playingFrom, shared };
       void queueSave(saved).catch(logSaveFailure);
     }, QUEUE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, items, order, cursor, repeat, shuffle, shared, savedSource]);
+  }, [enabled, items, order, cursor, repeat, shuffle, playingFrom, shared, savedSource]);
 
   const trackId = track?.id ?? null;
   const status = player.playback.status;

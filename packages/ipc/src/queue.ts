@@ -3,6 +3,9 @@ import { z } from "zod";
 
 import { invokeParsed, invokeVoid, isTauri } from "./tauri.ts";
 
+export const QueueFrom = z.object({ title: z.string(), device: z.string().nullable() });
+export type QueueFrom = z.infer<typeof QueueFrom>;
+
 /**
  * The queue as saved in `queue.json`. Rust stores it as it comes, so this
  * schema is its only check: a file that fails it reads as nothing saved.
@@ -19,6 +22,11 @@ export const SavedQueue = z.object({
    * on its own, not as part of the playlist.
    */
   source: z.object({ playlistId: z.string(), ids: z.array(TrackId).readonly() }).nullable(),
+  /**
+   * What the queue plays from, shown under "Playing from", and the device it
+   * was left on when it came from another one, in the account's words.
+   */
+  from: QueueFrom.nullable().default(null),
   /**
    * What this device last wrote to the account's server queue, and which
    * account it was. Kept when the queue changes without playing anything.

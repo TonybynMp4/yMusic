@@ -250,17 +250,26 @@ export function TitleLink({
 }
 
 function BylineLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  // A span, not a button: a button lays out as one block, which a truncated
+  // byline cuts whole, leaving a gap where the name was.
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
-      className="outline-none hover:text-foreground hover:underline focus-visible:underline"
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+      className="cursor-pointer outline-none hover:text-foreground hover:underline focus-visible:underline"
     >
       {children}
-    </button>
+    </span>
   );
 }
 
@@ -270,7 +279,9 @@ export function Artwork({ track, size = 36 }: { track: Track; size?: number }) {
     <Art
       thumbnails={track.thumbnails}
       width={size}
-      className="shrink-0 rounded text-xs"
+      // Preflight's `max-width: 100%` lets a squeezed parent shrink the cover,
+      // and makes it count as nothing towards the parent's minimum width.
+      className="max-w-none shrink-0 rounded text-xs"
       style={{ width: size, height: size }}
       fallback={track.title.slice(0, 1).toUpperCase()}
     />

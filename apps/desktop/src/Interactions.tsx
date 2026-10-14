@@ -685,16 +685,19 @@ function linked(artists: readonly Artist[]): { name: string; channelId: string }
 async function tracksOf(page: Page): Promise<{ tracks: Track[]; from?: PlayFrom }> {
   switch (page.kind) {
     case "album":
-      return { tracks: page.page.tracks };
-    case "playlist":
-      return { tracks: page.page.tracks, from: { kind: "playlist", id: page.page.id } };
+      return { tracks: page.page.tracks, from: { kind: "list", title: page.page.title } };
+    case "playlist": {
+      const { id, title } = page.page;
+      return { tracks: page.page.tracks, from: { kind: "playlist", id, title } };
+    }
     case "artist": {
       const id = page.page.topSongsPlaylistId;
-      if (id === null) return { tracks: page.page.topSongs };
+      const title = page.page.name;
+      if (id === null) return { tracks: page.page.topSongs, from: { kind: "list", title } };
       const all = await settledPage({ kind: "playlist", id });
       return {
         tracks: all.kind === "playlist" ? all.page.tracks : page.page.topSongs,
-        from: { kind: "playlist", id },
+        from: { kind: "playlist", id, title },
       };
     }
   }

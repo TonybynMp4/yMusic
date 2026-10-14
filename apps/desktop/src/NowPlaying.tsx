@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { decibelsForVolume, type RepeatMode, type Track } from "@ymusic/core";
 
+import { FromDevice } from "@/components/FromDevice";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -43,6 +44,8 @@ interface Props {
   onShuffle: (shuffle: boolean) => void;
   expanded: boolean;
   onToggleExpanded: () => void;
+  /** The device the queue was picked up from, in the account's words. */
+  device: string | null;
   /** Null when the song can't be rated: a local file, or signed out. */
   rating: RatingProps | null;
   /** Opens the album or an artist from the song's title and byline. */
@@ -139,6 +142,7 @@ export function NowPlaying(props: Props) {
                 <TitleLink track={track} onOpen={props.onOpen} className="text-sm" />
                 <Byline track={track} onOpen={props.onOpen} year={year} />
               </span>
+              {props.device && <FromDevice device={props.device} />}
               {props.rating && (
                 <span className="flex shrink-0 items-center">
                   <RatingButtons {...props.rating} />

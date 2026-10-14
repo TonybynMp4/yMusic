@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { QueueState, Track, TrackId } from "@ymusic/core";
+import type { QueueFrom } from "@ymusic/ipc";
 
 import { Art } from "@/components/Art";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export interface PlayerPanelTab {
 interface Props {
   track: Track | null;
   queue: QueueState;
+  playingFrom: QueueFrom | null;
   filling: boolean;
   autoplay: boolean;
   onAutoplay: (on: boolean) => void;

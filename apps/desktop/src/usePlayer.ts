@@ -16,7 +16,7 @@ import {
   type VideoId,
   videoIdFromTrackId,
 } from "@ymusic/core";
-import type { QueuePosition, SavedQueue } from "@ymusic/ipc";
+import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
@@ -33,11 +33,15 @@ function logPlaybackFailure(error: unknown): void {
 }
 
 /**
- * Where a queue came from, so it can keep growing: a playlist still loading
- * its later pages, or a song radio (what YouTube Music starts when you play a
- * search result).
+ * Where a queue came from, so it can keep growing and be named under
+ * "Playing from": a playlist still loading its later pages, a fixed list
+ * such as an album, or a song radio (what YouTube Music starts when you
+ * play a search result).
  */
-export type PlayFrom = { kind: "playlist"; id: string } | { kind: "radio" };
+export type PlayFrom =
+  | { kind: "playlist"; id: string; title: string }
+  | { kind: "list"; title: string }
+  | { kind: "radio" };
 
 /**
  * The seed for autoplay: the last YouTube track in playing order. Local files
@@ -90,6 +94,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
    * queue, so the next launch can tell whether another device played since.
    */
   const [shared, setShared] = useState<SavedQueue["shared"]>(null);
+  /** What the queue plays from, for "Playing from". Replaced with the queue. */
+  const [playingFrom, setPlayingFrom] = useState<QueueFrom | null>(null);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -358,7 +364,10 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   /** Clearing or replacing the queue also stops it growing from its old source. */
   const send = useCallback(
     (action: QueueAction) => {
-      if (action.type === "setQueue" || action.type === "clear") stopFollowing();
+      if (action.type === "setQueue" || action.type === "clear") {
+        stopFollowing();
+        setPlayingFrom(null);
+      }
       if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
       dispatch(action);
     },
@@ -391,6 +400,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       }
 
       send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+      if (from?.kind === "playlist" || from?.kind === "list") {
+        setPlayingFrom({ title: from.title, device: null });
+      }
       if (from?.kind !== "playlist") {
         source.current = null;
         return;
@@ -429,15 +441,17 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
 
   /**
    * Queues `tracks` at `index` without playing, for a queue resumed from
-   * another device. `playlistId` is the playlist it plays, if any.
+   * another device. `playlistId` is the playlist it plays, if any, and
+   * `queueFrom` what it is named and where it was left.
    */
   const cue = useCallback(
-    (tracks: Track[], index: number, playlistId: string | null) => {
+    (tracks: Track[], index: number, playlistId: string | null, queueFrom: QueueFrom | null) => {
       const first = tracks[index];
       if (!first) return;
       send({ type: "setQueue", tracks, startIndex: index });
       cued.current = first.id;
       source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
+      setPlayingFrom(queueFrom);
     },
     [send],
   );
@@ -462,6 +476,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
         : null;
       setShared(saved.shared);
+      setPlayingFrom(saved.from);
       return true;
     },
     [stopFollowing],
@@ -624,6 +639,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     playTrack,
     cue,
     restore,
+    playingFrom,
     shared,
     savedSource,
     play,

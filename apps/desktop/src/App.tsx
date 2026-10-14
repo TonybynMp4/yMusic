@@ -270,6 +270,7 @@ export function App(props: { settings: Settings }) {
                 <FullPlayer
                   track={player.track}
                   queue={player.queue}
+                  playingFrom={player.playingFrom}
                   filling={player.filling}
                   autoplay={player.autoplay}
                   onAutoplay={player.setAutoplay}
@@ -304,6 +305,7 @@ export function App(props: { settings: Settings }) {
           onShuffle={player.setShuffle}
           expanded={expanded}
           onToggleExpanded={() => setExpanded((open) => !open)}
+          device={player.playingFrom?.device ?? null}
           rating={rating}
           onOpen={go}
         />

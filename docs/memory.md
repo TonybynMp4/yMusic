@@ -60,9 +60,7 @@ wry leaves WebKitGTK on its default cache model, `WEB_BROWSER`, which keeps imag
 
 Measured against `main` with all of the stack before it merged (`docs/memory/cache-model-browser/`), `DOCUMENT_BROWSER` saves less than `DOCUMENT_VIEWER` and only while browsing. All processes held 17 MB less at the end of browsing, within noise, and 24 MB less once the long playlist had loaded. The web process's peak dropped 31 MB, from 349 to 318 MB, with every run below every run of the build before. By the end of the run the saving is gone: the web process ends 8 MB higher and all processes 10 MB higher, the second within noise. Playback and the idle minutes after it climb to the same level with either model, so the cap trims the browsing peak, not what a long session settles at.
 
-The core's PSS rose 28 MB in those runs while the memory it holds did not move, so the rise is in shared pages (libraries and other mapped files), not memory the core allocated. PSS splits a shared page between the processes that have it resident, and which process gets charged shifts when another one stops touching those pages. The change does not touch the core.
-
-Playback climbs to the same level with both models, so the memory that grows while a song plays is somewhere else.
+In the `DOCUMENT_VIEWER` runs, the core's PSS rose 28 MB while the memory it holds did not move, so the rise is in shared pages (libraries and other mapped files), not memory the core allocated. PSS splits a shared page between the processes that have it resident, and which process gets charged shifts when another one stops touching those pages. The change does not touch the core, and with `DOCUMENT_BROWSER` the core's PSS ends within noise.
 
 ## Measuring
 

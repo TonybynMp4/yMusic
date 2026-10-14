@@ -20,6 +20,7 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { keepLease } from "./leases.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
@@ -191,7 +192,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       .then((lease) => {
         // Not cached if the quality changed while it resolved; a load already
         // waiting on it still gets it.
-        if (quality.current === requested) leases.current.set(id, lease);
+        if (quality.current === requested) keepLease(leases.current, id, lease);
         return lease;
       })
       .finally(() => {
@@ -305,7 +306,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         void (async () => {
           const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
           if (loadedId.current !== failed) return;
-          leases.current.set(failed, lease);
+          keepLease(leases.current, failed, lease);
           // A song paused by the user, or cued by a resumed queue, stays
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;

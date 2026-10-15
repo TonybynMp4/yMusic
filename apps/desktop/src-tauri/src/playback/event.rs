@@ -35,6 +35,14 @@ pub enum PlaybackEvent {
     },
 }
 
+/// The reply to the page asking where playback is.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub position_ms: u64,
+    pub duration_ms: Option<u64>,
+}
+
 pub fn seconds_to_ms(seconds: f64) -> u64 {
     if !seconds.is_finite() || seconds <= 0.0 {
         0

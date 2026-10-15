@@ -609,7 +609,15 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     [videoId, next, sendRating],
   );
 
-  const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
+  // The core only sends the new position once mpv lands the seek, so until
+  // then the bar would fall back to where the song was.
+  const seek = useCallback(
+    (positionMs: number) => {
+      position.set(Math.max(0, Math.round(positionMs)));
+      void engine.seek(positionMs);
+    },
+    [engine, position],
+  );
   const setVolume = useCallback(
     (fraction: number) => {
       const clamped = Math.min(1, Math.max(0, fraction));

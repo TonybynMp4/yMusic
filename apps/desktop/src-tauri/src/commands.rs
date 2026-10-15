@@ -8,7 +8,7 @@ use crate::account::{import, rotate, sign_in, Account, Session};
 use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
-use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
+use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player, Position};
 use crate::queue::{QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
@@ -84,6 +84,11 @@ pub fn player_pause(player: State<'_, Player>) -> Result<(), String> {
 #[tauri::command]
 pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), String> {
     player.seek(position_ms)
+}
+
+#[tauri::command]
+pub fn player_position(player: State<'_, Player>) -> Option<Position> {
+    player.progress()
 }
 
 #[tauri::command]

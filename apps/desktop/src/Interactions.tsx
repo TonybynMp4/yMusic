@@ -31,6 +31,7 @@ import {
   cloneElement,
   createContext,
   isValidElement,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -38,7 +39,6 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogClose,
@@ -94,9 +94,23 @@ interface Context extends Interactions {
 
 const InteractionsContext = createContext<Context | null>(null);
 
+/** A menu to show: what it acts on, and the element it was asked from. */
+interface MenuRequest {
+  subject: Subject;
+  element: HTMLElement;
+  /** Under the dots button, or at the pointer for a right click. */
+  from: "button" | { x: number; y: number };
+}
+
+const OpenMenuContext = createContext<((request: MenuRequest) => void) | null>(null);
+
+const SHARED_TRIGGER = "interactions-menu-trigger";
+
 /**
- * Holds the dialogs a menu item opens. They outlive the menu, which unmounts
- * as soon as an item is picked.
+ * Holds the one menu every row, card and header opens, and the dialogs a menu
+ * item opens. They outlive the menu, which unmounts as soon as an item is
+ * picked. A menu each cost a long list two Base UI menus per row, most of what
+ * a row costs to mount, and a fast scroll outran the list.
  */
 export function InteractionsProvider({
   value,
@@ -106,13 +120,76 @@ export function InteractionsProvider({
   children: ReactNode;
 }) {
   const [songs, setSongs] = useState<(() => Promise<VideoId[]>) | null>(null);
+  const [menu, setMenu] = useState<MenuRequest | null>(null);
+  const [open, setOpen] = useState(false);
+  const openMenu = useCallback((request: MenuRequest) => {
+    setMenu(request);
+    setOpen(true);
+  }, []);
+  // What a trigger of its own would set, for the dots to stay shown while open.
+  useEffect(() => {
+    if (!open || menu?.from !== "button") return;
+    const element = menu.element;
+    element.setAttribute("data-popup-open", "");
+    return () => element.removeAttribute("data-popup-open");
+  }, [open, menu]);
   const context: Context = { ...value, createPlaylist: (ids) => setSongs(() => ids) };
   return (
-    <InteractionsContext.Provider value={context}>
-      {children}
-      <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
-    </InteractionsContext.Provider>
+    <OpenMenuContext.Provider value={openMenu}>
+      <InteractionsContext.Provider value={context}>
+        {children}
+        <DropdownMenu
+          open={open}
+          onOpenChange={setOpen}
+          triggerId={SHARED_TRIGGER}
+          // Kept until the menu has faded out, so it does not empty as it goes.
+          onOpenChangeComplete={(isOpen) => isOpen || setMenu(null)}
+        >
+          {/* Never seen or pressed. Base UI links a submenu to its menu
+              through the trigger, so a menu without one breaks its submenus. */}
+          <DropdownMenuTrigger
+            id={SHARED_TRIGGER}
+            nativeButton={false}
+            render={<span aria-hidden tabIndex={-1} className="pointer-events-none fixed size-0" />}
+          />
+          {menu && <SharedMenu menu={menu} />}
+        </DropdownMenu>
+        <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
+      </InteractionsContext.Provider>
+    </OpenMenuContext.Provider>
   );
+}
+
+function SharedMenu({ menu }: { menu: MenuRequest }) {
+  const { from, element } = menu;
+  const placement =
+    from === "button"
+      ? ({ anchor: element, align: "end" } as const)
+      : ({
+          anchor: {
+            getBoundingClientRect: () =>
+              DOMRect.fromRect({ x: from.x, y: from.y, width: 0, height: 0 }),
+          },
+          align: "start",
+          sideOffset: 2,
+        } as const);
+  return (
+    <DropdownMenuContent
+      {...placement}
+      // Back to the dots for the keyboard; a right-clicked row takes no focus.
+      finalFocus={from === "button" ? () => element : false}
+      className="w-56"
+      {...contained}
+    >
+      <Items subject={menu.subject} />
+    </DropdownMenuContent>
+  );
+}
+
+function useOpenMenu(): (request: MenuRequest) => void {
+  const open = useContext(OpenMenuContext);
+  if (open === null) throw new Error("menu opened outside InteractionsProvider");
+  return open;
 }
 
 /** Opens the "New playlist" dialog for an empty playlist, or null while signed out. */
@@ -148,28 +225,39 @@ export type Subject =
   | { kind: "collection"; route: Route }
   | { kind: "folder"; path: string };
 
-type TriggerProps = Omit<React.ComponentProps<typeof ContextMenuTrigger>, "children"> & {
-  children?: ReactNode;
+type AreaProps = React.HTMLAttributes<HTMLElement> & {
+  subject: Subject | null;
+  render?: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
 };
 
 /**
  * Right-clicking anywhere in it opens the subject's menu. Renders a `div`
  * unless given `render`; with no subject, just that element.
  */
-export function InteractionArea({ subject, ...props }: TriggerProps & { subject: Subject | null }) {
-  if (subject === null) {
-    const { render, ...rest } = props;
-    const plain = rest as React.HTMLAttributes<HTMLElement>;
-    return isValidElement(render) ? cloneElement(render, plain) : <div {...plain} />;
-  }
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger {...props} />
-      <ContextMenuContent className="w-56" {...contained}>
-        <Items subject={subject} />
-      </ContextMenuContent>
-    </ContextMenu>
-  );
+export function InteractionArea({ subject, render, ...props }: AreaProps) {
+  const openMenu = useOpenMenu();
+  const area: React.HTMLAttributes<HTMLElement> =
+    subject === null
+      ? props
+      : {
+          ...props,
+          onContextMenu: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const element = event.currentTarget;
+            // The keyboard's menu key has no pointer: open at the element.
+            const fromKeyboard = event.clientX === 0 && event.clientY === 0;
+            const box = element.getBoundingClientRect();
+            openMenu({
+              subject,
+              element,
+              from: fromKeyboard
+                ? { x: box.left, y: box.bottom }
+                : { x: event.clientX, y: event.clientY },
+            });
+          },
+        };
+  return isValidElement(render) ? cloneElement(render, area) : <div {...area} />;
 }
 
 /** The same menu behind a dots button, as YouTube Music puts on rows, cards and headers. */
@@ -182,25 +270,21 @@ export function InteractionButton({
   className?: string;
   size?: "icon-xs" | "icon-sm" | "icon";
 }) {
+  const openMenu = useOpenMenu();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        onClick={(event) => event.stopPropagation()}
-        render={
-          <Button
-            variant="ghost"
-            size={size}
-            aria-label="More actions"
-            className={cn("rounded-full", className)}
-          />
-        }
-      >
-        <IconDotsVertical size={17} stroke={1.75} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56" {...contained}>
-        <Items subject={subject} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      size={size}
+      aria-label="More actions"
+      aria-haspopup="menu"
+      className={cn("rounded-full", className)}
+      onClick={(event) => {
+        event.stopPropagation();
+        openMenu({ subject, element: event.currentTarget, from: "button" });
+      }}
+    >
+      <IconDotsVertical size={17} stroke={1.75} />
+    </Button>
   );
 }
 

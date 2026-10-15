@@ -191,3 +191,13 @@
   --channel-solo-foreground: var(--channel-solo);
   --channel-monitor-foreground: var(--channel-monitor);
 }
+
+/* For `ScrollArea`, which draws its own thumb. */
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

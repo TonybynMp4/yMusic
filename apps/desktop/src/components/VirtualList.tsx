@@ -8,6 +8,8 @@ interface Props {
   rowHeight: number;
   getKey: (index: number) => string;
   renderRow: (index: number) => ReactNode;
+  /** Rows kept mounted past each edge of the viewport, so a quick scroll lands on rows already drawn. */
+  overscan?: number;
   className?: string;
 }
 
@@ -16,7 +18,15 @@ interface Props {
  * costs what a screenful does. Rows are one fixed height, which is what lets
  * the list skip measuring them.
  */
-export function VirtualList({ count, scroller, rowHeight, getKey, renderRow, className }: Props) {
+export function VirtualList({
+  count,
+  scroller,
+  rowHeight,
+  getKey,
+  renderRow,
+  overscan = 8,
+  className,
+}: Props) {
   const list = useRef<HTMLUListElement>(null);
   // Where the list starts inside the scrolled content. It moves when anything
   // above it changes height, such as a description being expanded.
@@ -40,16 +50,21 @@ export function VirtualList({ count, scroller, rowHeight, getKey, renderRow, cla
     count,
     getScrollElement: () => scroller,
     estimateSize: () => rowHeight,
-    overscan: 8,
+    overscan,
     scrollMargin: offset,
     getItemKey: getKey,
+    // Rows come in a render React schedules, not one forced inside the scroll
+    // event: the overscan keeps them ahead of the viewport, and the scroll
+    // itself never waits on React.
+    useFlushSync: false,
   });
 
   return (
     <ul
       ref={list}
       className={className}
-      style={{ position: "relative", height: virtualizer.getTotalSize() }}
+      // Contained, so mounting rows lays out only the list.
+      style={{ position: "relative", height: virtualizer.getTotalSize(), contain: "layout style" }}
     >
       {virtualizer.getVirtualItems().map((item) => (
         <li
@@ -60,6 +75,9 @@ export function VirtualList({ count, scroller, rowHeight, getKey, renderRow, cla
             left: 0,
             width: "100%",
             height: item.size,
+            // A row's size never depends on what is inside it. Not `strict`:
+            // paint containment would clip a dragged queue row's shadow.
+            contain: "size layout style",
             transform: `translateY(${item.start - offset}px)`,
           }}
         >

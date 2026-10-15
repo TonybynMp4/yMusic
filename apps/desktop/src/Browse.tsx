@@ -5,6 +5,7 @@ import {
   IconLoader2,
   IconPlayerPlayFilled,
   IconPlaylist,
+  IconRefresh,
   IconUser,
 } from "@tabler/icons-react";
 import type {
@@ -72,6 +73,7 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
         <Playlist
           page={page.page}
           loadingMore={state.loadingMore}
+          resume={state.resume}
           actions={playingFrom(from)}
           route={route}
         />
@@ -135,11 +137,14 @@ function Album({
 function Playlist({
   page,
   loadingMore,
+  resume,
   actions,
   route,
 }: {
   page: PlaylistPage;
   loadingMore: boolean;
+  /** Set when the rest of the playlist failed to load: fetches it again. */
+  resume: (() => void) | undefined;
   actions: BrowseActions;
   route: Route;
 }) {
@@ -172,6 +177,15 @@ function Playlist({
           <IconLoader2 size={14} className="animate-spin" aria-hidden />
           Loading more songs ({page.tracks.length} so far)
         </p>
+      )}
+      {resume && (
+        <div className="flex items-center justify-center gap-3 py-4 text-xs text-muted-foreground">
+          Couldn't load the rest of this playlist
+          <Button variant="outline" size="sm" onClick={resume}>
+            <IconRefresh />
+            Retry
+          </Button>
+        </div>
       )}
     </>
   );

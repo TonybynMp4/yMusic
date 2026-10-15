@@ -138,7 +138,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Playlist details and editing: rename, description, privacy, reorder, remove, delete
 - [ ] React performance pass (see `docs/react-performance.md`)
 - [x] The queue saved across restarts
-- [ ] The volume saved across restarts
+- [x] The volume saved across restarts
 - [ ] Search history, local or the account's
 - [ ] Playback errors shown in a better place than red text over the player bar (prototype the options first)
 - [ ] Song and video switch

@@ -1,5 +1,5 @@
 import { IconZoomIn, IconZoomOut } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Cropper, { type Point, type Size } from "react-easy-crop";
 
 import { Slider } from "@/components/ui/slider";
@@ -9,13 +9,17 @@ import { MIN_SIDE, type Crop, type Picked } from "./cover.ts";
  * YouTube Music's "Edit Thumbnail" step, drawn like Origin UI's cropper: a
  * fixed square over the picked image, which moves and zooms under it. Drag or
  * scroll with two fingers to move it; pinch, Ctrl+wheel or the slider zoom.
- * Reports the square in the image's own pixels.
+ * From the keyboard, the arrow keys move it (Shift for finer steps), + and -
+ * zoom, and 0 starts over. Opens on `initial` when given, as when a cover is
+ * cropped again. Reports the square in the image's own pixels.
  */
 export function CoverCropper({
   picked,
+  initial,
   onCrop,
 }: {
   picked: Picked;
+  initial?: Crop | undefined;
   onCrop: (crop: Crop) => void;
 }) {
   const { file, width, height } = picked;
@@ -80,9 +84,24 @@ export function CoverCropper({
     };
   }, [maxZoom]);
 
+  const zoomTo = (next: number) => setZoom(Math.min(Math.max(next, 1), maxZoom));
+  const keys = (event: KeyboardEvent) => {
+    if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
+    else if (event.key === "-") zoomTo(zoom / 1.1);
+    else if (event.key === "0") {
+      setZoom(1);
+      setPosition({ x: 0, y: 0 });
+    } else return;
+    event.preventDefault();
+  };
+
   return (
-    <div className="flex flex-col gap-4">
-      <div ref={box} className="relative h-80 w-full overflow-hidden rounded-md">
+    <div data-slot="cover-cropper" className="flex flex-col gap-4">
+      <div
+        ref={box}
+        onKeyDown={keys}
+        className="relative h-[28rem] w-full overflow-hidden rounded-md has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+      >
         {url && (
           <Cropper
             image={url}
@@ -97,6 +116,16 @@ export function CoverCropper({
             onMediaLoaded={(media) => (latest.current.media = media)}
             onCropSizeChange={(square) => (latest.current.square = square)}
             onCropComplete={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
+            {...(initial && {
+              initialCroppedAreaPixels: {
+                x: initial.x,
+                y: initial.y,
+                width: initial.size,
+                height: initial.size,
+              },
+            })}
+            keyboardStep={10}
+            classes={{ containerClassName: "outline-none" }}
             cropperProps={{ "aria-label": "Image crop" }}
             // Inline, as the cropper's own stylesheet outranks Tailwind's layers.
             style={{
@@ -117,7 +146,7 @@ export function CoverCropper({
           step={0.01}
           value={zoom}
           disabled={maxZoom <= 1}
-          onValueChange={(value) => setZoom(Array.isArray(value) ? value[0]! : value)}
+          onValueChange={(value) => zoomTo(Array.isArray(value) ? value[0]! : value)}
         />
         <IconZoomIn className="size-4 shrink-0" aria-hidden />
       </div>

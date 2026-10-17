@@ -10,6 +10,7 @@ import {
   IconLoader2,
   IconPencil,
   IconPhoto,
+  IconCrop,
   IconPhotoEdit,
   IconPlayerTrackNext,
   IconPlaylist,
@@ -930,7 +931,8 @@ function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onCl
         if (!open) onClose();
       }}
     >
-      <DialogContent>
+      {/* Wider while cropping, for a larger view of the image. */}
+      <DialogContent className="has-data-[slot=cover-cropper]:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit playlist</DialogTitle>
         </DialogHeader>
@@ -945,7 +947,9 @@ function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onCl
  * What the form will make the cover: a new image, the one YouTube makes from
  * the songs, or (null) the cover as it is.
  */
-type CoverChange = Cover | "default" | null;
+/** A cropped image, with what it was cropped from so it can be cropped again. */
+type Cropped = Cover & { source: { file: File; crop: Crop } };
+type CoverChange = Cropped | "default" | null;
 
 /**
  * The cover, with YouTube Music's edit button over it: a menu to pick a new
@@ -956,6 +960,7 @@ function CoverPicker(props: {
   cover: CoverChange;
   disabled: boolean;
   onPick: (file: File) => void;
+  onRecrop: () => void;
   onRemove: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -997,6 +1002,12 @@ function CoverPicker(props: {
             <IconPhoto />
             Choose from library
           </DropdownMenuItem>
+          {cover !== null && cover !== "default" && (
+            <DropdownMenuItem onClick={props.onRecrop}>
+              <IconCrop />
+              Adjust crop
+            </DropdownMenuItem>
+          )}
           {custom && (
             <DropdownMenuItem onClick={props.onRemove}>
               <IconTrash />
@@ -1031,7 +1042,10 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
   const [cover, setCover] = useState<CoverChange>(null);
   // A picked image while its crop is placed, before it becomes `cover`.
-  const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop } | null>(null);
+  // `initial` is where a cover cropped again was left.
+  const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop; initial?: Crop } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1053,10 +1067,22 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     }
   };
 
+  const recrop = async () => {
+    if (cover === null || cover === "default") return;
+    setError(null);
+    try {
+      const image = await openImage(cover.source.file);
+      setCropping({ picked: image, crop: cover.source.crop, initial: cover.source.crop });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const crop = async () => {
     if (!cropping) return;
+    const { picked: from, crop: area } = cropping;
     try {
-      setCover(await cropCover(cropping.picked, cropping.crop));
+      setCover({ ...(await cropCover(from, area)), source: { file: from.file, crop: area } });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1120,6 +1146,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       <div className="flex flex-col gap-3">
         <CoverCropper
           picked={cropping.picked}
+          initial={cropping.initial}
           onCrop={(next) => setCropping((now) => now && { ...now, crop: next })}
         />
         <DialogFooter>
@@ -1147,6 +1174,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
         cover={cover}
         disabled={busy}
         onPick={(file) => void pick(file)}
+        onRecrop={() => void recrop()}
         // A new image not yet saved is only dropped; a saved one is removed on save.
         onRemove={() => setCover(isCustomCover(page.thumbnails) ? "default" : null)}
       />

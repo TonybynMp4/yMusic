@@ -119,6 +119,7 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            platform::window::forward_touchpad_pinch(&window);
             // WebKitGTK's default cache model keeps up to 64 MB of images no
             // page shows any more. DOCUMENT_BROWSER caps that at 24 MB: enough
             // that going back to a page draws its artwork from memory at once,

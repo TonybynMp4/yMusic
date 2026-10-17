@@ -61,7 +61,7 @@ export function CoverCropper({
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
       const dx = event.deltaX * unit;
       const dy = event.deltaY * unit;
-      // Browsers report a pinch as a wheel with Ctrl held.
+      // Chromium (Windows) reports a pinch as a wheel with Ctrl held.
       const next = event.ctrlKey
         ? zoomCrop(now.crop, Math.exp(dy * 0.01), width, height)
         : moveCrop(now.crop, dx / scale, dy / scale, width, height);
@@ -69,8 +69,25 @@ export function CoverCropper({
       now.crop = next;
       now.onCrop(next);
     };
+    // On Linux a pinch comes from the app's shell instead, as the scale since
+    // it began (platform/window.rs). Spreading the fingers shrinks the square,
+    // as a Ctrl+wheel pinch does.
+    let begun = 1;
+    const pinch = (event: Event) => {
+      const spread = (event as CustomEvent<number>).detail;
+      if (spread === 1) begun = 1;
+      const now = latest.current;
+      const next = zoomCrop(now.crop, begun / spread, width, height);
+      begun = spread;
+      now.crop = next;
+      now.onCrop(next);
+    };
     element.addEventListener("wheel", wheel, { passive: false });
-    return () => element.removeEventListener("wheel", wheel);
+    window.addEventListener("touchpadpinch", pinch);
+    return () => {
+      element.removeEventListener("wheel", wheel);
+      window.removeEventListener("touchpadpinch", pinch);
+    };
   }, [width, height, scale]);
 
   const percent: PercentCrop = {

@@ -52,6 +52,7 @@ cbc = "0.2"
 pbkdf2 = "0.13"
 secret-service = { version = "5", default-features = false, features = ["crypto-rust"] }
 sha1 = "0.11"
+gtk = "0.18"
 webkit2gtk = "2.0"
 
 # Line tables keep file and line in our panic backtraces at a fraction of the

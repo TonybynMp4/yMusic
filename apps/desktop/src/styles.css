@@ -155,8 +155,7 @@
 
   /* The search box has its own clear button, a Tabler icon like the rest. */
   input[type="search"]::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    appearance: none;
+    display: none;
   }
 
   input,

@@ -137,7 +137,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Metadata cache in SQLite for playlist, album and artist pages
 - [ ] Player tabs: Details (the default), Up next, Lyrics, Related, Comments
 - [x] Library page with chips, sort and grid or list
-- [x] Playlist details and editing: rename, description, privacy, reorder, remove, delete
+- [x] Playlist details and editing: rename, description, privacy, cover, reorder, remove, delete
 - [ ] React performance pass (see `docs/react-performance.md`)
 - [x] The queue saved across restarts
 - [x] The volume saved across restarts

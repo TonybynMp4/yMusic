@@ -19,7 +19,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench:memory": "bun bench/run.ts"
   },
   "dependencies": {
     "@ymusic/core": "workspace:*",

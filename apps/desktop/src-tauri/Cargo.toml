@@ -10,6 +10,11 @@ rust-version = "1.82"
 name = "ymusic_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# The memory harness's build (`scripts/memory`): adds the command its scripted
+# scenario reports progress through. Never on in a release.
+memory-scenario = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { centredCrop, moveCrop, resizeCrop } from "./cover.ts";
+import { centredCrop, isCustomCover, moveCrop, resizeCrop } from "./cover.ts";
 
 describe("centredCrop", () => {
   it("takes the largest square in the middle", () => {
@@ -30,5 +30,14 @@ describe("resizeCrop", () => {
   it("stays inside the image and no smaller than YouTube takes", () => {
     expect(resizeCrop(crop, "nw", -500, -500, 1000, 1000)).toEqual({ x: 100, y: 0, size: 500 });
     expect(resizeCrop(crop, "se", -300, -300, 1000, 1000)).toEqual({ x: 200, y: 100, size: 360 });
+  });
+});
+
+describe("isCustomCover", () => {
+  it("tells an uploaded cover from the one YouTube makes", () => {
+    const custom = "https://i.ytimg.com/pl_c/PLx/studio_square_thumbnail.jpg?sqp=1";
+    expect(isCustomCover([{ url: custom }])).toBe(true);
+    expect(isCustomCover([{ url: "https://yt3.googleusercontent.com/abc=s576" }])).toBe(false);
+    expect(isCustomCover([])).toBe(false);
   });
 });

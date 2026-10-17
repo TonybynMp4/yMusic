@@ -40,6 +40,7 @@ import {
   editPlaylist,
   moveAction,
   removeActions,
+  removeCoverAction,
   uploadCover,
   type PlaylistDetails,
   type PlaylistItem,
@@ -266,6 +267,13 @@ export class YouTubeEngine {
     const youtube = await this.#signedIn();
     const blobId = await uploadCover(youtube, image);
     return coverOf(await editPlaylist(youtube, playlistId, [coverAction(blobId)]));
+  }
+
+  /** Drops a custom cover. Answers with the one YouTube serves instead. */
+  async removePlaylistCover(playlistId: string): Promise<Thumbnail[]> {
+    return coverOf(
+      await editPlaylist(await this.#signedIn(), playlistId, [removeCoverAction()]),
+    );
   }
 
   async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {

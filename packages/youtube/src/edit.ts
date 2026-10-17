@@ -142,7 +142,18 @@ export function coverAction(blobId: string): EditAction {
   };
 }
 
-/** The cover in the header an edit answers with: after `coverAction`, the new one. */
+/** Puts back the cover YouTube makes from the playlist's songs. */
+export function removeCoverAction(): EditAction {
+  return {
+    action: "ACTION_REMOVE_CUSTOM_THUMBNAIL",
+    deletedCustomThumbnail: {
+      type: "PLAYLIST_IMAGE_TYPE_CUSTOM_THUMBNAIL",
+      name: "studio_square_thumbnail",
+    },
+  };
+}
+
+/** The cover in the header a cover edit answers with, as YouTube now serves it. */
 export function coverOf(response: unknown): Thumbnail[] {
   const header = (response as EditResponse | undefined)?.newHeader
     ?.musicEditablePlaylistDetailHeaderRenderer?.header?.musicResponsiveHeaderRenderer;

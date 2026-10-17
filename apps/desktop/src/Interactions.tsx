@@ -9,6 +9,7 @@ import {
   IconLibraryPlus,
   IconLoader2,
   IconPencil,
+  IconPhoto,
   IconPhotoEdit,
   IconPlayerTrackNext,
   IconPlaylist,
@@ -75,6 +76,7 @@ import {
   centredCrop,
   closePicked,
   cropCover,
+  isCustomCover,
   openImage,
   type Cover,
   type Crop,
@@ -939,39 +941,70 @@ function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onCl
   );
 }
 
-/** The cover, with YouTube Music's edit button over it to pick a new one. */
+/**
+ * What the form will make the cover: a new image, the one YouTube makes from
+ * the songs, or (null) the cover as it is.
+ */
+type CoverChange = Cover | "default" | null;
+
+/**
+ * The cover, with YouTube Music's edit button over it: a menu to pick a new
+ * image or, when the cover is one someone uploaded, to go back to YouTube's.
+ */
 function CoverPicker(props: {
   page: PlaylistPage;
-  cover: Cover | null;
+  cover: CoverChange;
   disabled: boolean;
   onPick: (file: File) => void;
+  onRemove: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const { cover } = props;
+  const custom = cover === null ? isCustomCover(props.page.thumbnails) : cover !== "default";
   return (
     <div className="relative size-32 self-center">
-      {props.cover ? (
-        <img src={props.cover.url} alt="" className="size-32 rounded-lg object-cover" />
+      {cover !== null && cover !== "default" ? (
+        <img src={cover.url} alt="" className="size-32 rounded-lg object-cover" />
       ) : (
+        // YouTube's own cover is only known once it is back, so until then the
+        // placeholder stands in for it.
         <Art
-          thumbnails={props.page.thumbnails}
+          thumbnails={cover === "default" ? [] : props.page.thumbnails}
           width={128}
           lazy={false}
           className="size-32 rounded-lg"
           fallback={<IconPlaylist size={48} stroke={1.25} />}
         />
       )}
-      <Button
-        type="button"
-        variant="secondary"
-        size="icon-sm"
-        aria-label="Change cover"
-        title="Change cover"
-        disabled={props.disabled}
-        className="absolute right-1.5 bottom-1.5 rounded-full shadow"
-        onClick={() => input.current?.click()}
-      >
-        <IconPhotoEdit />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={props.disabled}
+          render={
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Edit cover"
+              title="Edit cover"
+              className="absolute right-1.5 bottom-1.5 rounded-full shadow"
+            />
+          }
+        >
+          <IconPhotoEdit />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => input.current?.click()}>
+            <IconPhoto />
+            Choose from library
+          </DropdownMenuItem>
+          {custom && (
+            <DropdownMenuItem onClick={props.onRemove}>
+              <IconTrash />
+              Remove custom image
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <input
         ref={input}
         type="file"
@@ -996,14 +1029,14 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   // starts at Private and sends it only if you pick another.
   const startPrivacy = page.privacy ?? "PRIVATE";
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
-  const [cover, setCover] = useState<Cover | null>(null);
+  const [cover, setCover] = useState<CoverChange>(null);
   // A picked image while its crop is placed, before it becomes `cover`.
   const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (cover) return () => URL.revokeObjectURL(cover.url);
+    if (cover && cover !== "default") return () => URL.revokeObjectURL(cover.url);
   }, [cover]);
   const picked = cropping?.picked;
   useEffect(() => {
@@ -1046,7 +1079,10 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       // Sent apart from the rest, as YouTube Music does, and first: once it is
       // set, a failure below leaves it out of a second try.
       if (cover) {
-        const thumbnails = await engine.setPlaylistCover(page.id, cover.image);
+        const thumbnails =
+          cover === "default"
+            ? await engine.removePlaylistCover(page.id)
+            : await engine.setPlaylistCover(page.id, cover.image);
         setCover(null);
         patchPage({ kind: "playlist", id: page.id }, (p) =>
           p.kind === "playlist" && thumbnails.length > 0
@@ -1107,7 +1143,14 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
         void save();
       }}
     >
-      <CoverPicker page={page} cover={cover} disabled={busy} onPick={(file) => void pick(file)} />
+      <CoverPicker
+        page={page}
+        cover={cover}
+        disabled={busy}
+        onPick={(file) => void pick(file)}
+        // A new image not yet saved is only dropped; a saved one is removed on save.
+        onRemove={() => setCover(isCustomCover(page.thumbnails) ? "default" : null)}
+      />
       <PlaylistFields
         title={title}
         onTitle={setTitle}

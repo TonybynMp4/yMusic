@@ -59,7 +59,8 @@ export function CoverCropper({
       const now = latest.current;
       // A mouse wheel counts in lines, a touchpad in pixels.
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
-      const dx = event.deltaX * unit;
+      // Flipped: as reported, sideways scrolling moved the square against the fingers.
+      const dx = -event.deltaX * unit;
       const dy = event.deltaY * unit;
       // Chromium (Windows) reports a pinch as a wheel with Ctrl held.
       const next = event.ctrlKey
@@ -90,6 +91,11 @@ export function CoverCropper({
     };
   }, [width, height, scale]);
 
+  const toCrop = (next: PercentCrop): Crop => ({
+    x: (next.x / 100) * width,
+    y: (next.y / 100) * height,
+    size: (next.width / 100) * width,
+  });
   const percent: PercentCrop = {
     unit: "%",
     x: (crop.x / width) * 100,
@@ -102,18 +108,15 @@ export function CoverCropper({
       <ImageCrop
         file={picked.file}
         aspect={1}
-        keepSelection
         minWidth={min}
         minHeight={min}
         ariaLabels={LABELS}
         crop={percent}
-        onChange={(_, next) =>
-          onCrop({
-            x: (next.x / 100) * width,
-            y: (next.y / 100) * height,
-            size: (next.width / 100) * width,
-          })
-        }
+        onChange={(_, next) => onCrop(toCrop(next))}
+        // A square drawn from scratch (pressing outside the current one and
+        // dragging) may stop short of the smallest YouTube takes, or be a bare
+        // click; either grows about its centre to that size.
+        onComplete={(_, next) => onCrop(zoomCrop(toCrop(next), 1, width, height))}
       >
         <ImageCropContent
           className="mx-auto max-h-none"

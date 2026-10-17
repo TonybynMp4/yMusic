@@ -44,7 +44,7 @@ The meters start again with each song and whenever the setting or stable volume 
 
 **Pause watch history** stops `useWatchHistory` starting new plays, so nothing new is reported. A play already underway still sends its final report.
 
-**Search history** picks where searches are remembered. The recent ones show under the search box while it is focused and empty, each with a button to remove it.
+**Search history** picks where searches are remembered. The recent ones fill the search page while nothing is typed, and drop down from the box when it is focused and empty over any other page, each with a button to remove it.
 
 - *YouTube*, the default. Searches go out signed in, so YouTube records them on the account, and the list is the account's own: YouTube Music returns it from the search suggestions request with an empty query (see [Search history](engine.md#search-history)).
 - *On this device*. Searches go through a second browsing client with no cookie, so they never reach the account, and the list is kept in the webview's `localStorage`, newest first, at most 20. A search is added when you press Enter, pick a past search, or play or open a result, rather than at each pause in typing.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconArrowLeft, IconHistory, IconSearch, IconX } from "@tabler/icons-react";
 import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
 import type { Settings } from "@ymusic/ipc";
@@ -60,8 +60,16 @@ export function App(props: { settings: Settings }) {
   const signedIn = account.account !== null;
   // Only "youtube" searches with the account: that is what records them there.
   const youtube = useYouTubeSearch(query, true, settings.settings.searchHistory !== "youtube");
-  const searchBoxEmpty = searchFocused && query.trim().length === 0;
-  const searchHistory = useSearchHistory(settings.settings.searchHistory, signedIn, searchBoxEmpty);
+  const searchEmpty = query.trim().length === 0;
+  // The empty search page lists recent searches itself; over any other page
+  // they drop down from the focused box.
+  const recentOnPage = searchEmpty && view === null;
+  const recentInBox = searchEmpty && searchFocused && view !== null;
+  const searchHistory = useSearchHistory(
+    settings.settings.searchHistory,
+    signedIn,
+    recentOnPage || recentInBox,
+  );
   const player = usePlayer(settings, account.account?.name ?? null);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
@@ -272,8 +280,9 @@ export function App(props: { settings: Settings }) {
                   // A pill on a dark field, which is the shape YouTube Music uses.
                   className="h-9 rounded-full bg-secondary pl-9"
                 />
-                {searchBoxEmpty && searchHistory.recent.length > 0 && (
+                {recentInBox && searchHistory.recent.length > 0 && (
                   <RecentSearches
+                    floating
                     recent={searchHistory.recent}
                     onSearch={searchAgain}
                     onRemoved={() => searchInput.current?.focus()}
@@ -321,6 +330,15 @@ export function App(props: { settings: Settings }) {
                           local={library.matches}
                           youtube={youtube}
                           actions={searchActions}
+                          recent={
+                            searchHistory.recent.length > 0 && (
+                              <RecentSearches
+                                recent={searchHistory.recent}
+                                onSearch={searchAgain}
+                                onRemoved={() => searchInput.current?.focus()}
+                              />
+                            )
+                          }
                         />
                       )}
                     </div>
@@ -386,8 +404,9 @@ export function App(props: { settings: Settings }) {
 }
 
 /**
- * Past searches, under the empty search box as YouTube Music lists them. A
- * mouse down here would blur the box and close the list before the click
+ * Past searches, as YouTube Music lists them: on the empty search page, or
+ * `floating` under the empty search box over any other page. A mouse down on
+ * the floating list would blur the box and close the list before the click
  * lands, so it is held back. A removed entry takes its focused button with
  * it, so `onRemoved` puts focus back on the box.
  */
@@ -395,12 +414,17 @@ function RecentSearches(props: {
   recent: RecentSearch[];
   onSearch: (query: string) => void;
   onRemoved: () => void;
+  floating?: boolean;
 }) {
   return (
     <ul
       aria-label="Recent searches"
-      onMouseDown={(e) => e.preventDefault()}
-      className="absolute top-full right-0 left-0 z-40 mt-1 max-h-96 overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+      onMouseDown={props.floating ? (e) => e.preventDefault() : undefined}
+      className={
+        props.floating
+          ? "absolute top-full right-0 left-0 z-40 mt-1 max-h-96 overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+          : "px-1"
+      }
     >
       {props.recent.map((entry) => (
         <li key={entry.query} className="flex items-center rounded-md hover:bg-accent">
@@ -454,11 +478,20 @@ function SearchResults(props: {
   local: readonly Track[];
   youtube: YouTubeSearchState;
   actions: BrowseActions;
+  /** What the page shows before anything is typed, when there are recent searches. */
+  recent: ReactNode;
 }) {
   const { query, local, youtube, actions } = props;
   const [showAll, setShowAll] = useState(false);
   if (query.trim().length === 0) {
-    return <Empty title="Search" detail="Find songs on YouTube Music and in your local files." />;
+    return props.recent ? (
+      <section className="pt-1">
+        <h2 className="mb-1 px-3 text-sm font-semibold">Recent searches</h2>
+        {props.recent}
+      </section>
+    ) : (
+      <Empty title="Search" detail="Find songs on YouTube Music and in your local files." />
+    );
   }
   const shown = showAll ? local : local.slice(0, LOCAL_PREVIEW);
   const nothing = local.length === 0 && youtube.tracks.length === 0;

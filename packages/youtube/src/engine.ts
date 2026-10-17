@@ -7,6 +7,7 @@ import type {
   SearchFilter,
   SearchResults,
   StreamLease,
+  Thumbnail,
   Track,
   VideoId,
 } from "@ymusic/core";
@@ -31,6 +32,19 @@ import {
   type PlaylistMore,
   type PlaylistTarget,
 } from "./browse.ts";
+import {
+  coverAction,
+  coverOf,
+  deletePlaylist,
+  detailsActions,
+  editPlaylist,
+  moveAction,
+  removeActions,
+  removeCoverAction,
+  uploadCover,
+  type PlaylistDetails,
+  type PlaylistItem,
+} from "./edit.ts";
 import {
   fetchSignatureTimestamp,
   getPlaybackTracking,
@@ -237,6 +251,44 @@ export class YouTubeEngine {
     await (await this.#signedIn()).playlist.addVideos(playlistId, videoIds);
   }
 
+  /** Renames one of your playlists, or changes its description or who can see it. */
+  async editPlaylist(playlistId: string, details: PlaylistDetails): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, detailsActions(details));
+  }
+
+  /**
+   * Makes `image` (a square JPEG, at least 360 pixels a side) the playlist's
+   * cover. Answers with the cover as YouTube now serves it.
+   */
+  async setPlaylistCover(
+    playlistId: string,
+    image: Uint8Array<ArrayBuffer>,
+  ): Promise<Thumbnail[]> {
+    const youtube = await this.#signedIn();
+    const blobId = await uploadCover(youtube, image);
+    return coverOf(await editPlaylist(youtube, playlistId, [coverAction(blobId)]));
+  }
+
+  /** Drops a custom cover. Answers with the one YouTube serves instead. */
+  async removePlaylistCover(playlistId: string): Promise<Thumbnail[]> {
+    return coverOf(
+      await editPlaylist(await this.#signedIn(), playlistId, [removeCoverAction()]),
+    );
+  }
+
+  async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, removeActions(items));
+  }
+
+  /** Moves the row `itemId` to just before `beforeItemId`, or to the end when that is null. */
+  async moveInPlaylist(playlistId: string, itemId: string, beforeItemId: string | null): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, [moveAction(itemId, beforeItemId)]);
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    await deletePlaylist(await this.#signedIn(), playlistId);
+  }
+
   /**
    * Tells YouTube a song started playing, which adds it to the account's
    * history. Returns a handle for the watch-time reports that follow, or null
@@ -331,9 +383,11 @@ export class YouTubeEngine {
     return { page, more: this.#hold(more) };
   }
 
-  async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
-    const { tracks, more } = await this.#fetchMore<PlaylistMore>(handle, "playlist");
-    return { tracks, more: this.#hold(more) };
+  async playlistMore(
+    handle: string,
+  ): Promise<{ tracks: Track[]; itemIds: (string | null)[]; more: string | null }> {
+    const { tracks, itemIds, more } = await this.#fetchMore<PlaylistMore>(handle, "playlist");
+    return { tracks, itemIds, more: this.#hold(more) };
   }
 
   /**

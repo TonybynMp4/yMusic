@@ -8,6 +8,9 @@ import {
   IconLibraryMinus,
   IconLibraryPlus,
   IconLoader2,
+  IconPencil,
+  IconPhoto,
+  IconPhotoEdit,
   IconPlayerTrackNext,
   IconPlaylist,
   IconPlaylistAdd,
@@ -17,6 +20,7 @@ import {
   IconThumbDownFilled,
   IconThumbUp,
   IconThumbUpFilled,
+  IconTrash,
   IconUser,
   IconUserMinus,
   IconUserPlus,
@@ -25,8 +29,15 @@ import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
 import {
   sourceOf,
   videoIdFromTrackId,
-  type Artist, type BrowseCard, type Track, type TrackId, type VideoId } from "@ymusic/core";
-import type { NewPlaylist, PlaylistTarget, Rating } from "@ymusic/youtube/host";
+  type Artist,
+  type BrowseCard,
+  type PlaylistPage,
+  type PlaylistPrivacy,
+  type Track,
+  type TrackId,
+  type VideoId,
+} from "@ymusic/core";
+import type { PlaylistTarget, Rating } from "@ymusic/youtube/host";
 import {
   cloneElement,
   createContext,
@@ -34,10 +45,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
+import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,9 +72,28 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  centredCrop,
+  closePicked,
+  cropCover,
+  isCustomCover,
+  openImage,
+  type Cover,
+  type Crop,
+  type Picked,
+} from "./cover.ts";
+import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
 import { toggled } from "./Rating.tsx";
-import { newPlaylistRoute, patchPage, settledPage, useBrowse, type Page, type Route } from "./useBrowse.ts";
+import {
+  newPlaylistRoute,
+  patchPage,
+  refreshPage,
+  settledPage,
+  useBrowse,
+  type Page,
+  type Route,
+} from "./useBrowse.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
 /**
@@ -81,6 +113,8 @@ export interface Interactions {
   libraryChanged: () => void;
   /** A playlist was just created, so the sidebar shows it before YouTube lists it. */
   playlistCreated: (card: BrowseCard) => void;
+  /** A playlist was just deleted, so nothing should show it any more. */
+  playlistDeleted: (id: string, title: string) => void;
   /** A song's rating as last seen; null while signed out. */
   ratingOf: (videoId: VideoId) => Rating | null;
   rate: (videoId: VideoId, rating: Rating) => void;
@@ -90,6 +124,10 @@ export interface Interactions {
 interface Context extends Interactions {
   /** Opens the "New playlist" dialog; the playlist starts with these songs. */
   createPlaylist: (videoIds: () => Promise<VideoId[]>) => void;
+  /** Opens the edit dialog for one of your playlists. */
+  editPlaylist: (page: PlaylistPage) => void;
+  /** Asks before deleting one of your playlists. */
+  deletePlaylist: (page: PlaylistPage) => void;
 }
 
 const InteractionsContext = createContext<Context | null>(null);
@@ -133,7 +171,14 @@ export function InteractionsProvider({
     element.setAttribute("data-popup-open", "");
     return () => element.removeAttribute("data-popup-open");
   }, [open, menu]);
-  const context: Context = { ...value, createPlaylist: (ids) => setSongs(() => ids) };
+  const [editing, setEditing] = useState<PlaylistPage | null>(null);
+  const [deleting, setDeleting] = useState<PlaylistPage | null>(null);
+  const context: Context = {
+    ...value,
+    createPlaylist: (ids) => setSongs(() => ids),
+    editPlaylist: setEditing,
+    deletePlaylist: setDeleting,
+  };
   return (
     <OpenMenuContext.Provider value={openMenu}>
       <InteractionsContext.Provider value={context}>
@@ -155,6 +200,8 @@ export function InteractionsProvider({
           {menu && <SharedMenu menu={menu} />}
         </DropdownMenu>
         <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
+        <EditPlaylistDialog page={editing} onClose={() => setEditing(null)} />
+        <DeletePlaylistDialog page={deleting} onClose={() => setDeleting(null)} />
       </InteractionsContext.Provider>
     </OpenMenuContext.Provider>
   );
@@ -205,6 +252,87 @@ function useInteractions(): Context {
   return value;
 }
 
+/** What the owner of a playlist can do to it from its page. */
+export interface PlaylistEditing {
+  /** Opens the edit dialog. */
+  edit: () => void;
+  /** Removes the row at `index`. */
+  remove: (index: number) => void;
+  /** Moves the row at `from` to `to`, as a drag drops it. */
+  move: (from: number, to: number) => void;
+}
+
+/**
+ * Editing for a playlist page, or null when it is not yours. Each change
+ * shows at once and goes to YouTube after; if YouTube refuses it, the page is
+ * fetched again so it shows what YouTube has.
+ */
+export function usePlaylistEditing(page: PlaylistPage): PlaylistEditing | null {
+  const x = useInteractions();
+  if (!page.editable || !x.signedIn) return null;
+  const route: Route = { kind: "playlist", id: page.id };
+  const patch = (change: (page: PlaylistPage) => PlaylistPage) =>
+    patchPage(route, (p) => (p.kind === "playlist" ? { ...p, page: change(p.page) } : p));
+  const send = (action: Promise<void>, done: string) =>
+    action.then(
+      () => x.notify(done),
+      (error: unknown) => {
+        x.notify(error instanceof Error ? error.message : String(error));
+        refreshPage(route);
+      },
+    );
+  return {
+    edit: () => x.editPlaylist(page),
+    remove: (index) => {
+      const track = page.tracks[index];
+      const itemId = page.itemIds[index];
+      const videoId = track && videoIdFromTrackId(track.id);
+      if (!itemId || !videoId) {
+        x.notify("YouTube did not say how to remove this song");
+        return;
+      }
+      // Found again by its id, which is the row's own even if the page has moved on.
+      patch((p) => {
+        const at = p.itemIds.indexOf(itemId);
+        if (at < 0) return p;
+        return {
+          ...p,
+          tracks: p.tracks.toSpliced(at, 1),
+          itemIds: p.itemIds.toSpliced(at, 1),
+          trackCount: p.trackCount === null ? null : Math.max(0, p.trackCount - 1),
+        };
+      });
+      void send(
+        engine.removeFromPlaylist(page.id, [{ videoId, itemId }]),
+        `Removed from ${page.title}`,
+      );
+    },
+    move: (from, to) => {
+      const itemId = page.itemIds[from];
+      const track = page.tracks[from];
+      if (!itemId || !track || from === to) return;
+      const itemIds = page.itemIds.toSpliced(from, 1).toSpliced(to, 0, itemId);
+      // YouTube places the row before the one that ends up after it.
+      const before = itemIds[to + 1];
+      if (before === null) {
+        x.notify("YouTube did not say how to move this song");
+        return;
+      }
+      patch((p) => {
+        const at = p.itemIds.indexOf(itemId);
+        if (at < 0) return p;
+        const moved = p.tracks[at]!;
+        return {
+          ...p,
+          tracks: p.tracks.toSpliced(at, 1).toSpliced(to, 0, moved),
+          itemIds: p.itemIds.toSpliced(at, 1).toSpliced(to, 0, itemId),
+        };
+      });
+      void send(engine.moveInPlaylist(page.id, itemId, before ?? null), "Playlist saved");
+    },
+  };
+}
+
 /**
  * Whether the account dislikes a song, as last seen. Its row is dimmed for
  * it, as YouTube Music dims disliked songs in a list.
@@ -220,8 +348,11 @@ export function useDisliked(track: Track): boolean {
  * its own; a folder is one of the local library's.
  */
 export type Subject =
-  /** `onRemove` is set on a queue row, which the song can be removed from. */
-  | { kind: "song"; track: Track; onRemove?: () => void }
+  /**
+   * `onRemove` is set on a queue row, which the song can be removed from, and
+   * `onRemoveFromPlaylist` on a row of one of your playlists.
+   */
+  | { kind: "song"; track: Track; onRemove?: () => void; onRemoveFromPlaylist?: () => void }
   | { kind: "collection"; route: Route }
   | { kind: "folder"; path: string };
 
@@ -303,7 +434,13 @@ const contained = {
 function Items({ subject }: { subject: Subject }) {
   switch (subject.kind) {
     case "song":
-      return <SongItems track={subject.track} onRemove={subject.onRemove} />;
+      return (
+        <SongItems
+          track={subject.track}
+          onRemove={subject.onRemove}
+          onRemoveFromPlaylist={subject.onRemoveFromPlaylist}
+        />
+      );
     case "collection":
       return <CollectionItems route={subject.route} />;
     case "folder":
@@ -330,7 +467,15 @@ function FolderItems({ path }: { path: string }) {
   );
 }
 
-function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) | undefined }) {
+function SongItems({
+  track,
+  onRemove,
+  onRemoveFromPlaylist,
+}: {
+  track: Track;
+  onRemove?: (() => void) | undefined;
+  onRemoveFromPlaylist?: (() => void) | undefined;
+}) {
   const x = useInteractions();
   const videoId = videoIdFromTrackId(track.id);
   const albumId = track.albumId;
@@ -358,6 +503,12 @@ function SongItems({ track, onRemove }: { track: Track; onRemove?: (() => void) 
         </DropdownMenuItem>
       )}
       {videoId && x.signedIn && <SaveToPlaylist videoIds={() => Promise.resolve([videoId])} />}
+      {onRemoveFromPlaylist && (
+        <DropdownMenuItem onClick={onRemoveFromPlaylist}>
+          <IconTrash />
+          Remove from playlist
+        </DropdownMenuItem>
+      )}
       {videoId && <RatingItems videoId={videoId} />}
       {(albumId || linked(track.artists).length > 0) && <DropdownMenuSeparator />}
       {albumId && (
@@ -462,6 +613,19 @@ function CollectionItems({ route }: { route: Route }) {
         <SaveToPlaylist
           videoIds={async () => videoIdsOf((await tracksOf(await settledPage(route))).tracks)}
         />
+      )}
+      {x.signedIn && page?.kind === "playlist" && page.page.editable && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => x.editPlaylist(page.page)}>
+            <IconPencil />
+            Edit playlist
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => x.deletePlaylist(page.page)}>
+            <IconTrash />
+            Delete playlist
+          </DropdownMenuItem>
+        </>
       )}
       {page?.kind === "album" && linked(page.page.artists).length > 0 && (
         <>
@@ -607,11 +771,17 @@ function NewPlaylistItem({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
   );
 }
 
-const PRIVACY: { value: NewPlaylist["privacy"]; label: string }[] = [
-  { value: "PRIVATE", label: "Private" },
-  { value: "UNLISTED", label: "Unlisted" },
-  { value: "PUBLIC", label: "Public" },
-];
+/** Who can see a playlist, as the header and the playlist dialogs name it. */
+export const PRIVACY_LABELS: Record<PlaylistPrivacy, string> = {
+  PRIVATE: "Private",
+  UNLISTED: "Unlisted",
+  PUBLIC: "Public",
+};
+
+const PRIVACY = (Object.keys(PRIVACY_LABELS) as PlaylistPrivacy[]).map((value) => ({
+  value,
+  label: PRIVACY_LABELS[value],
+}));
 
 /** YouTube Music's "New playlist" dialog: a title, a description and who can see it. */
 function NewPlaylistDialog({
@@ -624,7 +794,7 @@ function NewPlaylistDialog({
   const x = useInteractions();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [privacy, setPrivacy] = useState<NewPlaylist["privacy"]>("PRIVATE");
+  const [privacy, setPrivacy] = useState<PlaylistPrivacy>("PRIVATE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -676,39 +846,14 @@ function NewPlaylistDialog({
             void create();
           }}
         >
-          <Input
-            autoFocus
-            aria-label="Title"
-            placeholder="Title"
-            value={title}
-            maxLength={150}
-            onChange={(event) => setTitle(event.target.value)}
+          <PlaylistFields
+            title={title}
+            onTitle={setTitle}
+            description={description}
+            onDescription={setDescription}
+            privacy={privacy}
+            onPrivacy={setPrivacy}
           />
-          <textarea
-            aria-label="Description"
-            placeholder="Description"
-            value={description}
-            maxLength={5000}
-            rows={3}
-            onChange={(event) => setDescription(event.target.value)}
-            className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          />
-          <div role="radiogroup" aria-label="Privacy" className="flex gap-2">
-            {PRIVACY.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={privacy === option.value}
-                variant={privacy === option.value ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-full"
-                onClick={() => setPrivacy(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
@@ -720,6 +865,366 @@ function NewPlaylistDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A playlist's title, description and who can see it, as both playlist dialogs ask. */
+function PlaylistFields(props: {
+  title: string;
+  onTitle: (title: string) => void;
+  description: string;
+  onDescription: (description: string) => void;
+  privacy: PlaylistPrivacy;
+  onPrivacy: (privacy: PlaylistPrivacy) => void;
+}) {
+  return (
+    <>
+      <Input
+        autoFocus
+        aria-label="Title"
+        placeholder="Title"
+        value={props.title}
+        maxLength={150}
+        onChange={(event) => props.onTitle(event.target.value)}
+      />
+      <textarea
+        aria-label="Description"
+        placeholder="Description"
+        value={props.description}
+        maxLength={5000}
+        rows={3}
+        onChange={(event) => props.onDescription(event.target.value)}
+        className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+      />
+      <div role="radiogroup" aria-label="Privacy" className="flex gap-2">
+        {PRIVACY.map((option) => (
+          <Button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={props.privacy === option.value}
+            variant={props.privacy === option.value ? "secondary" : "ghost"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => props.onPrivacy(option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * YouTube Music's "Edit playlist" dialog, the "New playlist" one filled in.
+ * Only what changed is sent.
+ */
+function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onClose: () => void }) {
+  return (
+    <Dialog
+      open={page !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit playlist</DialogTitle>
+        </DialogHeader>
+        {/* Keyed, so each opening starts from the playlist as it is. */}
+        {page && <EditPlaylistForm key={page.id} page={page} onClose={onClose} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * What the form will make the cover: a new image, the one YouTube makes from
+ * the songs, or (null) the cover as it is.
+ */
+type CoverChange = Cover | "default" | null;
+
+/**
+ * The cover, with YouTube Music's edit button over it: a menu to pick a new
+ * image or, when the cover is one someone uploaded, to go back to YouTube's.
+ */
+function CoverPicker(props: {
+  page: PlaylistPage;
+  cover: CoverChange;
+  disabled: boolean;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const { cover } = props;
+  const custom = cover === null ? isCustomCover(props.page.thumbnails) : cover !== "default";
+  return (
+    <div className="relative size-32 self-center">
+      {cover !== null && cover !== "default" ? (
+        <img src={cover.url} alt="" className="size-32 rounded-lg object-cover" />
+      ) : (
+        // YouTube's own cover is only known once it is back, so until then the
+        // placeholder stands in for it.
+        <Art
+          thumbnails={cover === "default" ? [] : props.page.thumbnails}
+          width={128}
+          lazy={false}
+          className="size-32 rounded-lg"
+          fallback={<IconPlaylist size={48} stroke={1.25} />}
+        />
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={props.disabled}
+          render={
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Edit cover"
+              title="Edit cover"
+              className="absolute right-1.5 bottom-1.5 rounded-full shadow"
+            />
+          }
+        >
+          <IconPhotoEdit />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-max">
+          <DropdownMenuItem onClick={() => input.current?.click()}>
+            <IconPhoto />
+            Choose from library
+          </DropdownMenuItem>
+          {custom && (
+            <DropdownMenuItem onClick={props.onRemove}>
+              <IconTrash />
+              Remove custom image
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Cleared, so picking the same file again still reports a change.
+          event.target.value = "";
+          if (file) props.onPick(file);
+        }}
+      />
+    </div>
+  );
+}
+
+function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () => void }) {
+  const x = useInteractions();
+  const [title, setTitle] = useState(page.title);
+  const [description, setDescription] = useState(page.description ?? "");
+  // YouTube names the privacy on your playlists, but should it not, the form
+  // starts at Private and sends it only if you pick another.
+  const startPrivacy = page.privacy ?? "PRIVATE";
+  const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
+  const [cover, setCover] = useState<CoverChange>(null);
+  // A picked image while its crop is placed, before it becomes `cover`.
+  const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cover && cover !== "default") return () => URL.revokeObjectURL(cover.url);
+  }, [cover]);
+  const picked = cropping?.picked;
+  useEffect(() => {
+    if (picked) return () => closePicked(picked);
+  }, [picked]);
+
+  const pick = async (file: File) => {
+    setError(null);
+    try {
+      const image = await openImage(file);
+      setCropping({ picked: image, crop: centredCrop(image.width, image.height) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const crop = async () => {
+    if (!cropping) return;
+    try {
+      setCover(await cropCover(cropping.picked, cropping.crop));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setCropping(null);
+  };
+
+  const save = async () => {
+    const name = title.trim();
+    if (name.length === 0) return;
+    const text = description.trim();
+    const details = {
+      ...(name !== page.title && { title: name }),
+      ...(text !== (page.description ?? "") && { description: text }),
+      ...(privacy !== startPrivacy && { privacy }),
+    };
+    if (Object.keys(details).length === 0 && !cover) return onClose();
+    setBusy(true);
+    setError(null);
+    try {
+      // Sent apart from the rest, as YouTube Music does, and first: once it is
+      // set, a failure below leaves it out of a second try.
+      if (cover) {
+        const thumbnails =
+          cover === "default"
+            ? await engine.removePlaylistCover(page.id)
+            : await engine.setPlaylistCover(page.id, cover.image);
+        setCover(null);
+        patchPage({ kind: "playlist", id: page.id }, (p) =>
+          p.kind === "playlist" && thumbnails.length > 0
+            ? { ...p, page: { ...p.page, thumbnails } }
+            : p,
+        );
+        x.libraryChanged();
+      }
+      await engine.editPlaylist(page.id, details);
+      patchPage({ kind: "playlist", id: page.id }, (p) =>
+        p.kind === "playlist"
+          ? {
+              ...p,
+              page: {
+                ...p.page,
+                title: name,
+                description: text || null,
+                privacy: details.privacy ?? p.page.privacy,
+              },
+            }
+          : p,
+      );
+      if (details.title !== undefined) x.libraryChanged();
+      x.notify("Playlist saved");
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (cropping) {
+    return (
+      <div className="flex flex-col gap-3">
+        <CoverCropper
+          picked={cropping.picked}
+          crop={cropping.crop}
+          onCrop={(next) => setCropping({ ...cropping, crop: next })}
+        />
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setCropping(null)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => void crop()}>
+            Done
+          </Button>
+        </DialogFooter>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <CoverPicker
+        page={page}
+        cover={cover}
+        disabled={busy}
+        onPick={(file) => void pick(file)}
+        // A new image not yet saved is only dropped; a saved one is removed on save.
+        onRemove={() => setCover(isCustomCover(page.thumbnails) ? "default" : null)}
+      />
+      <PlaylistFields
+        title={title}
+        onTitle={setTitle}
+        description={description}
+        onDescription={setDescription}
+        privacy={privacy}
+        onPrivacy={setPrivacy}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <DialogFooter>
+        <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+          Cancel
+        </DialogClose>
+        <Button type="submit" disabled={busy || title.trim().length === 0}>
+          {busy && <IconLoader2 className="animate-spin" />}
+          Save
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Asks first, as YouTube Music does: a deleted playlist cannot be brought back. */
+function DeletePlaylistDialog({
+  page,
+  onClose,
+}: {
+  page: PlaylistPage | null;
+  onClose: () => void;
+}) {
+  const x = useInteractions();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remove = async () => {
+    if (!page) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await engine.deletePlaylist(page.id);
+      onClose();
+      x.playlistDeleted(page.id, page.title);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={page !== null}
+      onOpenChange={(open) => {
+        if (!open && !busy) {
+          onClose();
+          setError(null);
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete playlist?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {page?.title} will be deleted from your library. This cannot be undone.
+        </p>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
+            Cancel
+          </DialogClose>
+          <Button variant="destructive" disabled={busy} onClick={() => void remove()}>
+            {busy && <IconLoader2 className="animate-spin" />}
+            Delete
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

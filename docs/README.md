@@ -9,7 +9,7 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Sign-in](sign-in.md): the cookie session, browser import and why OAuth is out.
 - [Settings](settings.md): the settings file, and how each setting reaches mpv, the engine or the window.
 - [Browse pages and long lists](browse.md): album, artist and playlist pages, loading long playlists, and virtualized track lists.
-- [Interactions](interactions.md): the menus on songs, albums, playlists and artists, and liking songs.
+- [Interactions](interactions.md): the menus on songs, albums, playlists and artists, editing your playlists, and liking songs.
 - [Artwork](artwork.md): the `img` scheme, WebP requests and the capped disk cache.
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.
 - [Versions and releases](releases.md): versioning, the release workflow and CI.

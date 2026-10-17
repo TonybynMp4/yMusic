@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { albumFrom, artistFrom, libraryFrom, playlistFrom, targetsFrom, toCard } from "./browse.ts";
+import {
+  albumFrom,
+  artistFrom,
+  countsFrom,
+  itemIdOf,
+  libraryFrom,
+  playlistFrom,
+  targetsFrom,
+  toCard,
+} from "./browse.ts";
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
@@ -186,6 +195,82 @@ describe("playlistFrom", () => {
 
   it("reads 'N/A', youtubei.js's empty text, as missing", () => {
     expect(playlistFrom("PLx", { subtitle: text("N/A") }, []).subtitle).toBeNull();
+  });
+
+  // Your own playlist, as the header and edit form come back from YouTube Music.
+  const own = {
+    title: text("Road trip"),
+    subtitle: text("Playlist • 2024"),
+    second_subtitle: text("2 tracks • 7 minutes"),
+    strapline_text_one: text("Tony", [{ text: "Tony", endpoint: { payload: { browseId: "UCme" } } }]),
+    description: { description: text("Songs for the car") },
+  };
+  const removable = (setVideoId: string, videoId: string) => ({
+    menu: {
+      items: [
+        { endpoint: { payload: { videoId } } },
+        {
+          endpoint: {
+            payload: {
+              actions: [{ action: "ACTION_REMOVE_VIDEO", setVideoId, removedVideoId: videoId }],
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  it("reads the owner, description, count and length off the header", () => {
+    const playlist = playlistFrom("PLx", own, [], { privacy: "PRIVATE" });
+    expect(playlist).toMatchObject({
+      subtitle: "Playlist • 2024",
+      owner: { name: "Tony", channelId: "UCme" },
+      description: "Songs for the car",
+      privacy: "PRIVATE",
+      trackCount: 2,
+      length: "7 minutes",
+      editable: true,
+    });
+  });
+
+  it("is editable only with the edit form", () => {
+    const playlist = playlistFrom("PLx", own, []);
+    expect(playlist.editable).toBe(false);
+    expect(playlist.privacy).toBeNull();
+  });
+
+  it("keeps each row's id within the playlist, in step with the songs", () => {
+    const playlist = playlistFrom("PLx", own, [
+      { id: "aaa", title: "One", ...removable("S1", "aaa") },
+      { title: "broken", ...removable("S2", "bbb") },
+      { id: "ccc", title: "Three" },
+    ]);
+    expect(playlist.tracks.map((t) => t.title)).toEqual(["One", "Three"]);
+    expect(playlist.itemIds).toEqual(["S1", null]);
+  });
+});
+
+describe("itemIdOf", () => {
+  it("is null without a remove item", () => {
+    expect(itemIdOf({})).toBeNull();
+    expect(itemIdOf({ menu: { items: [{ endpoint: { payload: { actions: [] } } }] } })).toBeNull();
+  });
+});
+
+describe("countsFrom", () => {
+  it("reads the count and length, past the views", () => {
+    expect(countsFrom("1.2K views • 1,204 tracks • 7+ hours")).toEqual({
+      tracks: 1204,
+      length: "7+ hours",
+    });
+    expect(countsFrom("1 song • 1 hour, 5 minutes")).toEqual({
+      tracks: 1,
+      length: "1 hour, 5 minutes",
+    });
+  });
+
+  it("is empty without the line", () => {
+    expect(countsFrom(null)).toEqual({ tracks: null, length: null });
   });
 });
 

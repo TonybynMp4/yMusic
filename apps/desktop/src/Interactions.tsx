@@ -48,6 +48,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 
@@ -1032,6 +1033,17 @@ function CoverPicker(props: {
   );
 }
 
+/** Left and right move focus along a row of buttons. */
+function arrowBetweenButtons(event: KeyboardEvent<HTMLElement>) {
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+  if (!step) return;
+  const buttons = [...event.currentTarget.querySelectorAll("button")];
+  const at = buttons.indexOf(event.target as HTMLButtonElement);
+  if (at < 0) return;
+  event.preventDefault();
+  buttons[(at + step + buttons.length) % buttons.length]?.focus();
+}
+
 function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () => void }) {
   const x = useInteractions();
   const [title, setTitle] = useState(page.title);
@@ -1147,9 +1159,10 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
         <CoverCropper
           picked={cropping.picked}
           initial={cropping.initial}
+          onDone={() => void crop()}
           onCrop={(next) => setCropping((now) => now && { ...now, crop: next })}
         />
-        <DialogFooter>
+        <DialogFooter onKeyDown={arrowBetweenButtons}>
           <Button type="button" variant="ghost" onClick={() => setCropping(null)}>
             Cancel
           </Button>

@@ -9,18 +9,21 @@ import { MIN_SIDE, type Crop, type Picked } from "./cover.ts";
  * YouTube Music's "Edit Thumbnail" step, drawn like Origin UI's cropper: a
  * fixed square over the picked image, which moves and zooms under it. Drag or
  * scroll with two fingers to move it; pinch, Ctrl+wheel or the slider zoom.
- * From the keyboard, the arrow keys move it (Shift for finer steps), + and -
- * zoom, and 0 starts over. Opens on `initial` when given, as when a cover is
- * cropped again. Reports the square in the image's own pixels.
+ * It takes focus on opening, so the keyboard works at once: the arrow keys
+ * move the square over the image (Shift for finer steps), + and - zoom, 0
+ * starts over and Enter calls `onDone`. Opens on `initial` when given, as when
+ * a cover is cropped again. Reports the square in the image's own pixels.
  */
 export function CoverCropper({
   picked,
   initial,
   onCrop,
+  onDone,
 }: {
   picked: Picked;
   initial?: Crop | undefined;
   onCrop: (crop: Crop) => void;
+  onDone: () => void;
 }) {
   const { file, width, height } = picked;
   // Zoomed in no further than leaves the square at the smallest YouTube takes.
@@ -28,6 +31,8 @@ export function CoverCropper({
   const [url, setUrl] = useState<string>();
   const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  // Whether the square is on screen yet. It is what takes focus.
+  const [drawn, setDrawn] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   // The listeners are added once, so they read the latest of these through a ref.
   const latest = useRef({ position, zoom, media: null as Size | null, square: null as Size | null });
@@ -49,20 +54,12 @@ export function CoverCropper({
       if (event.ctrlKey) return;
       // Not passive, so the dialog does not scroll instead.
       event.preventDefault();
-      const now = latest.current;
-      if (!now.media || !now.square) return;
       // A mouse wheel counts in lines, a touchpad in pixels.
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
       // The image goes the other way to the square it replaces, whose sideways
       // direction was flipped to follow the fingers.
-      const reach = (side: number, square: number) => Math.max(0, (side * now.zoom - square) / 2);
-      const next = {
-        x: clamp(now.position.x + event.deltaX * unit, reach(now.media.width, now.square.width)),
-        y: clamp(now.position.y - event.deltaY * unit, reach(now.media.height, now.square.height)),
-      };
-      // Several can come before a render, and each builds on the last.
-      now.position = next;
-      setPosition(next);
+      const next = moved(latest.current, event.deltaX * unit, -event.deltaY * unit);
+      if (next) setPosition(next);
     };
     // On Linux a pinch comes from the app's shell instead, as the scale since
     // it began (platform/window.rs).
@@ -84,9 +81,21 @@ export function CoverCropper({
     };
   }, [maxZoom]);
 
+  useEffect(() => {
+    if (drawn) box.current?.querySelector<HTMLElement>(".reactEasyCrop_CropArea")?.focus();
+  }, [drawn]);
+
   const zoomTo = (next: number) => setZoom(Math.min(Math.max(next, 1), maxZoom));
+  // In place of the cropper's own, which moves the image the way the arrow
+  // points and so the square the other way.
   const keys = (event: KeyboardEvent) => {
-    if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
+    const step = event.shiftKey ? 2 : 10;
+    const arrow = ARROWS[event.key];
+    if (arrow) {
+      const next = moved(latest.current, -arrow[0] * step, -arrow[1] * step);
+      if (next) setPosition(next);
+    } else if (event.key === "Enter") onDone();
+    else if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
     else if (event.key === "-") zoomTo(zoom / 1.1);
     else if (event.key === "0") {
       setZoom(1);
@@ -99,7 +108,6 @@ export function CoverCropper({
     <div data-slot="cover-cropper" className="flex flex-col gap-4">
       <div
         ref={box}
-        onKeyDown={keys}
         className="relative h-[28rem] w-full overflow-hidden rounded-md has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
       >
         {url && (
@@ -114,7 +122,12 @@ export function CoverCropper({
             onZoomChange={setZoom}
             onWheelRequest={(event) => event.ctrlKey}
             onMediaLoaded={(media) => (latest.current.media = media)}
-            onCropSizeChange={(square) => (latest.current.square = square)}
+            onCropSizeChange={(square) => {
+              latest.current.square = square;
+              setDrawn(true);
+            }}
+            // Moving it only reports the change; zooming reports it complete.
+            onCropAreaChange={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
             onCropComplete={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
             {...(initial && {
               initialCroppedAreaPixels: {
@@ -124,9 +137,8 @@ export function CoverCropper({
                 height: initial.size,
               },
             })}
-            keyboardStep={10}
-            classes={{ containerClassName: "outline-none" }}
-            cropperProps={{ "aria-label": "Image crop" }}
+            classes={{ cropAreaClassName: "outline-none" }}
+            cropperProps={{ "aria-label": "Image crop", onKeyDown: keys }}
             // Inline, as the cropper's own stylesheet outranks Tailwind's layers.
             style={{
               cropAreaStyle: {
@@ -152,6 +164,33 @@ export function CoverCropper({
       </div>
     </div>
   );
+}
+
+const ARROWS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
+/**
+ * The image's position moved by `dx`, `dy`, kept covering the square, or
+ * nothing before the image has loaded. Stored back at once, as several moves
+ * can come before a render and each builds on the last.
+ */
+function moved(
+  now: { position: Point; zoom: number; media: Size | null; square: Size | null },
+  dx: number,
+  dy: number,
+): Point | undefined {
+  const { media, square } = now;
+  if (!media || !square) return undefined;
+  const reach = (side: number, inner: number) => Math.max(0, (side * now.zoom - inner) / 2);
+  now.position = {
+    x: clamp(now.position.x + dx, reach(media.width, square.width)),
+    y: clamp(now.position.y + dy, reach(media.height, square.height)),
+  };
+  return now.position;
 }
 
 function clamp(value: number, reach: number): number {

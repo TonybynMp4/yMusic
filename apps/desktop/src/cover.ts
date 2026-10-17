@@ -12,9 +12,8 @@ const MAX_SIDE = 1200;
 
 /** A picked image, ready to crop. Release it with `closePicked` when done. */
 export interface Picked {
+  file: File;
   bitmap: ImageBitmap;
-  /** An object URL of the file, to show while cropping. */
-  url: string;
   width: number;
   height: number;
 }
@@ -55,53 +54,17 @@ export async function openImage(file: File): Promise<Picked> {
     throw new Error(`Images must be at least ${MIN_SIDE} x ${MIN_SIDE} pixels`);
   }
   const { width, height } = bitmap;
-  return { bitmap, url: URL.createObjectURL(file), width, height };
+  return { file, bitmap, width, height };
 }
 
 export function closePicked(picked: Picked): void {
   picked.bitmap.close();
-  URL.revokeObjectURL(picked.url);
 }
 
 /** The largest square in the middle, where the crop starts. */
 export function centredCrop(width: number, height: number): Crop {
   const size = Math.min(width, height);
   return { x: (width - size) / 2, y: (height - size) / 2, size };
-}
-
-/** `crop` moved by `dx`, `dy`, kept inside the image. */
-export function moveCrop(crop: Crop, dx: number, dy: number, width: number, height: number): Crop {
-  return {
-    x: clamp(crop.x + dx, 0, width - crop.size),
-    y: clamp(crop.y + dy, 0, height - crop.size),
-    size: crop.size,
-  };
-}
-
-export type Corner = "nw" | "ne" | "sw" | "se";
-
-/**
- * `crop` resized by dragging `corner` by `dx`, `dy`. The opposite corner stays
- * put, the crop stays square, inside the image and no smaller than `MIN_SIDE`.
- */
-export function resizeCrop(
-  crop: Crop,
-  corner: Corner,
-  dx: number,
-  dy: number,
-  width: number,
-  height: number,
-): Crop {
-  const west = corner === "nw" || corner === "sw";
-  const north = corner === "nw" || corner === "ne";
-  // The corner that stays, and how far the square may grow away from it.
-  const anchorX = west ? crop.x + crop.size : crop.x;
-  const anchorY = north ? crop.y + crop.size : crop.y;
-  const room = Math.min(west ? anchorX : width - anchorX, north ? anchorY : height - anchorY);
-  // The square follows whichever way the pointer went further.
-  const grow = Math.max(west ? -dx : dx, north ? -dy : dy);
-  const size = clamp(crop.size + grow, Math.min(MIN_SIDE, room), room);
-  return { x: west ? anchorX - size : anchorX, y: north ? anchorY - size : anchorY, size };
 }
 
 export async function cropCover(picked: Picked, crop: Crop): Promise<Cover> {
@@ -117,8 +80,4 @@ export async function cropCover(picked: Picked, crop: Crop): Promise<Cover> {
   );
   if (!blob) throw new Error(UNREADABLE);
   return { image: new Uint8Array(await blob.arrayBuffer()), url: URL.createObjectURL(blob) };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

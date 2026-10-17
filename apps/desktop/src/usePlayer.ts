@@ -654,7 +654,6 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     playingFrom,
     shared,
     savedSource,
-    playlistOf,
     play,
     pause,
     toggle,

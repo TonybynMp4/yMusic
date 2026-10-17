@@ -23,13 +23,14 @@ import {
   createPlaylist,
   getAlbum,
   getArtist,
-  getLibraryAlbums,
-  getLibraryArtists,
+  getLibraryCards,
   getLibraryPlaylists,
   getPlaylistTargets,
   openLibrarySongs,
   openPlaylist,
   playlistIdFromBrowseId,
+  type LibraryCards,
+  type LibraryKind,
   type NewPlaylist,
   type PlaylistMore,
   type PlaylistTarget,
@@ -374,26 +375,27 @@ export class YouTubeEngine {
     return getLibraryPlaylists(await this.#browseClient());
   }
 
-  /** The albums saved to the library. Empty when signed out. */
-  async libraryAlbums(): Promise<BrowseCard[]> {
-    if (this.#cookie === null) return [];
-    return getLibraryAlbums(await this.#browseClient());
-  }
-
-  /** The artists of the songs in the library. Empty when signed out. */
-  async libraryArtists(): Promise<BrowseCard[]> {
-    if (this.#cookie === null) return [];
-    return getLibraryArtists(await this.#browseClient());
+  /**
+   * The account's playlists, saved albums or library artists, in `sort`, one
+   * of the orders YouTube offers for the list, or its default. Empty when
+   * signed out.
+   */
+  async libraryCards(kind: LibraryKind, sort?: string): Promise<LibraryCards> {
+    if (this.#cookie === null) return { cards: [], sorts: [], sort: null };
+    return getLibraryCards(await this.#browseClient(), kind, sort);
   }
 
   /**
-   * The songs saved to the library, the first page of them; `more`, when set,
-   * is a handle for `playlistMore` to fetch the next. Empty when signed out.
+   * The songs saved to the library, in `sort`, the first page of them; `more`,
+   * when set, is a handle for `playlistMore` to fetch the next. Empty when
+   * signed out.
    */
-  async librarySongs(): Promise<{ tracks: Track[]; more: string | null }> {
-    if (this.#cookie === null) return { tracks: [], more: null };
-    const { tracks, more } = await openLibrarySongs(await this.#browseClient());
-    return { tracks, more: this.#hold(more) };
+  async librarySongs(
+    sort?: string,
+  ): Promise<{ tracks: Track[]; more: string | null; sorts: string[]; sort: string | null }> {
+    if (this.#cookie === null) return { tracks: [], more: null, sorts: [], sort: null };
+    const songs = await openLibrarySongs(await this.#browseClient(), sort);
+    return { ...songs, more: this.#hold(songs.more) };
   }
 
   /**

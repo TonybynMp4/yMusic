@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * When things last played on this device, for the library's "Recently played"
- * sort. Keyed like views (`playlist:…`, `album:…`, `artist:…`, `local:…`),
- * plus `track:…` for songs. YouTube keeps no such date for a saved album or
- * playlist that the app can read, so this is the app's own record.
+ * When local files last played on this device, for the library's "Recently
+ * played" sort of local files. Keyed like views (`local:…`). YouTube sorts
+ * the account's lists itself.
  */
 const KEY = "ymusic.recently-played";
 /** Enough for a large library; the oldest go first. */

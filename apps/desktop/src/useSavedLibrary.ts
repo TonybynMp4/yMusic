@@ -4,17 +4,23 @@ import type { BrowseCard, Track } from "@ymusic/core";
 import { engine } from "./engine.ts";
 
 /**
- * The saved albums, artists and songs in the account's library, for the
- * library page's chips. Each list loads when its chip is first opened, and is
- * kept for the run, per account, so switching chips is instant.
+ * The playlists, saved albums, artists and songs in the account's library,
+ * for the library page's chips. Each list loads when its chip is first opened,
+ * and is kept for the run, per account and sort, so switching chips is
+ * instant.
  */
 export type SavedState<T> =
   | { status: "loading" }
-  /** `loadingMore`: a long list of songs is still arriving, a page at a time. */
-  | { status: "ready"; items: T[]; loadingMore: boolean }
+  /**
+   * `loadingMore`: a long list of songs is still arriving, a page at a time.
+   * `sorts`: the orders YouTube offers for the list; `sort`, the one applied.
+   */
+  | { status: "ready"; items: T[]; loadingMore: boolean; sorts: string[]; sort: string | null }
   | { status: "error"; error: string };
 
-export type SavedKind = "albums" | "artists" | "songs";
+export type SavedKind = "playlists" | "albums" | "artists" | "songs";
+
+type Ready = Extract<SavedState<BrowseCard | Track>, { status: "ready" }>;
 
 interface Entry {
   state: SavedState<BrowseCard | Track>;
@@ -23,16 +29,21 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 /** What a dropped list held, shown again while its reload runs. */
-const previous = new Map<string, (BrowseCard | Track)[]>();
+const previous = new Map<string, Ready>();
 
-function entryFor(account: string, kind: SavedKind): Entry {
-  const key = `${account}\n${kind}`;
+/** `sort` empty for YouTube's default order. */
+function keyOf(account: string, kind: SavedKind, sort: string): string {
+  return `${account}\n${kind}\n${sort}`;
+}
+
+function entryFor(account: string, kind: SavedKind, sort: string): Entry {
+  const key = keyOf(account, kind, sort);
   let entry = entries.get(key);
   if (!entry) {
     const seed = previous.get(key);
     previous.delete(key);
     const created: Entry = {
-      state: seed ? { status: "ready", items: seed, loadingMore: false } : { status: "loading" },
+      state: seed ? { ...seed, loadingMore: false } : { status: "loading" },
       listeners: new Set(),
     };
     const set = (state: Entry["state"]) => {
@@ -40,7 +51,7 @@ function entryFor(account: string, kind: SavedKind): Entry {
       for (const listener of created.listeners) listener();
     };
     entries.set(key, created);
-    void load(kind, set, () => entries.get(key) !== created, seed !== undefined).catch(
+    void load(kind, sort, set, () => entries.get(key) !== created, seed !== undefined).catch(
       (error: unknown) => {
         // A failed reload keeps the list it was refreshing.
         if (seed) console.error("could not reload the library", error);
@@ -61,22 +72,34 @@ function entryFor(account: string, kind: SavedKind): Entry {
  */
 async function load(
   kind: SavedKind,
+  sort: string,
   set: (state: Entry["state"]) => void,
   dropped: () => boolean,
   quiet: boolean,
 ): Promise<void> {
-  if (kind === "albums") {
-    set({ status: "ready", items: await engine.libraryAlbums(), loadingMore: false });
-    return;
-  }
-  if (kind === "artists") {
-    set({ status: "ready", items: await engine.libraryArtists(), loadingMore: false });
+  if (kind !== "songs") {
+    const list = await engine.libraryCards(kind, sort || undefined);
+    set({
+      status: "ready",
+      items: list.cards,
+      loadingMore: false,
+      sorts: list.sorts,
+      sort: list.sort,
+    });
     return;
   }
   // Songs arrive like a long playlist: the first page shows at once.
-  const first = await engine.librarySongs();
+  const first = await engine.librarySongs(sort || undefined);
+  const { sorts } = first;
   let tracks = first.tracks;
-  if (!quiet) set({ status: "ready", items: tracks, loadingMore: first.more !== null });
+  const ready = (loadingMore: boolean): Ready => ({
+    status: "ready",
+    items: tracks,
+    loadingMore,
+    sorts,
+    sort: first.sort,
+  });
+  if (!quiet) set(ready(first.more !== null));
   for (let more = first.more; more !== null && !dropped(); ) {
     try {
       const next = await engine.playlistMore(more);
@@ -86,9 +109,9 @@ async function load(
       console.error("could not load the rest of the library's songs", error);
       more = null;
     }
-    if (!quiet) set({ status: "ready", items: tracks, loadingMore: more !== null });
+    if (!quiet) set(ready(more !== null));
   }
-  if (quiet && !dropped()) set({ status: "ready", items: tracks, loadingMore: false });
+  if (quiet && !dropped()) set(ready(false));
 }
 
 /**
@@ -98,9 +121,9 @@ async function load(
  */
 export function forgetSaved(kind?: SavedKind): void {
   for (const [key, entry] of entries) {
-    if (kind !== undefined && !key.endsWith(`\n${kind}`)) continue;
+    if (kind !== undefined && key.split("\n")[1] !== kind) continue;
     entries.delete(key);
-    if (entry.state.status === "ready") previous.set(key, entry.state.items);
+    if (entry.state.status === "ready") previous.set(key, entry.state);
   }
   generation += 1;
   for (const listener of forgotten) listener();
@@ -115,21 +138,36 @@ function subscribeForgotten(listener: () => void): () => void {
   return () => void forgotten.delete(listener);
 }
 
-const idle: SavedState<never> = { status: "ready", items: [], loadingMore: false };
+const idle: SavedState<never> = {
+  status: "ready",
+  items: [],
+  loadingMore: false,
+  sorts: [],
+  sort: null,
+};
 
-/** `account` null (signed out) or `kind` null (another chip) loads nothing. */
+/**
+ * `account` null (signed out) or `kind` null (another chip) loads nothing.
+ * `sort` is one of the list's `sorts`, or empty for YouTube's default.
+ */
 export function useSaved(
   account: string | null,
-  kind: "albums" | "artists" | null,
+  kind: "playlists" | "albums" | "artists" | null,
+  sort: string,
 ): SavedState<BrowseCard>;
-export function useSaved(account: string | null, kind: "songs" | null): SavedState<Track>;
+export function useSaved(
+  account: string | null,
+  kind: "songs" | null,
+  sort: string,
+): SavedState<Track>;
 export function useSaved(
   account: string | null,
   kind: SavedKind | null,
+  sort: string,
 ): SavedState<BrowseCard | Track> {
   // Read for the re-render: after `forgetSaved`, `entryFor` makes a new entry.
   useSyncExternalStore(subscribeForgotten, () => generation);
-  const entry = account === null || kind === null ? null : entryFor(account, kind);
+  const entry = account === null || kind === null ? null : entryFor(account, kind, sort);
   const subscribe = useCallback(
     (listener: () => void) => {
       if (entry === null) return () => {};
@@ -143,10 +181,10 @@ export function useSaved(
   useEffect(
     () => () => {
       if (account === null || kind === null) return;
-      const key = `${account}\n${kind}`;
+      const key = keyOf(account, kind, sort);
       if (entries.get(key)?.state.status === "error") entries.delete(key);
     },
-    [account, kind],
+    [account, kind, sort],
   );
   return state;
 }

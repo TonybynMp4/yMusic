@@ -6,6 +6,7 @@ import {
   cardsOf,
   libraryFrom,
   playlistFrom,
+  sortMenu,
   targetsFrom,
   toCard,
 } from "./browse.ts";
@@ -268,5 +269,43 @@ describe("targetsFrom", () => {
         { title: text("no id") },
       ]),
     ).toEqual([{ id: "PLa", title: "Road trip" }]);
+  });
+});
+
+describe("sortMenu", () => {
+  const option = (title: string, continuation?: string) => ({
+    title,
+    endpoint: continuation
+      ? {
+          payload: {
+            commands: [
+              {
+                browseSectionListReloadEndpoint: {
+                  continuation: { reloadContinuationData: { continuation } },
+                },
+              },
+            ],
+          },
+        }
+      : undefined,
+  });
+
+  it("lists YouTube's sorts, the one in use, and each one's reload", () => {
+    const menu = sortMenu({
+      title: "Recently played",
+      menu: { options: [option("Recently added", "a"), {}, option("Recently played", "p")] },
+    });
+    expect(menu).toEqual({
+      sorts: ["Recently added", "Recently played"],
+      applied: "Recently played",
+      options: [
+        { title: "Recently added", reload: "a" },
+        { title: "Recently played", reload: "p" },
+      ],
+    });
+  });
+
+  it("is empty for a list without a sort menu", () => {
+    expect(sortMenu(undefined)).toEqual({ sorts: [], applied: null, options: [] });
   });
 });

@@ -357,7 +357,6 @@ export function App(props: { settings: Settings }) {
                         <LibraryView
                           account={account.account?.name ?? null}
                           playlists={playlists.playlists}
-                          playlistsLoading={playlists.loading}
                           folders={library.folders}
                           covers={library.covers}
                           local={library.all}
@@ -505,9 +504,9 @@ function RecentSearches(props: {
 }
 
 /**
- * Notes what each song that starts playing belongs to, for the library's
- * "Recently played" sort: the song, its album and artists, the playlist the
- * queue came from, and for a local file its folders.
+ * Notes the local folders of each local file that starts playing, for the
+ * library's "Recently played" sort of local files. YouTube orders the
+ * account's lists itself.
  */
 function useRecordPlays(
   player: ReturnType<typeof usePlayer>,
@@ -516,27 +515,17 @@ function useRecordPlays(
   const playing = player.playback.status === "playing";
   const track = player.track;
   const recorded = useRef<TrackId | null>(null);
-  const { playlistOf } = player;
   const { all, folders } = library;
   useEffect(() => {
     if (!playing || track === null || recorded.current === track.id) return;
     recorded.current = track.id;
-    const keys = [`track:${track.id}`];
-    if (track.albumId) keys.push(`album:${track.albumId}`);
-    for (const artist of track.artists) {
-      if (artist.channelId) keys.push(`artist:${artist.channelId}`);
-    }
-    const playlist = playlistOf(track.id);
-    if (playlist) keys.push(`playlist:${playlist}`);
     const local = all.find((t) => t.id === track.id);
-    if (local) {
-      keys.push("local:");
-      for (const folder of folders) {
-        if (tracksIn([local], folder).length > 0) keys.push(`local:${folder}`);
-      }
-    }
-    recordPlayed(keys);
-  }, [playing, track, playlistOf, all, folders]);
+    if (!local) return;
+    recordPlayed([
+      "local:",
+      ...folders.filter((folder) => tracksIn([local], folder).length > 0).map((f) => `local:${f}`),
+    ]);
+  }, [playing, track, all, folders]);
 }
 
 /** How long a notice stays up. */

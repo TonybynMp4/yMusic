@@ -43,8 +43,7 @@ export interface EngineWorkerApi {
   playlist: YouTubeEngine["playlist"];
   playlistMore: YouTubeEngine["playlistMore"];
   libraryPlaylists: YouTubeEngine["libraryPlaylists"];
-  libraryAlbums: YouTubeEngine["libraryAlbums"];
-  libraryArtists: YouTubeEngine["libraryArtists"];
+  libraryCards: YouTubeEngine["libraryCards"];
   librarySongs: YouTubeEngine["librarySongs"];
   mix: YouTubeEngine["mix"];
   setSaved: YouTubeEngine["setSaved"];

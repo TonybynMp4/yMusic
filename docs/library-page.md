@@ -4,7 +4,7 @@
 
 ## Chips
 
-- *Playlists*: the sidebar's list, with Liked Music pinned first and a "New playlist" tile in front.
+- *Playlists*: the account's playlists (`FEmusic_liked_playlists`), with a "New playlist" tile in front. In YouTube's default order this is the sidebar's list, which stands in while the page loads its own.
 - *Songs*: the account's saved songs (`FEmusic_liked_videos`), always a list, with Shuffle all. The first page shows at once and the rest arrives a page at a time, through the same continuation handles as a long playlist.
 - *Albums*: the saved albums (`FEmusic_liked_albums`).
 - *Artists*: the artists of the songs in the library (`FEmusic_library_corpus_track_artists`). YouTube Music opens these on a library-only page (`MPLAUC…`); the app strips the prefix and opens the artist's own page.
@@ -12,12 +12,17 @@
 
 Signed out, only Local files is left, and the chip row is hidden. The chip chosen last comes back when signing in again.
 
-Songs, Albums and Artists load when their chip is first opened and are kept for the run, per account (`useSavedLibrary.ts`). Saving or removing anything, and Refresh, drops them so the next look fetches again; liking or unliking a song drops only Songs. A list on screen stays until its reload has every page. A failed load is forgotten when its chip is left, so opening it again retries.
+The account's lists load when their chip is first opened and are kept for the run, per account and sort (`useSavedLibrary.ts`). Saving or removing anything, and Refresh, drops them so the next look fetches again; liking or unliking a song drops only Songs. A list on screen stays until its reload has every page. A failed load is forgotten when its chip is left, so opening it again retries.
 
 ## Sort and layout
 
-The sort is Recently added, Recently played or A to Z, and the layout a grid or a list. Both, with the chip, are saved in `localStorage` and apply to every chip.
+The account's lists take the sorts YouTube offers for each, in its own words, as YouTube Music's sort menu does. Each list's menu (`MusicSortFilterButton`) names the sort in use, and each option carries a continuation that reloads the list in its order, after which the list pages on as usual. The app shows those options and remembers the one picked for each chip.
 
-- *Recently added*: YouTube's own order, which is newest first. A local folder counts as added when its newest file was first scanned (`added_at` in SQLite).
-- *Recently played*: YouTube keeps no last-played date the app can read for a saved album or playlist, so this is the device's own record (`recent.ts`). When a song starts playing, the app notes the song, its album, its artists, the playlist the queue came from, and for a local file "All local files" and its folders. Anything that has not played here follows, in added order. The record keeps the 5000 most recent entries.
+Local files sort by Recently added, Recently played or A to Z:
+
+- *Recently added*: a folder counts as added when its newest file was first scanned (`added_at` in SQLite).
+- *Recently played*: the device's own record (`recent.ts`). When a local file starts playing, the app notes "All local files" and its folders. Anything that has not played here follows, in added order. The record keeps the 5000 most recent entries.
 - *A to Z*: by title, ignoring case and accents, with numbers in numeric order.
+
+The layout is a grid or a list, for every chip but Songs, which is always a list. The chip, the sorts and the layout are saved in `localStorage`.
+

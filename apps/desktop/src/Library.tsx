@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   IconArrowsShuffle,
   IconDeviceDesktop,
@@ -43,6 +43,7 @@ import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 import { useSaved, type SavedState } from "./useSavedLibrary.ts";
 
 export type Chip = "playlists" | "songs" | "albums" | "artists" | "local";
+type AccountChip = Exclude<Chip, "local">;
 export type Sort = "added" | "played" | "title";
 type Layout = "grid" | "list";
 
@@ -54,6 +55,7 @@ const CHIPS: { value: Chip; label: string; account: boolean }[] = [
   { value: "local", label: "Local files", account: false },
 ];
 
+/** Local files' sorts. The account's lists take the sorts YouTube offers for each. */
 const SORTS: { value: Sort; label: string }[] = [
   { value: "added", label: "Recently added" },
   { value: "played", label: "Recently played" },
@@ -64,17 +66,24 @@ const PREFS_KEY = "ymusic.library-page";
 
 interface Prefs {
   chip: Chip;
+  /** Local files' sort. */
   sort: Sort;
+  /** Each account list's sort, as YouTube words it; missing for its default. */
+  sorts: Partial<Record<AccountChip, string>>;
   layout: Layout;
 }
 
 function readPrefs(): Prefs {
-  const fallback: Prefs = { chip: "playlists", sort: "added", layout: "grid" };
+  const fallback: Prefs = { chip: "playlists", sort: "added", sorts: {}, layout: "grid" };
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Partial<Prefs>;
+    const sorts = Object.fromEntries(
+      Object.entries(saved.sorts ?? {}).filter(([, value]) => typeof value === "string"),
+    );
     return {
       chip: CHIPS.some((c) => c.value === saved.chip) ? saved.chip! : fallback.chip,
       sort: SORTS.some((s) => s.value === saved.sort) ? saved.sort! : fallback.sort,
+      sorts,
       layout: saved.layout === "list" ? "list" : "grid",
     };
   } catch {
@@ -89,8 +98,8 @@ function readPrefs(): Prefs {
 export function LibraryView(props: {
   /** Who is signed in, or null. */
   account: string | null;
+  /** The sidebar's playlists, shown while the page loads its own. */
   playlists: readonly BrowseCard[];
-  playlistsLoading: boolean;
   folders: readonly string[];
   covers: Readonly<Record<string, Thumbnail[]>>;
   local: readonly LocalTrack[];
@@ -111,45 +120,77 @@ export function LibraryView(props: {
   const chip = chips.some((c) => c.value === prefs.chip) ? prefs.chip : "local";
   const played = useRecentlyPlayed();
   const newPlaylist = useNewPlaylist();
-  const albums = useSaved(props.account, chip === "albums" ? "albums" : null);
-  const artists = useSaved(props.account, chip === "artists" ? "artists" : null);
-  const songs = useSaved(props.account, chip === "songs" ? "songs" : null);
+  const sortOf = (c: AccountChip) => (chip === c ? (prefs.sorts[c] ?? "") : "");
+  const playlists = useSaved(
+    props.account,
+    chip === "playlists" ? "playlists" : null,
+    sortOf("playlists"),
+  );
+  const albums = useSaved(props.account, chip === "albums" ? "albums" : null, sortOf("albums"));
+  const artists = useSaved(props.account, chip === "artists" ? "artists" : null, sortOf("artists"));
+  const songs = useSaved(props.account, chip === "songs" ? "songs" : null, sortOf("songs"));
+  const saved =
+    chip === "playlists"
+      ? playlists
+      : chip === "albums"
+        ? albums
+        : chip === "artists"
+          ? artists
+          : chip === "songs"
+            ? songs
+            : null;
+  // A list reloading in a new order keeps its menu up meanwhile.
+  const [menus, setMenus] = useState<Partial<Record<AccountChip, SortMenu>>>({});
+  const menu = saved?.status === "ready" ? saved : chip === "local" ? undefined : menus[chip];
+  useEffect(() => {
+    if (chip === "local" || saved?.status !== "ready") return;
+    const { sorts, sort } = saved;
+    setMenus((m) =>
+      m[chip]?.sort === sort && m[chip]?.sorts.join("\n") === sorts.join("\n")
+        ? m
+        : { ...m, [chip]: { sorts, sort } },
+    );
+  }, [chip, saved]);
 
   let body: ReactNode;
   switch (chip) {
     case "playlists": {
-      const items = props.playlists.map((card, i) => cardItem(card, i));
-      body =
-        props.playlistsLoading && items.length === 0 ? (
-          <Loading layout={prefs.layout} />
-        ) : (
-          <Items
-            items={sortItems(
-              items,
-              prefs.sort,
-              played,
-              (item) => item.key === `playlist:${LIKED_MUSIC}`,
-            )}
-            layout={prefs.layout}
-            onOpen={props.onNavigate}
-            lead={newPlaylist && <NewPlaylistItem layout={prefs.layout} onClick={newPlaylist} />}
-            empty="Playlists you save or make show here."
-          />
-        );
-      break;
-    }
-    case "albums":
-    case "artists": {
-      const state = chip === "albums" ? albums : artists;
+      // YouTube's default order is the sidebar's, so it stands in while loading.
+      const fallback = !prefs.sorts.playlists && props.playlists.length > 0;
+      const state: SavedState<BrowseCard> =
+        playlists.status === "loading" && fallback
+          ? {
+              status: "ready",
+              items: [...props.playlists],
+              loadingMore: false,
+              sorts: [],
+              sort: null,
+            }
+          : playlists;
       body = (
         <Saved state={state} layout={prefs.layout}>
           {(cards) => (
             <Items
-              items={sortItems(
-                cards.map((card, i) => cardItem(card, i)),
-                prefs.sort,
-                played,
-              )}
+              items={cards.map(cardItem)}
+              layout={prefs.layout}
+              onOpen={props.onNavigate}
+              lead={
+                newPlaylist && <NewPlaylistItem layout={prefs.layout} onClick={newPlaylist} />
+              }
+              empty="Playlists you save or make show here."
+            />
+          )}
+        </Saved>
+      );
+      break;
+    }
+    case "albums":
+    case "artists":
+      body = (
+        <Saved state={chip === "albums" ? albums : artists} layout={prefs.layout}>
+          {(cards) => (
+            <Items
+              items={cards.map(cardItem)}
               layout={prefs.layout}
               onOpen={props.onNavigate}
               empty={
@@ -162,16 +203,11 @@ export function LibraryView(props: {
         </Saved>
       );
       break;
-    }
     case "songs":
       body = (
         <Saved state={songs} layout="list">
           {(tracks, loadingMore) => (
-            <Songs
-              tracks={sortTracks(tracks, prefs.sort, played)}
-              loadingMore={loadingMore}
-              actions={props.actions}
-            />
+            <Songs tracks={tracks} loadingMore={loadingMore} actions={props.actions} />
           )}
         </Saved>
       );
@@ -195,6 +231,12 @@ export function LibraryView(props: {
         );
   }
 
+  const sorts =
+    chip === "local"
+      ? SORTS
+      : (menu?.sorts ?? []).map((title) => ({ value: title, label: title }));
+  const sort = chip === "local" ? prefs.sort : (menu?.sort ?? null);
+
   return (
     <div className="flex flex-col gap-4 px-3 pt-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -216,22 +258,28 @@ export function LibraryView(props: {
             </button>
           ))}
         <div className="ml-auto flex items-center gap-1">
-          <Select
-            items={SORTS}
-            value={prefs.sort}
-            onValueChange={(value) => value !== null && update({ sort: value })}
-          >
-            <SelectTrigger className="w-44" aria-label="Sort">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORTS.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {sorts.length > 0 && (
+            <Select<string>
+              items={sorts}
+              value={sort}
+              onValueChange={(value) => {
+                if (value === null) return;
+                if (chip === "local") update({ sort: value as Sort });
+                else update({ sorts: { ...prefs.sorts, [chip]: value } });
+              }}
+            >
+              <SelectTrigger className="w-44" aria-label="Sort">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                {sorts.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {/* Songs are a list, as on YouTube Music. */}
           {chip !== "songs" && (
             <IconButton
@@ -253,6 +301,11 @@ export function LibraryView(props: {
   );
 }
 
+interface SortMenu {
+  sorts: string[];
+  sort: string | null;
+}
+
 /** One thing on the page, whatever its kind. */
 interface Item {
   /** Its view's key, which is also its key in the recently played record. */
@@ -264,11 +317,11 @@ interface Item {
   round: boolean;
   icon: ReactNode;
   subject: Subject | null;
-  /** When it was added, or a stand-in that keeps YouTube's newest-first order. */
+  /** When a local item was last added to; YouTube's lists keep its own order. */
   added: number;
 }
 
-function cardItem(card: BrowseCard, index: number): Item {
+function cardItem(card: BrowseCard): Item {
   const view: View = { kind: card.kind, id: card.id };
   const liked = card.kind === "playlist" && card.id === LIKED_MUSIC;
   return {
@@ -288,7 +341,7 @@ function cardItem(card: BrowseCard, index: number): Item {
       <IconPlaylist size={32} stroke={1.5} />
     ),
     subject: { kind: "collection", route: { kind: card.kind, id: card.id } },
-    added: -index,
+    added: 0,
   };
 }
 
@@ -338,9 +391,9 @@ function details(tracks: readonly Track[]): string {
 const byTitle = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 
 /**
- * In the order asked for. Recently played is this device's record; what has
- * not played here follows, newest added first. `pinned` items stay in front,
- * as Liked Music does on YouTube Music.
+ * Local files in the order asked for. Recently played is this device's
+ * record; what has not played here follows, newest added first. `pinned`
+ * items stay in front.
  */
 export function sortItems<T extends { key: string; title: string; added: number }>(
   items: readonly T[],
@@ -361,20 +414,6 @@ function comparer(
   if (sort === "played")
     return (a, b) => (played[b.key] ?? 0) - (played[a.key] ?? 0) || added(a, b);
   return added;
-}
-
-function sortTracks(
-  tracks: readonly Track[],
-  sort: Sort,
-  played: Readonly<Record<string, number>>,
-): Track[] {
-  const keyed = tracks.map((track, i) => ({
-    key: `track:${track.id}`,
-    title: track.title,
-    added: -i,
-    track,
-  }));
-  return sortItems(keyed, sort, played).map((entry) => entry.track);
 }
 
 function Items(props: {

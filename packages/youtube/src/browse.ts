@@ -263,21 +263,40 @@ export function artistFrom(
  * page shows whatever tab YouTube last defaulted to.
  */
 export async function getLibraryPlaylists(youtube: Innertube): Promise<BrowseCard[]> {
-  return libraryFrom(await libraryItems(youtube, LIBRARY_PLAYLISTS));
+  return libraryFrom((await libraryItems(youtube, LIBRARY_PLAYLISTS)).items);
 }
 
-/** The albums saved to the library, newest first, as YouTube Music's Albums chip lists them. */
-export async function getLibraryAlbums(youtube: Innertube): Promise<BrowseCard[]> {
-  return cardsOf(await libraryItems(youtube, LIBRARY_ALBUMS), "album");
+/** The library lists that YouTube Music sorts on the server. */
+export type LibraryKind = "playlists" | "albums" | "artists";
+
+/**
+ * A library list in the order asked for. `sorts` are the orders YouTube
+ * offers for it, in its own words and language; `sort` is the one applied.
+ */
+export interface LibraryCards {
+  cards: BrowseCard[];
+  sorts: string[];
+  sort: string | null;
 }
 
 /**
- * The artists of the songs in the library, as YouTube Music's Artists chip
- * lists them. Each row opens a library-only page (`MPLAUC…`), so the card
- * opens the artist's own page instead.
+ * The account's playlists, saved albums, or the artists of the songs in the
+ * library, as YouTube Music's chips list them. Artist rows open a
+ * library-only page (`MPLAUC…`), so their cards open the artist's own page
+ * instead.
  */
-export async function getLibraryArtists(youtube: Innertube): Promise<BrowseCard[]> {
-  return cardsOf(await libraryItems(youtube, LIBRARY_ARTISTS), "artist");
+export async function getLibraryCards(
+  youtube: Innertube,
+  kind: LibraryKind,
+  sort?: string,
+): Promise<LibraryCards> {
+  const page = LIBRARY_PAGES[kind];
+  const { items, sorts, sort: applied } = await libraryItems(youtube, page, sort);
+  const cards =
+    kind === "playlists"
+      ? libraryFrom(items)
+      : cardsOf(items, kind === "albums" ? "album" : "artist");
+  return { cards, sorts, sort: applied };
 }
 
 /**
@@ -285,16 +304,14 @@ export async function getLibraryArtists(youtube: Innertube): Promise<BrowseCard[
  * albums) or a shelf of rows (artists). Bounded, so a runaway continuation
  * cannot keep fetching forever.
  */
-async function libraryItems(youtube: Innertube, page: string): Promise<unknown[]> {
-  const first = await youtube.actions.execute("/browse", {
-    browseId: page,
-    client: "YTMUSIC",
-    parse: true,
-  });
-  const list = (first.contents_memo?.getType(YTNodes.Grid)[0] ??
-    first.contents_memo?.getType(YTNodes.MusicShelf)[0]) as RawList | undefined;
-  const items = [...rowsOf(list)];
-  let token = list?.continuation ?? null;
+async function libraryItems(
+  youtube: Innertube,
+  page: string,
+  sort?: string,
+): Promise<{ items: unknown[]; sorts: string[]; sort: string | null }> {
+  const first = await libraryFirst(youtube, page, sort);
+  const items = [...rowsOf(first.list)];
+  let token = first.list?.continuation ?? null;
   for (let pages = 1; token && pages < MAX_LIBRARY_PAGES; pages++) {
     const next = await youtube.actions.execute("/browse", {
       continuation: token,
@@ -305,8 +322,83 @@ async function libraryItems(youtube: Innertube, page: string): Promise<unknown[]
     items.push(...rowsOf(more));
     token = more?.continuation ?? null;
   }
-  return items;
+  return { items, sorts: first.sorts, sort: first.sort };
 }
+
+/**
+ * The first page of a library list, and the sorts its menu offers. A sort
+ * other than the one YouTube applied reloads the list through that option's
+ * own continuation, as YouTube Music's sort menu does.
+ */
+async function libraryFirst(
+  youtube: Innertube,
+  page: string,
+  sort?: string,
+): Promise<{ list: RawList | undefined; sorts: string[]; sort: string | null }> {
+  const first = await youtube.actions.execute("/browse", {
+    browseId: page,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const menu = sortMenu(first.contents_memo?.getType(YTNodes.MusicSortFilterButton)[0]);
+  const list = listIn(first.contents_memo?.getType(YTNodes.Grid, YTNodes.MusicShelf));
+  const option = menu.options.find((o) => o.title === sort);
+  if (!option?.reload || option.title === menu.applied) {
+    return { list, sorts: menu.sorts, sort: menu.applied };
+  }
+  const sorted = await youtube.actions.execute("/browse", {
+    continuation: option.reload,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  const section = sorted.continuation_contents as { contents?: unknown } | undefined;
+  return {
+    list: listIn(section?.contents as readonly unknown[] | undefined),
+    sorts: menu.sorts,
+    sort: option.title,
+  };
+}
+
+/** The first grid or shelf among `nodes`. */
+function listIn(nodes: readonly unknown[] | null | undefined): RawList | undefined {
+  return nodes?.find((n) => n instanceof YTNodes.Grid || n instanceof YTNodes.MusicShelf) as
+    | RawList
+    | undefined;
+}
+
+/**
+ * The options of a library list's sort menu. The button reads as the sort in
+ * use; each option reloads the list through a continuation of its own.
+ */
+export function sortMenu(node: unknown): {
+  sorts: string[];
+  applied: string | null;
+  options: { title: string; reload: string | null }[];
+} {
+  const raw = node as
+    | { title?: string; menu?: { options?: readonly unknown[] } | null }
+    | undefined;
+  const options = (raw?.menu?.options ?? []).flatMap((item) => {
+    const option = item as {
+      title?: string;
+      endpoint?: { payload?: { commands?: readonly SortCommand[] } };
+    };
+    if (typeof option.title !== "string" || option.title === "") return [];
+    const reload = option.endpoint?.payload?.commands?.find(
+      (c) => c.browseSectionListReloadEndpoint,
+    )?.browseSectionListReloadEndpoint?.continuation?.reloadContinuationData?.continuation;
+    return [{ title: option.title, reload: reload ?? null }];
+  });
+  const sorts = options.map((o) => o.title);
+  const applied = sorts.includes(raw?.title ?? "") ? raw!.title! : null;
+  return { sorts, applied, options };
+}
+
+type SortCommand = {
+  browseSectionListReloadEndpoint?: {
+    continuation?: { reloadContinuationData?: { continuation?: string } };
+  };
+};
 
 /** A grid or its continuation has `items`; a shelf or its continuation, `contents`. */
 type RawList = {
@@ -320,19 +412,20 @@ function rowsOf(list: RawList | undefined): readonly unknown[] {
 }
 
 /**
- * The songs saved to the library, newest first: the first page of rows, with
- * a way to fetch the rest, as a long playlist arrives.
+ * The songs saved to the library in the order asked for: the first page of
+ * rows, with a way to fetch the rest, as a long playlist arrives.
  */
 export async function openLibrarySongs(
   youtube: Innertube,
-): Promise<{ tracks: Track[]; more: PlaylistMore | null }> {
-  const first = await youtube.actions.execute("/browse", {
-    browseId: LIBRARY_SONGS,
-    client: "YTMUSIC",
-    parse: true,
-  });
-  const shelf = first.contents_memo?.getType(YTNodes.MusicShelf)[0] as RawList | undefined;
-  return { tracks: tracksFrom(rowsOf(shelf)), more: songsAfter(youtube, shelf?.continuation, 1) };
+  sort?: string,
+): Promise<{ tracks: Track[]; more: PlaylistMore | null; sorts: string[]; sort: string | null }> {
+  const first = await libraryFirst(youtube, LIBRARY_SONGS, sort);
+  return {
+    tracks: tracksFrom(rowsOf(first.list)),
+    more: songsAfter(youtube, first.list?.continuation, 1),
+    sorts: first.sorts,
+    sort: first.sort,
+  };
 }
 
 function songsAfter(
@@ -356,8 +449,11 @@ function songsAfter(
 }
 
 const LIBRARY_PLAYLISTS = "FEmusic_liked_playlists";
-const LIBRARY_ALBUMS = "FEmusic_liked_albums";
-const LIBRARY_ARTISTS = "FEmusic_library_corpus_track_artists";
+const LIBRARY_PAGES: Record<LibraryKind, string> = {
+  playlists: LIBRARY_PLAYLISTS,
+  albums: "FEmusic_liked_albums",
+  artists: "FEmusic_library_corpus_track_artists",
+};
 const LIBRARY_SONGS = "FEmusic_liked_videos";
 const MAX_LIBRARY_PAGES = 20;
 

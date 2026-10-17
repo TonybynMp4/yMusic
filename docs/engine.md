@@ -19,7 +19,7 @@ The listening is tracked in `useWatchHistory`, from mpv's position updates: stea
 
 ## Search history
 
-YouTube Music shows the account's recent searches when its search box opens. They come from `/music/get_search_suggestions` with an empty `input`: the answer is a suggestions section of `historySuggestionRenderer`s, each with its query and a `feedbackEndpoint` token. Removing one posts that token to `/feedback` as `feedbackTokens`, as the web player's remove button does. Both go out on the signed-in `WEB_REMIX` client. Signed out the engine returns an empty list without asking. The setting that decides whether this list or one on the device is shown is in [Settings](settings.md).
+YouTube Music shows the account's recent searches when its search box opens. They come from `/music/get_search_suggestions` with an empty `input`: the answer is a suggestions section of `historySuggestionRenderer`s, each with its query and a `feedbackEndpoint` token. Removing one posts that token to `/feedback` as `feedbackTokens`, as the web player's remove button does. Both go out on the signed-in `WEB_REMIX` client. There is no request that adds a search: YouTube records any search made signed in, which is why the app searches signed out while you type (see [Settings](settings.md)). Signed out the engine returns an empty list without asking. The setting that decides whether this list or one on the device is shown is in [Settings](settings.md).
 
 ## Resume
 

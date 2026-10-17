@@ -27,7 +27,7 @@ import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
 import { useSavedQueue } from "./useSavedQueue.ts";
-import { useSearchHistory, type RecentSearch } from "./useSearchHistory.ts";
+import { searchHistoryIn, useSearchHistory, type RecentSearch } from "./useSearchHistory.ts";
 import { useSettings } from "./useSettings.ts";
 import { useUpdates } from "./useUpdates.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
@@ -59,7 +59,11 @@ export function App(props: { settings: Settings }) {
   const account = useAccount();
   const signedIn = account.account !== null;
   // Only "youtube" searches with the account: that is what records them there.
-  const youtube = useYouTubeSearch(query, true, settings.settings.searchHistory !== "youtube");
+  const youtube = useYouTubeSearch(
+    query,
+    true,
+    searchHistoryIn(settings.settings.searchHistory, signedIn) === "youtube",
+  );
   const searchEmpty = query.trim().length === 0;
   // The empty search page lists recent searches itself; over any other page
   // they drop down from the focused box.
@@ -183,17 +187,27 @@ export function App(props: { settings: Settings }) {
   const searchActions: BrowseActions = {
     ...browse,
     onPlay: (tracks, id, from) => {
-      searchHistory.record(query);
+      remember(query);
       play(tracks, id, from);
     },
     onOpen: (next) => {
-      searchHistory.record(query);
+      remember(query);
       go(next);
     },
   };
+  /** Records a search where the setting keeps them, leaving the results as they are. */
+  const remember = (searched: string) => {
+    searchHistory.record(searched);
+    youtube.record(searched);
+  };
+  /** Records a search and, kept on the account, shows the account's results for it. */
+  const submit = (searched: string) => {
+    searchHistory.record(searched);
+    youtube.submit(searched);
+  };
   const searchAgain = (past: string) => {
     setQuery(past);
-    searchHistory.record(past);
+    submit(past);
     // The button picked from the keyboard is about to unmount, so focus goes
     // back to the box rather than the page.
     searchInput.current?.focus();
@@ -273,7 +287,7 @@ export function App(props: { settings: Settings }) {
                     go(null);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") searchHistory.record(query);
+                    if (e.key === "Enter") submit(query);
                     if (e.key === "Escape") e.currentTarget.blur();
                   }}
                   placeholder="Search YouTube Music and your files"

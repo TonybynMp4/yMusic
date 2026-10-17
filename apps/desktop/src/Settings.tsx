@@ -304,7 +304,8 @@ const SEARCH_HISTORY: { value: SearchHistory; label: string }[] = [
 ];
 
 const SEARCH_HISTORY_DETAIL: Record<SearchHistory, string> = {
-  youtube: "Searches go into your YouTube search history, and recent ones come from there.",
+  youtube:
+    "A search goes into your YouTube search history when you press Enter or play or open a result, and recent ones come from there. Results are personalised once you press Enter.",
   device:
     "Recent searches are kept on this device. Searches are sent without your account, so they stay out of your YouTube search history and results are not personalised.",
   off: "Searches are not remembered anywhere. They are sent without your account, so results are not personalised.",

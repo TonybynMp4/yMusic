@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { heapStats } from "bun:jsc";
 
 import { YouTubeEngine } from "../src/engine.ts";
+import { extractInWorker, type ExtractorWorker } from "../src/host.ts";
 import { lazyBotGuard } from "./botguard.ts";
 import { openRecording } from "./replay.ts";
 import { runPhase, SCENARIOS, type Phase, type Scenario } from "./scenario.ts";
@@ -38,8 +39,24 @@ if (!dir || !scenario || !(scenario in SCENARIOS)) {
 }
 const recording = openRecording(dir, mode === "record" ? "record" : "replay");
 // With BotGuard, as in the app, so a stream the usual client fails on is
-// retried on the fallback client.
-const engine = new YouTubeEngine(recording.fetch, lazyBotGuard());
+// retried on the fallback client. The player script is analysed in a worker
+// ended once it has the result, as in the app, unless `run.ts` was given
+// `--player-script in-process`. Bun's workers are threads in this process,
+// as WebKit's are in the web process, so their memory counts here.
+const engine = new YouTubeEngine(
+  recording.fetch,
+  lazyBotGuard(),
+  undefined,
+  process.env.YMUSIC_BENCH_PLAYER_SCRIPT === "in-process"
+    ? undefined
+    : extractInWorker(
+        recording.fetch,
+        () =>
+          new Worker(new URL("./player-script.worker.ts", import.meta.url), {
+            type: "module",
+          }) as unknown as ExtractorWorker,
+      ),
+);
 
 const points: Point[] = [{ phase: "start", got: "", ms: 0, peak: highWater(), ...settled() }];
 for (const phase of SCENARIOS[scenario as Scenario]) {

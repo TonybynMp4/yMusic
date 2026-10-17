@@ -19,6 +19,7 @@ import { SCENARIOS, type Scenario } from "./scenario.ts";
  *
  *   bun bench/run.ts [--scenario quick|session] [--record] [--runs 5]
  *                    [--recording default] [--label <branch>]
+ *                    [--player-script worker|in-process]
  */
 
 const { values } = parseArgs({
@@ -28,6 +29,7 @@ const { values } = parseArgs({
     runs: { type: "string", default: "5" },
     recording: { type: "string", default: "default" },
     label: { type: "string" },
+    "player-script": { type: "string", default: "worker" },
   },
 });
 
@@ -35,6 +37,9 @@ if (!(values.scenario in SCENARIOS)) {
   throw new Error(`--scenario is one of ${Object.keys(SCENARIOS).join(", ")}`);
 }
 const scenario = values.scenario as Scenario;
+if (!["worker", "in-process"].includes(values["player-script"])) {
+  throw new Error(`--player-script is worker or in-process, got ${values["player-script"]}`);
+}
 const dir = recordingDir(values.recording);
 const runs = Number(values.runs);
 if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer, got ${values.runs}`);
@@ -97,6 +102,7 @@ async function session(args: string[]): Promise<Point[]> {
   const proc = Bun.spawn([process.execPath, child, dir, scenario, ...args], {
     stdout: "pipe",
     stderr: "pipe",
+    env: { ...process.env, YMUSIC_BENCH_PLAYER_SCRIPT: values["player-script"] },
   });
   const [stdout, stderr, code] = await Promise.all([
     new Response(proc.stdout).text(),

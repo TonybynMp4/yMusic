@@ -97,7 +97,7 @@ export async function runPhase(engine: YouTubeEngine, phase: Phase): Promise<str
       const ids = (await wholePlaylist(engine, PLAY_PLAYLIST)).slice(0, TRACKS);
       let resolved = 0;
       for (const id of ids) {
-        if (await engine.resolve(id, { fallback: true }).catch(() => null)) resolved++;
+        if (await engine.resolve(id, { refused: "VISIONOS" }).catch(() => null)) resolved++;
       }
       return `${resolved} of ${ids.length} streams resolved on the fallback client`;
     }

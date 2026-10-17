@@ -7,6 +7,7 @@ import {
   detailsActions,
   moveAction,
   removeActions,
+  removeCoverAction,
   uploadCover,
 } from "./edit.ts";
 
@@ -84,6 +85,18 @@ describe("coverAction", () => {
           name: "studio_square_thumbnail",
         },
         playlistScottyEncryptedBlobId: "blob",
+      },
+    });
+  });
+});
+
+describe("removeCoverAction", () => {
+  it("names the custom cover the way the web player does", () => {
+    expect(removeCoverAction()).toEqual({
+      action: "ACTION_REMOVE_CUSTOM_THUMBNAIL",
+      deletedCustomThumbnail: {
+        type: "PLAYLIST_IMAGE_TYPE_CUSTOM_THUMBNAIL",
+        name: "studio_square_thumbnail",
       },
     });
   });

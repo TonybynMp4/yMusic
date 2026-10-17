@@ -32,6 +32,14 @@ export interface Cover {
   url: string;
 }
 
+/**
+ * Whether `thumbnails` are a cover someone uploaded rather than the one YouTube
+ * makes from the songs. YouTube serves uploaded covers from their own path.
+ */
+export function isCustomCover(thumbnails: readonly { url: string }[]): boolean {
+  return thumbnails.some(({ url }) => url.includes("/pl_c/"));
+}
+
 const UNREADABLE = "Couldn't open that image, try another one";
 
 export async function openImage(file: File): Promise<Picked> {

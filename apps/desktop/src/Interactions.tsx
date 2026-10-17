@@ -71,7 +71,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { squareCover, type Cover } from "./cover.ts";
+import {
+  centredCrop,
+  closePicked,
+  cropCover,
+  openImage,
+  type Cover,
+  type Crop,
+  type Picked,
+} from "./cover.ts";
+import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
 import { toggled } from "./Rating.tsx";
 import {
@@ -988,20 +997,37 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   const startPrivacy = page.privacy ?? "PRIVATE";
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
   const [cover, setCover] = useState<Cover | null>(null);
+  // A picked image while its crop is placed, before it becomes `cover`.
+  const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (cover) return () => URL.revokeObjectURL(cover.url);
   }, [cover]);
+  const picked = cropping?.picked;
+  useEffect(() => {
+    if (picked) return () => closePicked(picked);
+  }, [picked]);
 
   const pick = async (file: File) => {
     setError(null);
     try {
-      setCover(await squareCover(file));
+      const image = await openImage(file);
+      setCropping({ picked: image, crop: centredCrop(image.width, image.height) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const crop = async () => {
+    if (!cropping) return;
+    try {
+      setCover(await cropCover(cropping.picked, cropping.crop));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setCropping(null);
   };
 
   const save = async () => {
@@ -1052,6 +1078,26 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       setBusy(false);
     }
   };
+
+  if (cropping) {
+    return (
+      <div className="flex flex-col gap-3">
+        <CoverCropper
+          picked={cropping.picked}
+          crop={cropping.crop}
+          onCrop={(next) => setCropping({ ...cropping, crop: next })}
+        />
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setCropping(null)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => void crop()}>
+            Done
+          </Button>
+        </DialogFooter>
+      </div>
+    );
+  }
 
   return (
     <form

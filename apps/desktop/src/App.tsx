@@ -292,8 +292,21 @@ export function App(props: { settings: Settings }) {
                   }}
                   placeholder="Search YouTube Music and your files"
                   // A pill on a dark field, which is the shape YouTube Music uses.
-                  className="h-9 rounded-full bg-secondary pl-9"
+                  className="h-9 rounded-full bg-secondary pr-9 pl-9"
                 />
+                {query.length > 0 && (
+                  <IconButton
+                    label="Clear search"
+                    size="icon-xs"
+                    onClick={() => {
+                      setQuery("");
+                      searchInput.current?.focus();
+                    }}
+                    className="absolute top-1/2 right-2 -translate-y-1/2"
+                  >
+                    <IconX />
+                  </IconButton>
+                )}
                 {recentInBox && searchHistory.recent.length > 0 && (
                   <RecentSearches
                     floating

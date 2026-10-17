@@ -1,87 +1,76 @@
-import { useEffect, useRef } from "react";
-import type { PercentCrop } from "react-image-crop";
+import { IconZoomIn, IconZoomOut } from "@tabler/icons-react";
+import { useEffect, useRef, useState } from "react";
+import Cropper, { type Point, type Size } from "react-easy-crop";
 
-import { ImageCrop, ImageCropContent } from "@/components/kibo-ui/image-crop";
-import {
-  MIN_SIDE,
-  moveCrop,
-  zoomCrop,
-  type Crop,
-  type Picked,
-} from "./cover.ts";
-
-/** The longest side the image is shown at while cropping, in CSS pixels. */
-const VIEW = 384;
-
-// YouTube Music's labels for the corners; the sides keep theirs in the same words.
-const LABELS = {
-  cropArea: "Image crop",
-  nwDragHandle: "Top left corner of image crop",
-  nDragHandle: "Top edge of image crop",
-  neDragHandle: "Top right corner of image crop",
-  eDragHandle: "Right edge of image crop",
-  seDragHandle: "Bottom right corner of image crop",
-  sDragHandle: "Bottom edge of image crop",
-  swDragHandle: "Bottom left corner of image crop",
-  wDragHandle: "Left edge of image crop",
-};
+import { Slider } from "@/components/ui/slider";
+import { MIN_SIDE, type Crop, type Picked } from "./cover.ts";
 
 /**
- * YouTube Music's "Edit Thumbnail" step: the picked image with a square over
- * it, dragged to move and by its handles to resize (Kibo UI's image crop).
- * On a touchpad, scrolling with two fingers moves it and pinching resizes it.
- * `crop` is in the image's own pixels, held by the caller.
+ * YouTube Music's "Edit Thumbnail" step, drawn like Origin UI's cropper: a
+ * fixed square over the picked image, which moves and zooms under it. Drag or
+ * scroll with two fingers to move it; pinch, Ctrl+wheel or the slider zoom.
+ * Reports the square in the image's own pixels.
  */
 export function CoverCropper({
   picked,
-  crop,
   onCrop,
 }: {
   picked: Picked;
-  crop: Crop;
   onCrop: (crop: Crop) => void;
 }) {
-  const { width, height } = picked;
-  const scale = Math.min(VIEW / width, VIEW / height);
-  // The crop library works on the image as shown, so the limit is scaled to it.
-  const min = MIN_SIDE * scale;
+  const { file, width, height } = picked;
+  // Zoomed in no further than leaves the square at the smallest YouTube takes.
+  const maxZoom = Math.min(width, height) / MIN_SIDE;
+  const [url, setUrl] = useState<string>();
+  const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
   const box = useRef<HTMLDivElement>(null);
-  // The listener is added once, so it reads the latest of these through a ref.
-  const latest = useRef({ crop, onCrop });
-  latest.current = { crop, onCrop };
+  // The listeners are added once, so they read the latest of these through a ref.
+  const latest = useRef({ position, zoom, media: null as Size | null, square: null as Size | null });
+  latest.current.position = position;
+  latest.current.zoom = zoom;
+
+  useEffect(() => {
+    const next = URL.createObjectURL(file);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [file]);
 
   useEffect(() => {
     const element = box.current;
     if (!element) return;
     const wheel = (event: WheelEvent) => {
-      // Not passive, so neither the dialog scrolls nor (on a pinch) the page zooms.
+      // Chromium (Windows) reports a pinch as a wheel with Ctrl held, which the
+      // cropper zooms with itself.
+      if (event.ctrlKey) return;
+      // Not passive, so the dialog does not scroll instead.
       event.preventDefault();
       const now = latest.current;
+      if (!now.media || !now.square) return;
       // A mouse wheel counts in lines, a touchpad in pixels.
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
-      // Flipped: as reported, sideways scrolling moved the square against the fingers.
-      const dx = -event.deltaX * unit;
-      const dy = event.deltaY * unit;
-      // Chromium (Windows) reports a pinch as a wheel with Ctrl held.
-      const next = event.ctrlKey
-        ? zoomCrop(now.crop, Math.exp(dy * 0.01), width, height)
-        : moveCrop(now.crop, dx / scale, dy / scale, width, height);
+      // The image goes the other way to the square it replaces, whose sideways
+      // direction was flipped to follow the fingers.
+      const reach = (side: number, square: number) => Math.max(0, (side * now.zoom - square) / 2);
+      const next = {
+        x: clamp(now.position.x + event.deltaX * unit, reach(now.media.width, now.square.width)),
+        y: clamp(now.position.y - event.deltaY * unit, reach(now.media.height, now.square.height)),
+      };
       // Several can come before a render, and each builds on the last.
-      now.crop = next;
-      now.onCrop(next);
+      now.position = next;
+      setPosition(next);
     };
     // On Linux a pinch comes from the app's shell instead, as the scale since
-    // it began (platform/window.rs). Spreading the fingers shrinks the square,
-    // as a Ctrl+wheel pinch does.
+    // it began (platform/window.rs).
     let begun = 1;
     const pinch = (event: Event) => {
       const spread = (event as CustomEvent<number>).detail;
       if (spread === 1) begun = 1;
       const now = latest.current;
-      const next = zoomCrop(now.crop, begun / spread, width, height);
+      const next = Math.min(Math.max(now.zoom * (spread / begun), 1), maxZoom);
       begun = spread;
-      now.crop = next;
-      now.onCrop(next);
+      now.zoom = next;
+      setZoom(next);
     };
     element.addEventListener("wheel", wheel, { passive: false });
     window.addEventListener("touchpadpinch", pinch);
@@ -89,40 +78,53 @@ export function CoverCropper({
       element.removeEventListener("wheel", wheel);
       window.removeEventListener("touchpadpinch", pinch);
     };
-  }, [width, height, scale]);
+  }, [maxZoom]);
 
-  const toCrop = (next: PercentCrop): Crop => ({
-    x: (next.x / 100) * width,
-    y: (next.y / 100) * height,
-    size: (next.width / 100) * width,
-  });
-  const percent: PercentCrop = {
-    unit: "%",
-    x: (crop.x / width) * 100,
-    y: (crop.y / height) * 100,
-    width: (crop.size / width) * 100,
-    height: (crop.size / height) * 100,
-  };
   return (
-    <div ref={box}>
-      <ImageCrop
-        file={picked.file}
-        aspect={1}
-        minWidth={min}
-        minHeight={min}
-        ariaLabels={LABELS}
-        crop={percent}
-        onChange={(_, next) => onCrop(toCrop(next))}
-        // A square drawn from scratch (pressing outside the current one and
-        // dragging) may stop short of the smallest YouTube takes, or be a bare
-        // click; either grows about its centre to that size.
-        onComplete={(_, next) => onCrop(zoomCrop(toCrop(next), 1, width, height))}
-      >
-        <ImageCropContent
-          className="mx-auto max-h-none"
-          style={{ width: width * scale, height: height * scale }}
+    <div className="flex flex-col gap-4">
+      <div ref={box} className="relative h-80 w-full overflow-hidden rounded-md">
+        {url && (
+          <Cropper
+            image={url}
+            crop={position}
+            zoom={zoom}
+            aspect={1}
+            minZoom={1}
+            maxZoom={maxZoom}
+            onCropChange={setPosition}
+            onZoomChange={setZoom}
+            onWheelRequest={(event) => event.ctrlKey}
+            onMediaLoaded={(media) => (latest.current.media = media)}
+            onCropSizeChange={(square) => (latest.current.square = square)}
+            onCropComplete={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
+            cropperProps={{ "aria-label": "Image crop" }}
+            // Inline, as the cropper's own stylesheet outranks Tailwind's layers.
+            style={{
+              cropAreaStyle: {
+                border: "3px solid white",
+                boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.3)",
+              },
+            }}
+          />
+        )}
+      </div>
+      <div className="flex items-center gap-3 px-1 text-muted-foreground">
+        <IconZoomOut className="size-4 shrink-0" aria-hidden />
+        <Slider
+          aria-label="Zoom"
+          min={1}
+          max={maxZoom}
+          step={0.01}
+          value={zoom}
+          disabled={maxZoom <= 1}
+          onValueChange={(value) => setZoom(Array.isArray(value) ? value[0]! : value)}
         />
-      </ImageCrop>
+        <IconZoomIn className="size-4 shrink-0" aria-hidden />
+      </div>
     </div>
   );
+}
+
+function clamp(value: number, reach: number): number {
+  return Math.min(Math.max(value, -reach), reach);
 }

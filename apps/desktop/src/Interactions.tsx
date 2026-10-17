@@ -1120,8 +1120,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       <div className="flex flex-col gap-3">
         <CoverCropper
           picked={cropping.picked}
-          crop={cropping.crop}
-          onCrop={(next) => setCropping({ ...cropping, crop: next })}
+          onCrop={(next) => setCropping((now) => now && { ...now, crop: next })}
         />
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setCropping(null)}>

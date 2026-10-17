@@ -40,6 +40,9 @@ export function useYouTubeSearch(
     error: null,
   });
   const [submitted, setSubmitted] = useState<string | null>(null);
+  // Only the query as submitted searches with the account. Typing away and
+  // back to the same text is typing again, so it no longer counts.
+  if (submitted !== null && query.trim() !== submitted) setSubmitted(null);
   const recorded = useRef<string | null>(null);
 
   useEffect(() => {

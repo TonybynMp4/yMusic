@@ -121,7 +121,9 @@ export function CoverCropper({
             onCropChange={setPosition}
             onZoomChange={setZoom}
             onWheelRequest={(event) => event.ctrlKey}
-            onMediaLoaded={(media) => (latest.current.media = media)}
+            // On every layout, not only on load: the dialog widens once the
+            // cropper is in it, and the image is shown larger after.
+            setMediaSize={(media) => (latest.current.media = media)}
             onCropSizeChange={(square) => {
               latest.current.square = square;
               setDrawn(true);

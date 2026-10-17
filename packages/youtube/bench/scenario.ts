@@ -1,6 +1,7 @@
 import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import type { YouTubeEngine } from "../src/engine.ts";
+import type { PlayerScript } from "../src/player-script.ts";
 import { loadApp, type App } from "./app.ts";
 
 /**
@@ -59,8 +60,19 @@ const SESSION_SONGS = 700;
 
 /** `quick` takes seconds; `session` adds the long session, which takes about a minute. */
 export const SCENARIOS = {
-  quick: ["browse", "long-playlist", "playback", "fallback", "app-browse"],
-  session: ["browse", "long-playlist", "playback", "fallback", "app-browse", "app-session"],
+  quick: ["browse", "long-playlist", "playback", "player-script", "fallback", "app-browse"],
+  // Signed in, without the fallback: the player script is what `WEB_REMIX`
+  // adds, and `idle` gives an ended worker time to go before the next point.
+  "signed-in": ["browse", "long-playlist", "playback", "player-script", "idle", "app-browse"],
+  session: [
+    "browse",
+    "long-playlist",
+    "playback",
+    "player-script",
+    "fallback",
+    "app-browse",
+    "app-session",
+  ],
 } as const;
 export type Scenario = keyof typeof SCENARIOS;
 export type Phase = (typeof SCENARIOS)[Scenario][number];
@@ -70,7 +82,11 @@ let app: App | null = null;
 const leases = new Map<string, unknown>();
 
 /** Runs `phase` and says what it got, to tell a working run from one that quietly did little. */
-export async function runPhase(engine: YouTubeEngine, phase: Phase): Promise<string> {
+export async function runPhase(
+  engine: YouTubeEngine,
+  phase: Phase,
+  analyse: () => Promise<PlayerScript | null>,
+): Promise<string> {
   switch (phase) {
     case "browse": {
       let rows = 0;
@@ -91,6 +107,17 @@ export async function runPhase(engine: YouTubeEngine, phase: Phase): Promise<str
       }
       return `${resolved} of ${ids.length} streams resolved`;
     }
+    case "player-script": {
+      // What signing in adds before the first song: YouTube's player script,
+      // analysed for the decipher code `WEB_REMIX` needs. The fallback below
+      // reuses it, as the engine does.
+      const script = await analyse();
+      if (script === null) return "skipped";
+      return `player ${script.playerId}, ${Math.round(script.data.output.length / 1024)} KB extracted`;
+    }
+    case "idle":
+      await Bun.sleep(5_000);
+      return "5 s";
     case "fallback": {
       // The client the player retries a stream on when mpv cannot play it:
       // a PO token from BotGuard, and the player script's decipher code.

@@ -17,9 +17,9 @@ import { SCENARIOS, type Scenario } from "./scenario.ts";
  * Measures the engine's memory over the scenario in `scenario.ts`, against
  * recorded responses. See `docs/engine-memory.md`.
  *
- *   bun bench/run.ts [--scenario quick|session] [--record] [--runs 5]
+ *   bun bench/run.ts [--scenario quick|signed-in|session] [--record] [--runs 5]
  *                    [--recording default] [--label <branch>]
- *                    [--player-script worker|in-process]
+ *                    [--player-script worker|in-process|none]
  */
 
 const { values } = parseArgs({
@@ -37,8 +37,8 @@ if (!(values.scenario in SCENARIOS)) {
   throw new Error(`--scenario is one of ${Object.keys(SCENARIOS).join(", ")}`);
 }
 const scenario = values.scenario as Scenario;
-if (!["worker", "in-process"].includes(values["player-script"])) {
-  throw new Error(`--player-script is worker or in-process, got ${values["player-script"]}`);
+if (!["worker", "in-process", "none"].includes(values["player-script"])) {
+  throw new Error(`--player-script is worker, in-process or none, got ${values["player-script"]}`);
 }
 const dir = recordingDir(values.recording);
 const runs = Number(values.runs);

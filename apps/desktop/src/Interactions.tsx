@@ -992,7 +992,7 @@ function CoverPicker(props: {
         >
           <IconPhotoEdit />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="w-max">
           <DropdownMenuItem onClick={() => input.current?.click()}>
             <IconPhoto />
             Choose from library

@@ -8,6 +8,13 @@ export const StableVolume = z.enum(["off", "on", "loudOnly"]);
 export type StableVolume = z.infer<typeof StableVolume>;
 
 /**
+ * Where searches are remembered: on the account, in a list on this device
+ * (with searches kept off the account), or nowhere.
+ */
+export const SearchHistory = z.enum(["youtube", "device", "off"]);
+export type SearchHistory = z.infer<typeof SearchHistory>;
+
+/**
  * Mirrors `settings::Settings` in Rust. The defaults match Rust's too, and are
  * what a plain browser gets, where there is no file to read.
  */
@@ -19,7 +26,7 @@ export const Settings = z.object({
   audioDevice: z.string().default("auto"),
   skipDisliked: z.boolean().default(false),
   pauseWatchHistory: z.boolean().default(false),
-  pauseSearchHistory: z.boolean().default(false),
+  searchHistory: SearchHistory.default("youtube"),
   closeToTray: z.boolean().default(false),
   checkForUpdates: z.boolean().default(true),
   includePrereleases: z.boolean().default(false),

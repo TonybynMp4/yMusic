@@ -19,6 +19,7 @@ export type { WatchReport } from "./history.ts";
 export type { Rating } from "./rating.ts";
 export type { ServerQueue } from "./resume.ts";
 export { isSharedQueue, type SharedQueue } from "./shared-queue.ts";
+export type { SearchHistoryEntry } from "./search-history.ts";
 
 export type EngineClient = Remote<Omit<EngineWorkerApi, "connect">>;
 

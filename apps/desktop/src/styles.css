@@ -153,6 +153,11 @@
     font-family: var(--font-sans);
   }
 
+  /* The search box has its own clear button, a Tabler icon like the rest. */
+  input[type="search"]::-webkit-search-cancel-button {
+    display: none;
+  }
+
   input,
   textarea,
   [contenteditable] {

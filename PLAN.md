@@ -51,12 +51,6 @@ Sign release assets with the updater's minisign key so the download is verified 
   - *Marked in the queue.* The failed row gets an icon and its menu a Retry, and the queue skips to the next song. Pairs with any of the others rather than replacing them.
 
   Whichever wins, each failure gets plain copy and its own action, and the raw message moves to a details view and the log, where it is still there for bug reports. Whether a failure skips on its own is part of the choice: a missing file should, a lost network shouldn't.
-- **Search history.** Recent searches show under the empty search box, each with a button to remove it. Signed-in searches already reach the account's history; the existing *Pause search history* setting keeps them out by searching through a cookieless client. That switch becomes one "Search history" choice with three options:
-  - *YouTube*, the default when signed in and today's behaviour: searches are recorded on the account, and the list is the account's own. YouTube Music returns it from the search suggestions request with an empty query, and removing one sends the entry's feedback token.
-  - *On this device*: a local list, with searches kept off the account through the cookieless client. Like the current pause, its description says results aren't personalised.
-  - *Off*: nothing recorded anywhere, the current pause.
-
-  A saved `pauseSearchHistory` of true becomes *Off*, and false becomes *YouTube*, so nobody's search changes on update. Signed out there is no account to record on, so the list is local and *YouTube* is unavailable.
 - **React performance pass.** Once the open memory and playlist PRs are merged, profile a release build: what re-renders during playback, while scrolling browse pages, search results, the sidebar and the queue, and while a menu or dialog opens. Fix what the profile shows, measuring before and after. `docs/react-performance.md` lists how to measure, the common causes, and what is known but not yet looked at.
 
 ## Later

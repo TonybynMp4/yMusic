@@ -7,6 +7,7 @@ import type {
   SearchFilter,
   SearchResults,
   StreamLease,
+  Thumbnail,
   Track,
   VideoId,
 } from "@ymusic/core";
@@ -32,11 +33,14 @@ import {
   type PlaylistTarget,
 } from "./browse.ts";
 import {
+  coverAction,
+  coverOf,
   deletePlaylist,
   detailsActions,
   editPlaylist,
   moveAction,
   removeActions,
+  uploadCover,
   type PlaylistDetails,
   type PlaylistItem,
 } from "./edit.ts";
@@ -249,6 +253,19 @@ export class YouTubeEngine {
   /** Renames one of your playlists, or changes its description or who can see it. */
   async editPlaylist(playlistId: string, details: PlaylistDetails): Promise<void> {
     await editPlaylist(await this.#signedIn(), playlistId, detailsActions(details));
+  }
+
+  /**
+   * Makes `image` (a square JPEG, at least 360 pixels a side) the playlist's
+   * cover. Answers with the cover as YouTube now serves it.
+   */
+  async setPlaylistCover(
+    playlistId: string,
+    image: Uint8Array<ArrayBuffer>,
+  ): Promise<Thumbnail[]> {
+    const youtube = await this.#signedIn();
+    const blobId = await uploadCover(youtube, image);
+    return coverOf(await editPlaylist(youtube, playlistId, [coverAction(blobId)]));
   }
 
   async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {

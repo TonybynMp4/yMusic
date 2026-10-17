@@ -9,6 +9,7 @@ import {
   IconLibraryPlus,
   IconLoader2,
   IconPencil,
+  IconPhotoEdit,
   IconPlayerTrackNext,
   IconPlaylist,
   IconPlaylistAdd,
@@ -43,10 +44,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
+import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,6 +71,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { squareCover, type Cover } from "./cover.ts";
 import { engine } from "./engine.ts";
 import { toggled } from "./Rating.tsx";
 import {
@@ -926,6 +930,55 @@ function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onCl
   );
 }
 
+/** The cover, with YouTube Music's edit button over it to pick a new one. */
+function CoverPicker(props: {
+  page: PlaylistPage;
+  cover: Cover | null;
+  disabled: boolean;
+  onPick: (file: File) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <div className="relative size-32 self-center">
+      {props.cover ? (
+        <img src={props.cover.url} alt="" className="size-32 rounded-lg object-cover" />
+      ) : (
+        <Art
+          thumbnails={props.page.thumbnails}
+          width={128}
+          lazy={false}
+          className="size-32 rounded-lg"
+          fallback={<IconPlaylist size={48} stroke={1.25} />}
+        />
+      )}
+      <Button
+        type="button"
+        variant="secondary"
+        size="icon-sm"
+        aria-label="Change cover"
+        title="Change cover"
+        disabled={props.disabled}
+        className="absolute right-1.5 bottom-1.5 rounded-full shadow"
+        onClick={() => input.current?.click()}
+      >
+        <IconPhotoEdit />
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Cleared, so picking the same file again still reports a change.
+          event.target.value = "";
+          if (file) props.onPick(file);
+        }}
+      />
+    </div>
+  );
+}
+
 function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () => void }) {
   const x = useInteractions();
   const [title, setTitle] = useState(page.title);
@@ -934,8 +987,22 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   // starts at Private and sends it only if you pick another.
   const startPrivacy = page.privacy ?? "PRIVATE";
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>(startPrivacy);
+  const [cover, setCover] = useState<Cover | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cover) return () => URL.revokeObjectURL(cover.url);
+  }, [cover]);
+
+  const pick = async (file: File) => {
+    setError(null);
+    try {
+      setCover(await squareCover(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const save = async () => {
     const name = title.trim();
@@ -946,10 +1013,22 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       ...(text !== (page.description ?? "") && { description: text }),
       ...(privacy !== startPrivacy && { privacy }),
     };
-    if (Object.keys(details).length === 0) return onClose();
+    if (Object.keys(details).length === 0 && !cover) return onClose();
     setBusy(true);
     setError(null);
     try {
+      // Sent apart from the rest, as YouTube Music does, and first: once it is
+      // set, a failure below leaves it out of a second try.
+      if (cover) {
+        const thumbnails = await engine.setPlaylistCover(page.id, cover.image);
+        setCover(null);
+        patchPage({ kind: "playlist", id: page.id }, (p) =>
+          p.kind === "playlist" && thumbnails.length > 0
+            ? { ...p, page: { ...p.page, thumbnails } }
+            : p,
+        );
+        x.libraryChanged();
+      }
       await engine.editPlaylist(page.id, details);
       patchPage({ kind: "playlist", id: page.id }, (p) =>
         p.kind === "playlist"
@@ -982,6 +1061,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
         void save();
       }}
     >
+      <CoverPicker page={page} cover={cover} disabled={busy} onPick={(file) => void pick(file)} />
       <PlaylistFields
         title={title}
         onTitle={setTitle}

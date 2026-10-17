@@ -60,6 +60,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     addToPlaylist: (playlistId, videoIds) => engine.addToPlaylist(playlistId, videoIds),
     createPlaylist: (playlist, videoIds) => engine.createPlaylist(playlist, videoIds),
     editPlaylist: (playlistId, details) => engine.editPlaylist(playlistId, details),
+    setPlaylistCover: (playlistId, image) => engine.setPlaylistCover(playlistId, image),
     removeFromPlaylist: (playlistId, items) => engine.removeFromPlaylist(playlistId, items),
     moveInPlaylist: (playlistId, itemId, beforeItemId) =>
       engine.moveInPlaylist(playlistId, itemId, beforeItemId),

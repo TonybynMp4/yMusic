@@ -50,6 +50,7 @@ export interface EngineWorkerApi {
   addToPlaylist: YouTubeEngine["addToPlaylist"];
   createPlaylist: YouTubeEngine["createPlaylist"];
   editPlaylist: YouTubeEngine["editPlaylist"];
+  setPlaylistCover: YouTubeEngine["setPlaylistCover"];
   removeFromPlaylist: YouTubeEngine["removeFromPlaylist"];
   moveInPlaylist: YouTubeEngine["moveInPlaylist"];
   deletePlaylist: YouTubeEngine["deletePlaylist"];

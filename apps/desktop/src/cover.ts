@@ -67,6 +67,26 @@ export function centredCrop(width: number, height: number): Crop {
   return { x: (width - size) / 2, y: (height - size) / 2, size };
 }
 
+/** `crop` moved by `dx`, `dy`, kept inside the image. */
+export function moveCrop(crop: Crop, dx: number, dy: number, width: number, height: number): Crop {
+  return {
+    x: clamp(crop.x + dx, 0, width - crop.size),
+    y: clamp(crop.y + dy, 0, height - crop.size),
+    size: crop.size,
+  };
+}
+
+/**
+ * `crop` scaled by `factor` about its centre, no smaller than `MIN_SIDE` and
+ * no larger than the image, then moved back inside it if it spilled over.
+ */
+export function zoomCrop(crop: Crop, factor: number, width: number, height: number): Crop {
+  const largest = Math.min(width, height);
+  const size = clamp(crop.size * factor, Math.min(MIN_SIDE, largest), largest);
+  const shift = (crop.size - size) / 2;
+  return moveCrop({ x: crop.x + shift, y: crop.y + shift, size }, 0, 0, width, height);
+}
+
 export async function cropCover(picked: Picked, crop: Crop): Promise<Cover> {
   const side = Math.round(Math.min(crop.size, MAX_SIDE));
   const canvas = document.createElement("canvas");
@@ -80,4 +100,8 @@ export async function cropCover(picked: Picked, crop: Crop): Promise<Cover> {
   );
   if (!blob) throw new Error(UNREADABLE);
   return { image: new Uint8Array(await blob.arrayBuffer()), url: URL.createObjectURL(blob) };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

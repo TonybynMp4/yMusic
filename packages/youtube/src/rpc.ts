@@ -33,6 +33,7 @@ export interface EngineWorkerApi {
   renewCookie: YouTubeEngine["renewCookie"];
   account: YouTubeEngine["account"];
   search: YouTubeEngine["search"];
+  searchMore: YouTubeEngine["searchMore"];
   searchHistory: YouTubeEngine["searchHistory"];
   removeSearchHistory: YouTubeEngine["removeSearchHistory"];
   radio: YouTubeEngine["radio"];

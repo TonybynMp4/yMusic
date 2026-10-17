@@ -10,13 +10,14 @@ describe("the worker's forwarding", () => {
   // Each forwarder names its arguments, so one that drops an optional argument
   // still typechecks. Pausing search history once went missing that way.
   it("passes search options through to the engine", async () => {
-    const search = vi.spyOn(YouTubeEngine.prototype, "search").mockResolvedValue([]);
+    const search = vi.spyOn(YouTubeEngine.prototype, "search")
+      .mockResolvedValue({ results: { top: null, shelves: [], filters: [] }, more: null });
     const { port1, port2 } = new MessageChannel();
     exposeEngine(port1);
     const engine = connectEngine(port2, globalThis.fetch);
 
-    await engine.search("anything", { signedOut: true });
-    expect(search).toHaveBeenCalledWith("anything", { signedOut: true });
+    await engine.search("anything", { signedOut: true, filter: "videos" });
+    expect(search).toHaveBeenCalledWith("anything", { signedOut: true, filter: "videos" });
 
     search.mockRestore();
     port1.close();
@@ -42,7 +43,8 @@ live("the engine across a message port", () => {
       return globalThis.fetch(input, init);
     });
 
-    const tracks = await engine.search("boards of canada roygbiv");
+    const { results } = await engine.search("boards of canada roygbiv", { filter: "songs" });
+    const tracks = results.shelves.flatMap((shelf) => (shelf.kind === "tracks" ? shelf.tracks : []));
     expect(tracks.length).toBeGreaterThan(0);
     // The requests really went through the host, not around it.
     expect(requests).toBeGreaterThan(0);

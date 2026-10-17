@@ -4,6 +4,8 @@ import type {
   ArtistPage,
   BrowseCard,
   PlaylistPage,
+  SearchFilter,
+  SearchResults,
   StreamLease,
   Track,
   VideoId,
@@ -42,7 +44,7 @@ import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
-import { searchSongs } from "./search.ts";
+import { searchMusic, type SearchMore } from "./search.ts";
 import {
   getSearchHistory,
   removeSearchHistory,
@@ -57,7 +59,7 @@ import { NotPlayableError, resolveStream } from "./stream.ts";
  */
 const FALLBACK_SESSION_MS = 6 * 60 * 60 * 1000;
 
-/** Playlists that can be left half loaded and still resumed. */
+/** Playlists and searches that can be left half loaded and still resumed. */
 const MAX_CONTINUATIONS = 16;
 
 /** Plays still being reported on. Two is typical: the one ending and the next. */
@@ -65,6 +67,9 @@ const MAX_PLAYS = 4;
 
 /** YouTube ships a new player script every few days; this is well inside that. */
 const SIGNATURE_TIMESTAMP_MS = 12 * 60 * 60 * 1000;
+
+/** A page fetcher held for the UI, which cannot hold the closure itself. */
+type Continuation = PlaylistMore | SearchMore;
 
 export interface ResolveOptions {
   /**
@@ -101,7 +106,7 @@ export class YouTubeEngine {
   readonly #onSessionExpired: () => void;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
   #signatureTimestamp: { value: Promise<number>; expiresAt: number } | null = null;
-  readonly #continuations = new Map<string, PlaylistMore>();
+  readonly #continuations = new Map<string, Continuation>();
   readonly #plays = new Map<string, Play>();
   #handles = 0;
   /** The cookie the signed-in browsing client sends, which `renewCookie` updates. */
@@ -163,10 +168,17 @@ export class YouTubeEngine {
    */
   async search(
     query: string,
-    { signedOut = false }: { signedOut?: boolean } = {},
-  ): Promise<Track[]> {
+    { signedOut = false, filter = null }: { signedOut?: boolean; filter?: SearchFilter | null } = {},
+  ): Promise<{ results: SearchResults; more: string | null }> {
     const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
-    return searchSongs(youtube, query);
+    const { results, more } = await searchMusic(youtube, query, filter);
+    return { results, more: this.#hold(more) };
+  }
+
+  /** The next page of a chip's results, from the handle `search` or this returned. */
+  async searchMore(handle: string): Promise<{ results: SearchResults; more: string | null }> {
+    const { results, more } = await this.#fetchMore<SearchMore>(handle, "search");
+    return { results, more: this.#hold(more) };
   }
 
   /** The account's recent searches, newest first. Empty when signed out. */
@@ -320,20 +332,17 @@ export class YouTubeEngine {
   }
 
   async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
-    const next = this.#continuations.get(handle);
-    if (!next) throw new Error("this playlist page has expired; reopen the playlist");
-    // Dropped only once fetched, so a page that failed can be asked for again.
-    const { tracks, more } = await next();
-    this.#continuations.delete(handle);
+    const { tracks, more } = await this.#fetchMore<PlaylistMore>(handle, "playlist");
     return { tracks, more: this.#hold(more) };
   }
 
   /**
    * A continuation is a youtubei.js closure and cannot cross the worker
    * boundary, so it stays here under a handle. Only the newest few are kept:
-   * one abandoned per playlist left half loaded is not worth holding forever.
+   * one abandoned per playlist or search left half loaded is not worth
+   * holding forever.
    */
-  #hold(more: PlaylistMore | null): string | null {
+  #hold(more: Continuation | null): string | null {
     if (more === null) return null;
     const handle = String(++this.#handles);
     this.#continuations.set(handle, more);
@@ -342,6 +351,18 @@ export class YouTubeEngine {
       this.#continuations.delete(old);
     }
     return handle;
+  }
+
+  /** Fetches a held page. Dropped only once fetched, so a page that failed can be asked for again. */
+  async #fetchMore<C extends Continuation>(
+    handle: string,
+    what: "playlist" | "search",
+  ): Promise<Awaited<ReturnType<C>>> {
+    const next = this.#continuations.get(handle) as C | undefined;
+    if (!next) throw new Error(`this ${what} page has expired; open it again`);
+    const page = (await next()) as Awaited<ReturnType<C>>;
+    this.#continuations.delete(handle);
+    return page;
   }
 
   /** The signed-in account's playlists, Liked Music first. Empty when signed out. */

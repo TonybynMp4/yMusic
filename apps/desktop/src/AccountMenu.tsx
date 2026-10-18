@@ -8,7 +8,6 @@ import {
   IconBrandOpera,
   IconBrandVivaldi,
   IconBrowser,
-  IconLoader2,
   IconLogin2,
   IconLogout,
   IconSettings,
@@ -18,6 +17,7 @@ import { accountBrowsers, isTauri, type Browser } from "@ymusic/ipc";
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +35,7 @@ export function AccountMenu({ state, onSettings }: { state: AccountState; onSett
   if (state.busy) {
     return (
       <span className="grid size-8 place-items-center text-muted-foreground" aria-label="Signing in">
-        <IconLoader2 size={16} className="animate-spin" />
+        <Spinner size={16} />
       </span>
     );
   }
@@ -128,7 +128,7 @@ function SignInMenu({ state, onSettings }: { state: AccountState; onSettings: ()
           <DropdownMenuLabel>Import from a browser</DropdownMenuLabel>
           {browsers === null ? (
             <DropdownMenuItem disabled>
-              <IconLoader2 className="animate-spin" />
+              <Spinner />
               Looking for browsers
             </DropdownMenuItem>
           ) : browsers.length === 0 ? (

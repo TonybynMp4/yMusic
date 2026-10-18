@@ -2,7 +2,6 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconGripVertical,
-  IconLoader2,
   IconX,
 } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
@@ -22,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
@@ -226,7 +226,7 @@ export function Queue({
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {queue.items.length} tracks
-          {filling && <IconLoader2 size={12} className="animate-spin" aria-label="Loading more" />}
+          {filling && <Spinner size={12} label="Loading more" />}
         </span>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">

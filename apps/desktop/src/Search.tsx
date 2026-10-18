@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { IconLoader2 } from "@tabler/icons-react";
 import type { SearchFilter, SearchResults, Track } from "@ymusic/core";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { Card, Shelf, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { TrackList } from "./TrackList.tsx";
@@ -196,7 +196,7 @@ function More({ loading, onReach }: { loading: boolean; onReach: () => void }) {
     <div ref={end} className="flex h-12 items-center justify-center text-xs text-muted-foreground">
       {loading && (
         <span className="flex items-center gap-2">
-          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          <Spinner size={14} />
           Loading more results
         </span>
       )}

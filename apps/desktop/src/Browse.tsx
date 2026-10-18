@@ -2,7 +2,6 @@ import {
   IconArrowsShuffle,
   IconDisc,
   IconHeart,
-  IconLoader2,
   IconPencil,
   IconPlayerPlayFilled,
   IconPlaylist,
@@ -24,6 +23,7 @@ import { useState, type CSSProperties } from "react";
 import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { formatTotal } from "./format.ts";
 import {
@@ -209,7 +209,7 @@ function Playlist({
       />
       {loadingMore && (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          <Spinner size={14} />
           Loading more songs ({page.tracks.length} so far)
         </p>
       )}

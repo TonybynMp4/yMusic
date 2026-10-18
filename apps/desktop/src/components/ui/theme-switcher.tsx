@@ -33,7 +33,7 @@ function ThemeSwitcher({
       value={[value]}
       onValueChange={(next) => {
         // A press on the current theme would empty the group; keep it instead.
-        const [theme] = next as Theme[]
+        const [theme] = next
         if (theme) onValueChange(theme)
       }}
       className={cn("inline-flex h-8 rounded-full bg-background p-1 ring-1 ring-border", className)}

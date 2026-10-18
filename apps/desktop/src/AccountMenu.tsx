@@ -17,7 +17,6 @@ import { accountBrowsers, isTauri, type Browser } from "@ymusic/ipc";
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import type { AccountState } from "./useAccount.ts";
 
 /** The avatar in the top-right corner, where YouTube Music keeps it. */

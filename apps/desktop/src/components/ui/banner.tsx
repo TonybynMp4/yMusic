@@ -1,4 +1,4 @@
-import { IconX, type Icon } from "@tabler/icons-react"
+import { IconX } from "@tabler/icons-react"
 import { createContext, use, type ComponentProps, type HTMLAttributes } from "react"
 
 import { IconButton } from "@/components/IconButton"
@@ -32,14 +32,6 @@ function Banner({
   )
 }
 
-function BannerIcon({ icon: Icon, className }: { icon: Icon; className?: string }) {
-  return (
-    <div data-slot="banner-icon" className={cn("rounded-full bg-muted p-1", className)}>
-      <Icon size={16} aria-hidden />
-    </div>
-  )
-}
-
 function BannerTitle({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
   return <p data-slot="banner-title" className={cn("flex-1", className)} {...props} />
 }
@@ -57,4 +49,4 @@ function BannerClose({ label = "Dismiss" }: { label?: string }) {
   )
 }
 
-export { Banner, BannerAction, BannerClose, BannerIcon, BannerTitle }
+export { Banner, BannerAction, BannerClose, BannerTitle }

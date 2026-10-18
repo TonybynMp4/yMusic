@@ -314,3 +314,26 @@ describe("a long playlist", () => {
     expect(seen.at(-1)).toEqual({ count: 400, loading: false });
   });
 });
+
+describe("a playlist changed from outside its page", () => {
+  it("is fetched again on the next visit", async () => {
+    const route = { kind: "playlist", id: "PL7" } as const;
+    await browse.settledPage(route);
+    browse.playlistChanged("PL7");
+    await browse.settledPage(route);
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+  });
+
+  it("is fetched again when opened by its browse id", async () => {
+    const route = { kind: "playlist", id: "VLPL8" } as const;
+    await browse.settledPage(route);
+    browse.playlistChanged("PL8");
+    await browse.settledPage(route);
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a playlist never opened uncached", () => {
+    browse.playlistChanged("PL9");
+    expect(engine.playlist).not.toHaveBeenCalled();
+  });
+});

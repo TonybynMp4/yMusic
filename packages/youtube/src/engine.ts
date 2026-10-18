@@ -486,7 +486,7 @@ export class YouTubeEngine {
       options.refused == null
         ? clients
         : clients.slice(clients.findIndex((c) => c.name === options.refused) + 1 || 1);
-    if (tries.length === 0) throw new Error("no BotGuard to mint a PO token with");
+    if (tries.length === 0) throw new Error(`no player client left after ${options.refused}`);
     const errors: unknown[] = [];
     for (const { name, resolve } of tries) {
       try {

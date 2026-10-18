@@ -65,12 +65,16 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuFilter,
+  DropdownMenuInput,
   DropdownMenuItem,
+  DropdownMenuList,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  useDropdownMenuFilter,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -694,25 +698,42 @@ function Membership({
   );
 }
 
-/** Your playlists, fetched when the submenu opens. */
+/**
+ * Your playlists, fetched when the submenu opens, with a search field on top.
+ * The filter is ours (`filter={null}`) so "New playlist" stays visible while
+ * the playlists narrow down.
+ */
 function SaveToPlaylist({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
+  const [query, setQuery] = useState("");
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <IconPlaylistAdd />
-        Save to playlist
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-80 w-56" {...contained}>
-        <NewPlaylistItem videoIds={videoIds} />
-        <DropdownMenuSeparator />
-        <PlaylistTargets videoIds={videoIds} />
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+    <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery}>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <IconPlaylistAdd />
+          Save to playlist
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="flex max-h-80 w-56 flex-col overflow-hidden" {...contained}>
+          <DropdownMenuInput placeholder="Search playlists" aria-label="Search playlists" />
+          <DropdownMenuList>
+            <NewPlaylistItem videoIds={videoIds} />
+            <DropdownMenuSeparator />
+            <PlaylistTargets videoIds={videoIds} query={query} />
+          </DropdownMenuList>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    </DropdownMenuFilter>
   );
 }
 
-function PlaylistTargets({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
+function PlaylistTargets({
+  videoIds,
+  query,
+}: {
+  videoIds: () => Promise<VideoId[]>;
+  query: string;
+}) {
   const x = useInteractions();
+  const filter = useDropdownMenuFilter();
   const [state, setState] = useState<
     { ids: VideoId[]; targets: PlaylistTarget[] } | { error: string } | null
   >(null);
@@ -747,7 +768,10 @@ function PlaylistTargets({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
   if (state.targets.length === 0) {
     return <DropdownMenuItem disabled>You have no playlists yet</DropdownMenuItem>;
   }
-  return state.targets.map((target) => (
+  const needle = query.trim();
+  const targets = state.targets.filter((target) => filter.contains(target.title, needle));
+  if (targets.length === 0) return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
+  return targets.map((target) => (
     <DropdownMenuItem
       key={target.id}
       onClick={() => {

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "@/lib/utils"
-import { IconChevronRight, IconCheck } from "@tabler/icons-react"
+import { IconChevronRight, IconCheck, IconSearch } from "@tabler/icons-react"
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -221,6 +221,41 @@ function DropdownMenuRadioItem({
   )
 }
 
+function DropdownMenuFilter({ ...props }: MenuPrimitive.FilterProvider.Props) {
+  return <MenuPrimitive.FilterProvider {...props} />
+}
+
+/** Matches text against a query, ignoring case and accents, like the menu's own filter. */
+const useDropdownMenuFilter = MenuPrimitive.useFilter
+
+function DropdownMenuInput({ className, ...props }: MenuPrimitive.Input.Props) {
+  return (
+    <div
+      data-slot="dropdown-menu-input"
+      className="flex items-center gap-1.5 px-1.5 pb-1 text-muted-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+    >
+      <IconSearch />
+      <MenuPrimitive.Input
+        className={cn(
+          "h-7 w-full min-w-0 bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground",
+          className
+        )}
+        {...props}
+      />
+    </div>
+  )
+}
+
+function DropdownMenuList({ className, ...props }: MenuPrimitive.List.Props) {
+  return (
+    <MenuPrimitive.List
+      data-slot="dropdown-menu-list"
+      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+      {...props}
+    />
+  )
+}
+
 function DropdownMenuSeparator({
   className,
   ...props
@@ -266,4 +301,8 @@ export {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
+  DropdownMenuFilter,
+  DropdownMenuInput,
+  DropdownMenuList,
+  useDropdownMenuFilter,
 }

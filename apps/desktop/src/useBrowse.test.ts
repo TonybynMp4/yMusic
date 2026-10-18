@@ -332,6 +332,15 @@ describe("a playlist changed from outside its page", () => {
     expect(engine.playlist).toHaveBeenCalledTimes(2);
   });
 
+  it("is fetched again at once while something shows it", async () => {
+    const stop = browse.followPlaylist("PL10", () => {});
+    await flush();
+    browse.playlistChanged("PL10");
+    await flush();
+    expect(engine.playlist).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
   it("leaves a playlist never opened uncached", () => {
     browse.playlistChanged("PL9");
     expect(engine.playlist).not.toHaveBeenCalled();

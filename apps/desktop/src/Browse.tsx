@@ -3,6 +3,7 @@ import {
   IconDisc,
   IconHeart,
   IconLoader2,
+  IconPencil,
   IconPlayerPlayFilled,
   IconPlaylist,
   IconRefresh,
@@ -24,7 +25,14 @@ import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { InteractionArea, InteractionButton, type Subject } from "./Interactions.tsx";
+import { formatTotal } from "./format.ts";
+import {
+  InteractionArea,
+  InteractionButton,
+  PRIVACY_LABELS,
+  usePlaylistEditing,
+  type Subject,
+} from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
@@ -151,6 +159,14 @@ function Playlist({
   // The same icons as the sidebar: Liked Music always shows the heart, and a
   // playlist whose artwork is missing shows the playlist icon.
   const liked = route.id === LIKED_MUSIC;
+  const editing = usePlaylistEditing(page);
+  // Every row is in: not still loading, and not stopped early by a failure.
+  const complete = !loadingMore && !resume;
+  // YouTube's count and length until every row is in, then the rows' own,
+  // which follow your edits.
+  const count = complete ? page.tracks.length : (page.trackCount ?? page.tracks.length);
+  const total = page.tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
+  const length = complete ? (total > 0 ? formatTotal(total) : null) : page.length;
   return (
     <>
       <Header
@@ -159,10 +175,23 @@ function Playlist({
           liked ? <IconHeart size={64} stroke={1.25} /> : <IconPlaylist size={64} stroke={1.25} />
         }
         title={page.title}
-        subtitle={page.subtitle}
+        byline={page.owner?.name}
+        subtitle={[page.subtitle, page.privacy && PRIVACY_LABELS[page.privacy]]
+          .filter(Boolean)
+          .join(" • ")}
+        details={[`${count} ${count === 1 ? "song" : "songs"}`, length].filter(Boolean).join(" • ")}
+        description={page.description}
         tracks={page.tracks}
         actions={actions}
         subject={{ kind: "collection", route }}
+        extra={
+          editing && (
+            <Button variant="outline" className="rounded-full" onClick={editing.edit}>
+              <IconPencil size={16} stroke={1.75} />
+              Edit
+            </Button>
+          )
+        }
       />
       <TrackList
         tracks={page.tracks}
@@ -171,6 +200,12 @@ function Playlist({
         onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
         onOpen={actions.onOpen}
+        // Rows move and go only once all are in: the queue follows a loading
+        // playlist by how many rows it has, and a move past the last row
+        // loaded would land after rows that never arrived.
+        editing={
+          editing && complete ? { onRemove: editing.remove, onMove: editing.move } : undefined
+        }
       />
       {loadingMore && (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
@@ -300,10 +335,15 @@ export function Header(props: {
   title: string;
   byline?: React.ReactNode;
   subtitle: string | null;
+  /** A second summary line: how many songs, how long. */
+  details?: string | undefined;
+  description?: string | null | undefined;
   tracks: Track[];
   actions: BrowseActions;
   /** What the page's menu acts on. The "Local files" page has none. */
   subject?: Subject | undefined;
+  /** More buttons beside Play and Shuffle. */
+  extra?: React.ReactNode;
 }) {
   return (
     <div className="mb-4 flex items-end gap-6 px-3 pt-2">
@@ -318,7 +358,14 @@ export function Header(props: {
         <h1 className="text-3xl font-bold tracking-tight">{props.title}</h1>
         {props.byline && <p className="text-sm">{props.byline}</p>}
         {props.subtitle && <p className="text-xs text-muted-foreground">{props.subtitle}</p>}
-        <PlayButtons tracks={props.tracks} actions={props.actions} subject={props.subject} />
+        {props.details && <p className="text-xs text-muted-foreground">{props.details}</p>}
+        {props.description && <Description text={props.description} />}
+        <PlayButtons
+          tracks={props.tracks}
+          actions={props.actions}
+          subject={props.subject}
+          extra={props.extra}
+        />
       </div>
     </div>
   );
@@ -328,10 +375,12 @@ function PlayButtons({
   tracks,
   actions,
   subject,
+  extra,
 }: {
   tracks: Track[];
   actions: BrowseActions;
   subject?: Subject | undefined;
+  extra?: React.ReactNode;
 }) {
   const empty = tracks.length === 0;
   return (
@@ -353,6 +402,7 @@ function PlayButtons({
         <IconArrowsShuffle size={16} stroke={1.75} />
         Shuffle
       </Button>
+      {extra}
       {subject && <InteractionButton subject={subject} size="icon" />}
     </div>
   );

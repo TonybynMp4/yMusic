@@ -18,7 +18,7 @@ vi.mock("./engine.ts", () => ({ engine }));
 let browse: typeof import("./useBrowse.ts");
 
 const album = (id: string) => ({ kind: "album", id }) as const;
-const playlistPage = { title: "Mix", tracks: [] } as unknown as PlaylistPage;
+const playlistPage = { title: "Mix", tracks: [], itemIds: [] } as unknown as PlaylistPage;
 
 /** Opens an album and waits for it, leaving nothing following it. */
 async function visit(id: string): Promise<void> {
@@ -103,7 +103,7 @@ describe("the browse page cache", () => {
     expect(engine.playlist).toHaveBeenCalledTimes(1);
     expect(loading).toBe(true);
 
-    rest({ tracks: [], more: null });
+    rest({ tracks: [], itemIds: [], more: null });
     await flush();
     expect(loading).toBe(false);
     stop();
@@ -116,9 +116,18 @@ function tracks(from: number, count: number): Track[] {
   return Array.from({ length: count }, (_, i) => ({ id: `yt:${from + i}` }) as unknown as Track);
 }
 
+function ids(from: number, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `item:${from + i}`);
+}
+
 function first(id: string, more: string | null) {
   return {
-    page: { id, title: "Liked Music", tracks: tracks(0, PAGE) } as unknown as PlaylistPage,
+    page: {
+      id,
+      title: "Liked Music",
+      tracks: tracks(0, PAGE),
+      itemIds: ids(0, PAGE),
+    } as unknown as PlaylistPage,
     more,
   };
 }
@@ -128,7 +137,11 @@ function continuations(pages: number, ms: number) {
   return async (handle: string) => {
     await new Promise((resolve) => setTimeout(resolve, ms));
     const n = Number(handle);
-    return { tracks: tracks(n * PAGE, PAGE), more: n + 1 < pages ? String(n + 1) : null };
+    return {
+      tracks: tracks(n * PAGE, PAGE),
+      itemIds: ids(n * PAGE, PAGE),
+      more: n + 1 < pages ? String(n + 1) : null,
+    };
   };
 }
 
@@ -166,6 +179,23 @@ describe("a long playlist", () => {
     expect(seen.slice(0, -1).every((update) => update.loading)).toBe(true);
     const counts = seen.map((update) => update.count);
     expect(counts).toEqual([...counts].sort((a, b) => a - b));
+  });
+
+  it("keeps each row's id, and an edit made while it loads", async () => {
+    engine.playlist.mockResolvedValue(first("PL5", "1"));
+    engine.playlistMore.mockImplementation(continuations(3, 50));
+    const route = { kind: "playlist", id: "PL5" } as const;
+    browse.browseState(route);
+    await vi.advanceTimersByTimeAsync(0);
+    browse.patchPage(route, (p) =>
+      p.kind === "playlist" ? { ...p, page: { ...p.page, title: "Renamed" } } : p,
+    );
+    await vi.runAllTimersAsync();
+
+    const done = browse.browseState(route);
+    if (done.status !== "ready" || done.page.kind !== "playlist") throw new Error("not ready");
+    expect(done.page.page.title).toBe("Renamed");
+    expect(done.page.page.itemIds).toEqual(ids(0, 3 * PAGE));
   });
 
   it("tries the first page again before failing", async () => {

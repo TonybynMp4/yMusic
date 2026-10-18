@@ -51,6 +51,12 @@ export interface EngineWorkerApi {
   playlistTargets: YouTubeEngine["playlistTargets"];
   addToPlaylist: YouTubeEngine["addToPlaylist"];
   createPlaylist: YouTubeEngine["createPlaylist"];
+  editPlaylist: YouTubeEngine["editPlaylist"];
+  setPlaylistCover: YouTubeEngine["setPlaylistCover"];
+  removePlaylistCover: YouTubeEngine["removePlaylistCover"];
+  removeFromPlaylist: YouTubeEngine["removeFromPlaylist"];
+  moveInPlaylist: YouTubeEngine["moveInPlaylist"];
+  deletePlaylist: YouTubeEngine["deletePlaylist"];
   resolve: YouTubeEngine["resolve"];
   played: YouTubeEngine["played"];
   watched: YouTubeEngine["watched"];

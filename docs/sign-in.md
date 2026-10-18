@@ -18,4 +18,4 @@ A session from the sign-in window has no browser left to keep it fresh, so the a
 
 A rotation and a request can cross: the engine can get a signed-out answer for a cookie that was replaced while the request was out. So the app passes the cookie that failed to `account_refresh`, which returns the saved session instead if it has moved on, and only a session that really failed signs you out. The check itself only reads answers to `browse` and `next`: youtubei.js fetches `/config` when it starts, and that answer says `logged_in` `0` whatever the session.
 
-Only the browsing client is signed in. The `VISIONOS` player client stays anonymous, because a web cookie on a non-web client is exactly the mismatch YouTube flags.
+The browsing client and the `WEB_REMIX` player client are signed in, which is how a Premium account gets its 256 kbps formats (see `docs/playback.md`). The `VISIONOS` and `TV_SIMPLY` player clients stay anonymous, because a web cookie on a non-web client is exactly the mismatch YouTube flags: both answer it with HTTP 400.

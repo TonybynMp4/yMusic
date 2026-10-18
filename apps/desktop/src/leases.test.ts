@@ -17,6 +17,8 @@ function lease(id: string, expiresAt: number | null): StreamLease {
     loudnessDb: null,
     headers: {},
     expiresAt,
+    playerClient: "VISIONOS",
+    degraded: null,
   };
 }
 

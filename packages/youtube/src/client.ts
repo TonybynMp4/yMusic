@@ -1,4 +1,7 @@
-import { ClientType, Innertube, Platform } from "youtubei.js";
+import { ClientType, Innertube, Platform, type SessionOptions } from "youtubei.js";
+
+import { playerFrom } from "./player-extract.ts";
+import type { PlayerScript } from "./player-script.ts";
 
 export type FetchLike = typeof fetch;
 
@@ -85,16 +88,54 @@ export async function createPlayer(options: YouTubeOptions): Promise<Innertube> 
  * `visitorData`; youtubei.js appends it to every deciphered URL.
  */
 export async function createFallbackPlayer(
-  options: YouTubeOptions & { visitorData: string; sessionToken: string },
+  options: YouTubeOptions & { visitorData: string; sessionToken: string; script: PlayerScript },
+): Promise<Innertube> {
+  return withPlayer(
+    {
+      client_type: ClientType.TV_SIMPLY,
+      visitor_data: options.visitorData,
+      po_token: options.sessionToken,
+      fetch: options.fetch,
+    },
+    options.script,
+    options.sessionToken,
+  );
+}
+
+/**
+ * The player client for a signed-in account: `WEB_REMIX`, music.youtube.com's
+ * own, with the session cookie. It is the only client that hands out Premium's
+ * formats (itags 774 and 141) as URLs mpv can open. Its formats are ciphered,
+ * signature and `n` both, so it needs the player script and the evaluator, the
+ * same as `TV_SIMPLY`. The URLs it deciphers need no cookie and no PO token.
+ *
+ * Only for a web cookie: the cookie is what makes this the web client YouTube
+ * expects it to be, and the reason the other player clients stay anonymous.
+ */
+export async function createSignedInPlayer(
+  options: YouTubeOptions & { cookie: string; script: PlayerScript },
+): Promise<Innertube> {
+  return withPlayer(
+    { client_type: ClientType.MUSIC, cookie: options.cookie, fetch: options.fetch },
+    options.script,
+  );
+}
+
+/**
+ * A client given the analysed player script rather than left to fetch and
+ * parse its own (`retrieve_player: true`), which is what the memory goes on.
+ * Each client gets its own `Player`, as only `TV_SIMPLY`'s carries a PO token,
+ * but they share the script.
+ */
+async function withPlayer(
+  options: SessionOptions,
+  script: PlayerScript,
+  poToken?: string,
 ): Promise<Innertube> {
   installEvaluator();
-  return Innertube.create({
-    retrieve_player: true,
-    client_type: ClientType.TV_SIMPLY,
-    visitor_data: options.visitorData,
-    po_token: options.sessionToken,
-    fetch: options.fetch,
-  });
+  const youtube = await Innertube.create({ ...options, retrieve_player: false });
+  youtube.session.player = playerFrom(script, poToken);
+  return youtube;
 }
 
 /** A fresh anonymous visitor id, for binding a session token to. */
@@ -111,6 +152,9 @@ export async function createVisitor(options: YouTubeOptions): Promise<string> {
  * them with `new Function`, which is why it only belongs in the engine worker:
  * worker scripts carry no CSP in the app, the page does, and the page's
  * forbids eval. Everything evaluated here is YouTube's own player code.
+ *
+ * youtubei.js appends a `process(n, sp, sig)` to the script before handing it
+ * over, which returns `{ n, sig }`; this only has to call it.
  */
 function installEvaluator(): void {
   Platform.shim.eval = playerEvaluator();

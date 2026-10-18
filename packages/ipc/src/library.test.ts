@@ -21,6 +21,8 @@ const localLease = {
   loudnessDb: null,
   headers: {},
   expiresAt: null,
+  playerClient: null,
+  degraded: null,
 };
 
 /** What the YouTube resolver will return, for comparison. */
@@ -34,6 +36,8 @@ const remoteLease = {
   loudnessDb: null,
   headers: { "User-Agent": "YMUSIC/0.1", Cookie: "a=1, b=2" },
   expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+  playerClient: "VISIONOS",
+  degraded: null,
 };
 
 describe("StreamLease", () => {

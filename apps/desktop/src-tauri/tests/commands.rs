@@ -361,6 +361,8 @@ fn library_commands_round_trip_over_ipc() {
         "headers",
         "expiresAt",
         "loudnessDb",
+        "playerClient",
+        "degraded",
     ] {
         assert!(lease.get(field).is_some(), "missing `{field}` in {lease}");
     }

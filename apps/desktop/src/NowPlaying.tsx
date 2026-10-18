@@ -19,6 +19,7 @@ import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { DegradedBadge } from "./DegradedBadge.tsx";
 import { InteractionArea } from "./Interactions.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
 import { Artwork, Byline, TitleLink } from "./TrackList.tsx";
@@ -52,6 +53,8 @@ interface Props {
   rating: RatingProps | null;
   /** Opens the album or an artist from the song's title and byline. */
   onOpen: (route: Route) => void;
+  /** Why the song plays below its account's best, or null. */
+  degraded: string | null;
 }
 
 /**
@@ -177,6 +180,7 @@ export function NowPlaying(props: Props) {
               >
                 <span className="flex min-w-0 items-center gap-1.5">
                   <TitleLink track={track} onOpen={props.onOpen} className="min-w-0 text-sm" />
+                  <DegradedBadge reason={props.degraded} />
                   {props.device && <FromDevice device={props.device} />}
                 </span>
                 <Byline track={track} onOpen={props.onOpen} year={year} />

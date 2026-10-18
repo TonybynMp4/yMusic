@@ -79,6 +79,8 @@ pub struct LocalLease {
     pub loudness_db: Option<f64>,
     pub headers: std::collections::HashMap<String, String>,
     pub expires_at: Option<i64>,
+    pub player_client: Option<String>,
+    pub degraded: Option<String>,
 }
 
 pub struct Library {
@@ -217,6 +219,8 @@ impl Library {
             loudness_db: None,
             headers: std::collections::HashMap::new(),
             expires_at: None,
+            player_client: None,
+            degraded: None,
         })
     }
 

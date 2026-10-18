@@ -107,6 +107,8 @@ async function load(
       more = next.more;
     } catch (error) {
       console.error("could not load the rest of the library's songs", error);
+      // A quiet reload keeps the old list rather than a shorter one.
+      if (quiet) return;
       more = null;
     }
     if (!quiet) set(ready(more !== null));

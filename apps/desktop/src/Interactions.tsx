@@ -768,7 +768,8 @@ function PlaylistTargets({
   if (state.targets.length === 0) {
     return <DropdownMenuItem disabled>You have no playlists yet</DropdownMenuItem>;
   }
-  const targets = state.targets.filter((target) => filter.contains(target.title, query));
+  const needle = query.trim();
+  const targets = state.targets.filter((target) => filter.contains(target.title, needle));
   if (targets.length === 0) return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
   return targets.map((target) => (
     <DropdownMenuItem

@@ -41,6 +41,8 @@ The `signed-in` scenario runs browse, long playlist, playback and player script,
 
 `--player-script` says where the analysis runs. `worker`, the default, analyses it in a Bun worker that is ended once it has the result, as the app does (`extractInWorker`). Bun's workers are threads in the same process, as WebKit's are in the web process, so the worker's memory is counted. `in-process` analyses it in the engine's own thread, which is what youtubei.js does when left to fetch the script itself. `none` skips the player script phase, which is signed-in playback before `WEB_REMIX`.
 
+The phase and the flag need Premium playback's player script API (`src/player-extract.ts`). On a branch without it the phase reports `skipped`, `--player-script` has no effect, and the fallback phase lets youtubei.js fetch the script itself.
+
 The engine phases drop each result as soon as it arrives, so what stays alive afterwards is the engine's doing. The `app-` phases load `useBrowse.ts` and `useSongYear.ts` from the branch under test and keep what they keep (`app.ts`). In those two modules, `./engine.ts` becomes the bench's engine, copying each result as the messages from the app's engine worker do, and `react` becomes a stand-in that runs each effect at once and its cleanup on unmount. Nothing renders.
 
 Each phase reports what it got ("20 of 20 streams resolved"), and a comparison prints both sides when they differ. If that line changes, the run did different work, and its numbers do not compare.

@@ -1,7 +1,7 @@
 import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import type { YouTubeEngine } from "../src/engine.ts";
-import type { PlayerScript } from "../src/player-script.ts";
+import type { PlayerScripts } from "./player-script.ts";
 import { loadApp, type App } from "./app.ts";
 
 /**
@@ -85,7 +85,7 @@ const leases = new Map<string, unknown>();
 export async function runPhase(
   engine: YouTubeEngine,
   phase: Phase,
-  analyse: () => Promise<PlayerScript | null>,
+  analyse: PlayerScripts["analyse"],
 ): Promise<string> {
   switch (phase) {
     case "browse": {
@@ -123,8 +123,10 @@ export async function runPhase(
       // a PO token from BotGuard, and the player script's decipher code.
       const ids = (await wholePlaylist(engine, PLAY_PLAYLIST)).slice(0, TRACKS);
       let resolved = 0;
+      // `fallback` before Premium playback, `refused` after; each ignores the other.
+      const options = { fallback: true, refused: "VISIONOS" } as never;
       for (const id of ids) {
-        if (await engine.resolve(id, { refused: "VISIONOS" }).catch(() => null)) resolved++;
+        if (await engine.resolve(id, options).catch(() => null)) resolved++;
       }
       return `${resolved} of ${ids.length} streams resolved on the fallback client`;
     }

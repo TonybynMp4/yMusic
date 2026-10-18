@@ -101,8 +101,12 @@ export function extractInWorker(
     if (!response.ok) throw new Error(`the player script answered ${response.status}`);
     const source = await response.text();
     const worker = startWorker();
+    const failure = new AbortController();
     try {
-      const script = await wrap<ExtractorApi>(worker).extract(playerId, source);
+      const script = await Promise.race([
+        wrap<ExtractorApi>(worker).extract(playerId, source),
+        workerFailure(worker, failure.signal),
+      ]);
       try {
         storage?.setItem(PLAYER_SCRIPT_KEY, JSON.stringify({ libraryVersion, script }));
       } catch {
@@ -110,9 +114,32 @@ export function extractInWorker(
       }
       return script;
     } finally {
+      failure.abort();
       worker.terminate();
     }
   };
+}
+
+/** Longer than any parse takes, even on a slow machine under load. */
+const EXTRACT_TIMEOUT_MS = 60_000;
+
+/**
+ * Rejects when the worker fails to load, dies, or never answers. A comlink
+ * call to a dead worker never settles, and the resolve waiting on it would
+ * hang instead of moving on to the next player client. `done` stops the clock.
+ */
+function workerFailure(worker: ExtractorWorker, done: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = (event: Event) =>
+      reject(new Error(`the extractor worker failed: ${(event as ErrorEvent).message ?? event.type}`));
+    worker.addEventListener("error", fail);
+    worker.addEventListener("messageerror", fail);
+    const timer = setTimeout(
+      () => reject(new Error("the extractor worker did not answer in time")),
+      EXTRACT_TIMEOUT_MS,
+    );
+    done.addEventListener("abort", () => clearTimeout(timer));
+  });
 }
 
 function keptPlayerScript(

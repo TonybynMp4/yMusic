@@ -119,4 +119,17 @@ describe("analysing in a worker", () => {
     await source("def456", "18.2.0");
     expect(counts.workers).toBe(3);
   });
+
+  it("rejects and ends a worker that dies mid-parse", async () => {
+    let ended = false;
+    const fetch: typeof globalThis.fetch = async () => new Response("base.js");
+    const source = extractInWorker(fetch, () => {
+      const { port2 } = new MessageChannel();
+      // Nothing answers on the other end, as with a worker that crashed.
+      setTimeout(() => port2.dispatchEvent(new Event("error")));
+      return Object.assign(port2, { terminate: () => void (ended = true) });
+    });
+    await expect(source("abc123", "18.1.0")).rejects.toThrow("the extractor worker failed");
+    expect(ended).toBe(true);
+  });
 });

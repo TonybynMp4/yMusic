@@ -396,6 +396,21 @@ export function refreshPage(route: Route): void {
   for (const listener of old?.listeners ?? []) listener();
 }
 
+/**
+ * For a playlist changed from outside its page (songs saved to it from a
+ * menu): a copy on screen is fetched again, and one kept for later is dropped
+ * so the next visit fetches it. `id` may carry the `VL` browse prefix.
+ */
+export function playlistChanged(id: string): void {
+  const bare = id.startsWith("VL") ? id.slice(2) : id;
+  for (const route of [bare, `VL${bare}`].map((key): Route => ({ kind: "playlist", id: key }))) {
+    const entry = entries.get(viewKey(route));
+    if (!entry) continue;
+    if (entry.listeners.size > 0) refreshPage(route);
+    else entries.delete(viewKey(route));
+  }
+}
+
 /** Drops a page that no longer exists, such as a playlist just deleted. */
 export function forgetPage(route: Route): void {
   entries.delete(`${route.kind}:${route.id}`);

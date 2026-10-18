@@ -94,6 +94,7 @@ import { toggled } from "./Rating.tsx";
 import {
   newPlaylistRoute,
   patchPage,
+  playlistChanged,
   refreshPage,
   settledPage,
   useBrowse,
@@ -776,7 +777,10 @@ function PlaylistTargets({
       key={target.id}
       onClick={() => {
         engine.addToPlaylist(target.id, state.ids).then(
-          () => x.notify(`Saved to ${target.title}`),
+          () => {
+            playlistChanged(target.id);
+            x.notify(`Saved to ${target.title}`);
+          },
           (error: unknown) =>
             x.notify(error instanceof Error ? error.message : String(error)),
         );

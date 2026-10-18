@@ -7,7 +7,6 @@ import {
   IconHeart,
   IconLayoutGrid,
   IconList,
-  IconLoader2,
   IconPlaylist,
   IconPlus,
   IconUser,
@@ -26,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { BrowseActions } from "./Browse.tsx";
 import { formatTotal } from "./format.ts";
@@ -568,7 +568,7 @@ function Songs(props: { tracks: Track[]; loadingMore: boolean; actions: BrowseAc
       />
       {props.loadingMore && (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          <Spinner size={14} />
           Loading more songs ({tracks.length} so far)
         </p>
       )}

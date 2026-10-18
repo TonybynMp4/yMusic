@@ -7,7 +7,6 @@ import {
   IconLibrary,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
-  IconLoader2,
   IconPlaylist,
   IconPlaylistAdd,
   IconRefresh,
@@ -20,6 +19,7 @@ import type { ScanReport } from "@ymusic/ipc";
 import { Art } from "@/components/Art";
 import { IconButton } from "@/components/IconButton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
@@ -144,7 +144,7 @@ export function Sidebar(props: Props) {
             )}
             <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>
               {props.loading ? (
-                <IconLoader2 size={15} className="animate-spin" />
+                <Spinner size={15} />
               ) : (
                 <IconRefresh size={15} />
               )}

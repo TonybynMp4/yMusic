@@ -2,7 +2,6 @@ import {
   IconArrowsShuffle,
   IconDisc,
   IconHeart,
-  IconLoader2,
   IconPencil,
   IconPlayerPlayFilled,
   IconPlaylist,
@@ -19,11 +18,12 @@ import type {
   TrackId,
 } from "@ymusic/core";
 
-import { useState, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 
 import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { formatTotal } from "./format.ts";
 import {
@@ -209,7 +209,7 @@ function Playlist({
       />
       {loadingMore && (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          <Spinner size={14} />
           Loading more songs ({page.tracks.length} so far)
         </p>
       )}
@@ -313,18 +313,52 @@ function Artist({
   );
 }
 
-/** Two lines until clicked, then the whole thing; clicking again folds it. */
+/**
+ * Two lines until More, then the whole text in paragraphs, as YouTube Music
+ * does. More only shows when two lines cut the text off.
+ */
 function Description({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // Measured while the clamped paragraph is mounted, and again as its width
+  // changes. Keyed by the text, so a new description is measured afresh.
+  const clamp = useCallback((el: HTMLParagraphElement) => {
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <button
-      type="button"
-      aria-expanded={open}
-      onClick={() => setOpen((o) => !o)}
-      className="max-w-2xl cursor-pointer text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
-    >
-      <span className={cn("whitespace-pre-line", !open && "line-clamp-2")}>{text}</span>
-    </button>
+    <div className="typography max-w-2xl text-muted-foreground">
+      {open ? (
+        paragraphs.map((p, i) => (
+          <p key={i} className="whitespace-pre-line">
+            {p}
+          </p>
+        ))
+      ) : (
+        <p key={text} ref={clamp} className="line-clamp-2">
+          {paragraphs.join(" ")}
+        </p>
+      )}
+      {(open || clipped) && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="mt-1 cursor-pointer font-medium text-foreground outline-none hover:underline focus-visible:underline"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </div>
   );
 }
 

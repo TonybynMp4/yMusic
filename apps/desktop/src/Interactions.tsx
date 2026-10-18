@@ -7,7 +7,6 @@ import {
   IconFolderSearch,
   IconLibraryMinus,
   IconLibraryPlus,
-  IconLoader2,
   IconPencil,
   IconPhoto,
   IconCrop,
@@ -77,6 +76,7 @@ import {
   useDropdownMenuFilter,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import {
   centredCrop,
@@ -759,7 +759,7 @@ function PlaylistTargets({
   if (state === null) {
     return (
       <DropdownMenuItem disabled>
-        <IconLoader2 className="animate-spin" />
+        <Spinner />
         Loading playlists
       </DropdownMenuItem>
     );
@@ -886,7 +886,7 @@ function NewPlaylistDialog({
               Cancel
             </DialogClose>
             <Button type="submit" disabled={busy || title.trim().length === 0}>
-              {busy && <IconLoader2 className="animate-spin" />}
+              {busy && <Spinner />}
               Create
             </Button>
           </DialogFooter>
@@ -1237,7 +1237,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
           Cancel
         </DialogClose>
         <Button type="submit" disabled={busy || title.trim().length === 0}>
-          {busy && <IconLoader2 className="animate-spin" />}
+          {busy && <Spinner />}
           Save
         </Button>
       </DialogFooter>
@@ -1293,7 +1293,7 @@ function DeletePlaylistDialog({
             Cancel
           </DialogClose>
           <Button variant="destructive" disabled={busy} onClick={() => void remove()}>
-            {busy && <IconLoader2 className="animate-spin" />}
+            {busy && <Spinner />}
             Delete
           </Button>
         </DialogFooter>

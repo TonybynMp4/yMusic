@@ -176,11 +176,6 @@ export function usePlayer(
   const inMpv = useRef<TrackId | null>(null);
   /** The lease mpv is playing, for the degraded badge and stats for nerds. */
   const [streaming, setStreaming] = useState<StreamLease | null>(null);
-  const playingLease = useRef<StreamLease | null>(null);
-  const playLease = useCallback((next: StreamLease | null) => {
-    playingLease.current = next;
-    setStreaming(next);
-  }, []);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -221,7 +216,7 @@ export function usePlayer(
       if (loadedId.current !== null) {
         loadedId.current = null;
         inMpv.current = null;
-        playLease(null);
+        setStreaming(null);
         void engine.stop().catch(logPlaybackFailure);
       }
       return;
@@ -250,7 +245,7 @@ export function usePlayer(
       queued.current = null;
       await load(lease, paused, resumeAt.current?.ms);
       inMpv.current = trackId;
-      playLease(lease);
+      setStreaming(lease);
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
@@ -262,7 +257,7 @@ export function usePlayer(
     return () => {
       cancelled = true;
     };
-  }, [trackId, engine, load, reportError, leaseFor, playLease]);
+  }, [trackId, engine, load, reportError, leaseFor]);
 
   // Hand mpv the next track while this one plays, so it opens it ahead of
   // time and goes on to it with no gap. Only once playing, so resolving it
@@ -316,11 +311,12 @@ export function usePlayer(
         if (failed === null || failed !== loadedId.current) return;
         if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
         retried.current = failed;
+        // The lease mpv refused: `streaming` may not have reached it yet.
+        const refused = leases.current.get(failed)?.playerClient ?? null;
         leases.current.delete(failed);
-        const refused = playingLease.current?.trackId === failed ? playingLease.current : null;
         void (async () => {
           const lease = await resolveTrack(failed, {
-            refused: refused?.playerClient ?? null,
+            refused,
             quality: quality.current,
           });
           if (loadedId.current !== failed) return;
@@ -332,7 +328,7 @@ export function usePlayer(
           const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
           await load(lease, paused, startMs);
           inMpv.current = failed;
-          playLease(lease);
+          setStreaming(lease);
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
@@ -341,7 +337,7 @@ export function usePlayer(
           }
         });
       }),
-    [engine, load, reportError, playLease],
+    [engine, load, reportError],
   );
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
@@ -370,13 +366,13 @@ export function usePlayer(
         if (inMpv.current !== currentId.current) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
-        playLease(leases.current.get(event.trackId) ?? null);
+        setStreaming(leases.current.get(event.trackId) ?? null);
         retried.current = null;
         queued.current = null;
         cameUp.current = true;
         dispatch({ type: "next", reason: "trackEnded" });
       }),
-    [engine, playLease],
+    [engine],
   );
 
   const stopFollowing = useCallback(() => {

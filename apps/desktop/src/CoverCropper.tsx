@@ -94,8 +94,10 @@ export function CoverCropper({
     if (arrow) {
       const next = moved(latest.current, -arrow[0] * step, -arrow[1] * step);
       if (next) setPosition(next);
-    } else if (event.key === "Enter") onDone();
-    else if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
+    } else if (event.key === "Enter") {
+      // Held down, it would finish the crop again on every repeat.
+      if (!event.repeat) onDone();
+    } else if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
     else if (event.key === "-") zoomTo(zoom / 1.1);
     else if (event.key === "0") {
       setZoom(1);

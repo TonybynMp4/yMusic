@@ -944,12 +944,12 @@ function EditPlaylistDialog({ page, onClose }: { page: PlaylistPage | null; onCl
   );
 }
 
+/** A cropped image, with what it was cropped from so it can be cropped again. */
+type Cropped = Cover & { source: { file: File; crop: Crop } };
 /**
  * What the form will make the cover: a new image, the one YouTube makes from
  * the songs, or (null) the cover as it is.
  */
-/** A cropped image, with what it was cropped from so it can be cropped again. */
-type Cropped = Cover & { source: { file: File; crop: Crop } };
 type CoverChange = Cropped | "default" | null;
 
 /**
@@ -1090,14 +1090,18 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     }
   };
 
+  // Set while a crop is drawn, so Done pressed again in the meantime does nothing.
+  const drawing = useRef(false);
   const crop = async () => {
-    if (!cropping) return;
+    if (!cropping || drawing.current) return;
+    drawing.current = true;
     const { picked: from, crop: area } = cropping;
     try {
       setCover({ ...(await cropCover(from, area)), source: { file: from.file, crop: area } });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+    drawing.current = false;
     setCropping(null);
   };
 
@@ -1113,6 +1117,8 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     if (Object.keys(details).length === 0 && !cover) return onClose();
     setBusy(true);
     setError(null);
+    const route: Route = { kind: "playlist", id: page.id };
+    let stale = false;
     try {
       // Sent apart from the rest, as YouTube Music does, and first: once it is
       // set, a failure below leaves it out of a second try.
@@ -1122,15 +1128,16 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
             ? await engine.removePlaylistCover(page.id)
             : await engine.setPlaylistCover(page.id, cover.image);
         setCover(null);
-        patchPage({ kind: "playlist", id: page.id }, (p) =>
-          p.kind === "playlist" && thumbnails.length > 0
-            ? { ...p, page: { ...p.page, thumbnails } }
-            : p,
-        );
+        // Without the new art in the reply, the page is fetched once the rest is sent.
+        stale = thumbnails.length === 0;
+        if (!stale)
+          patchPage(route, (p) =>
+            p.kind === "playlist" ? { ...p, page: { ...p.page, thumbnails } } : p,
+          );
         x.libraryChanged();
       }
       await engine.editPlaylist(page.id, details);
-      patchPage({ kind: "playlist", id: page.id }, (p) =>
+      patchPage(route, (p) =>
         p.kind === "playlist"
           ? {
               ...p,
@@ -1150,6 +1157,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      if (stale) refreshPage(route);
     }
   };
 

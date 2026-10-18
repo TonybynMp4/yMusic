@@ -12,8 +12,10 @@ import { AccountMenu } from "./AccountMenu.tsx";
 import { BrowseView, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
+import { LibraryView } from "./Library.tsx";
 import { LocalView } from "./Local.tsx";
 import { NowPlaying } from "./NowPlaying.tsx";
+import { recordPlayed } from "./recent.ts";
 import { ScrollParent } from "./scroll.ts";
 import { isEmpty, SearchChips, YouTubeResults } from "./Search.tsx";
 import { SettingsView } from "./Settings.tsx";
@@ -23,8 +25,9 @@ import { TrackList } from "./TrackList.tsx";
 import { UpdateNotice } from "./UpdateNotice.tsx";
 import { useAccount } from "./useAccount.ts";
 import { viewKey, type View } from "./useBrowse.ts";
-import { useLibrary } from "./useLibrary.ts";
+import { tracksIn, useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
+import { forgetSaved } from "./useSavedLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
 import { useSavedQueue } from "./useSavedQueue.ts";
@@ -78,6 +81,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const player = usePlayer(settings, account.account?.name ?? null, props.volume.volume);
   const playlists = useLibraryPlaylists(account.account?.name ?? null);
   useMediaSession(player);
+  useRecordPlays(player, library);
   const resumed = useResume(player, account.account?.name ?? null, !account.busy);
   useSavedQueue(player, resumed);
   const notice = useNotice();
@@ -164,6 +168,8 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
       .then(() => {
         if (value === "like") notice.show("Saved to Liked Music");
         else if (before === "like") notice.show("Removed from Liked Music");
+        // A liked song is a saved one, so the library's Songs chip changes too.
+        if (value === "like" || before === "like") forgetSaved("songs");
       })
       .catch((error: unknown) =>
         notice.show(error instanceof Error ? error.message : String(error)),
@@ -221,7 +227,10 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
       player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
     open: go,
     notify: notice.show,
-    libraryChanged: playlists.reload,
+    libraryChanged: () => {
+      playlists.reload();
+      forgetSaved();
+    },
     playlistCreated: playlists.created,
     ratingOf: player.ratingOf,
     rate,
@@ -251,6 +260,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
             onRemoveFolder={(path) => void library.removeFolder(path)}
             onRefresh={() => {
               playlists.reload();
+              forgetSaved();
               if (library.folders.length > 0) void library.rescan();
             }}
           />
@@ -342,6 +352,17 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                           library={library}
                           updates={updates}
                           account={account}
+                        />
+                      ) : view?.kind === "library" ? (
+                        <LibraryView
+                          account={account.account?.name ?? null}
+                          playlists={playlists.playlists}
+                          folders={library.folders}
+                          covers={library.covers}
+                          local={library.all}
+                          localLoading={library.loading}
+                          actions={browse}
+                          onNavigate={go}
                         />
                       ) : view?.kind === "local" ? (
                         <LocalView
@@ -481,6 +502,31 @@ function RecentSearches(props: {
       ))}
     </ul>
   );
+}
+
+/**
+ * Notes the local folders of each local file that starts playing, for the
+ * library's "Recently played" sort of local files. YouTube orders the
+ * account's lists itself.
+ */
+function useRecordPlays(
+  player: ReturnType<typeof usePlayer>,
+  library: ReturnType<typeof useLibrary>,
+) {
+  const playing = player.playback.status === "playing";
+  const track = player.track;
+  const recorded = useRef<TrackId | null>(null);
+  const { all, folders } = library;
+  useEffect(() => {
+    if (!playing || track === null || recorded.current === track.id) return;
+    recorded.current = track.id;
+    const local = all.find((t) => t.id === track.id);
+    if (!local) return;
+    recordPlayed([
+      "local:",
+      ...folders.filter((folder) => tracksIn([local], folder).length > 0).map((f) => `local:${f}`),
+    ]);
+  }, [playing, track, all, folders]);
 }
 
 /** How long a notice stays up. */

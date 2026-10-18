@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { albumFrom, artistFrom, libraryFrom, playlistFrom, targetsFrom, toCard } from "./browse.ts";
+import {
+  albumFrom,
+  artistFrom,
+  cardsOf,
+  libraryFrom,
+  playlistFrom,
+  sortMenu,
+  targetsFrom,
+  toCard,
+} from "./browse.ts";
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
@@ -168,6 +177,51 @@ describe("libraryFrom", () => {
   });
 });
 
+describe("cardsOf", () => {
+  it("keeps saved albums from a grid of cards", () => {
+    const cards = cardsOf(
+      [
+        {
+          item_type: "album",
+          title: text("Inferno"),
+          subtitle: text("Album • Boards of Canada • 2002"),
+          thumbnail: [
+            { url: "https://lh3.googleusercontent.com/a=w226-h226", width: 226, height: 226 },
+          ],
+          endpoint: { payload: { browseId: "MPREb_inf" } },
+        },
+        { item_type: "playlist", title: text("Mix"), endpoint: { payload: { browseId: "VLPLx" } } },
+      ],
+      "album",
+    );
+    expect(cards).toMatchObject([{ kind: "album", id: "MPREb_inf", title: "Inferno" }]);
+    expect(cards[0]!.thumbnails.length).toBeGreaterThan(0);
+  });
+
+  it("opens a library artist's row on the artist's own page", () => {
+    const cards = cardsOf(
+      [
+        {
+          item_type: "library_artist",
+          name: "Boards of Canada",
+          subtitle: text("42 songs"),
+          thumbnail: {
+            contents: [
+              { url: "https://lh3.googleusercontent.com/b=w120-h120", width: 120, height: 120 },
+            ],
+          },
+          endpoint: { payload: { browseId: "MPLAUCboc" } },
+        },
+      ],
+      "artist",
+    );
+    expect(cards).toMatchObject([
+      { kind: "artist", id: "UCboc", title: "Boards of Canada", subtitle: "42 songs" },
+    ]);
+    expect(cards[0]!.thumbnails.length).toBeGreaterThan(0);
+  });
+});
+
 describe("playlistFrom", () => {
   it("keeps the rows that are songs", () => {
     const playlist = playlistFrom("PLx", { title: text("Mix"), subtitle: text("Playlist") }, [
@@ -215,5 +269,43 @@ describe("targetsFrom", () => {
         { title: text("no id") },
       ]),
     ).toEqual([{ id: "PLa", title: "Road trip" }]);
+  });
+});
+
+describe("sortMenu", () => {
+  const option = (title: string, continuation?: string) => ({
+    title,
+    endpoint: continuation
+      ? {
+          payload: {
+            commands: [
+              {
+                browseSectionListReloadEndpoint: {
+                  continuation: { reloadContinuationData: { continuation } },
+                },
+              },
+            ],
+          },
+        }
+      : undefined,
+  });
+
+  it("lists YouTube's sorts, the one in use, and each one's reload", () => {
+    const menu = sortMenu({
+      title: "Recently played",
+      menu: { options: [option("Recently added", "a"), {}, option("Recently played", "p")] },
+    });
+    expect(menu).toEqual({
+      sorts: ["Recently added", "Recently played"],
+      applied: "Recently played",
+      options: [
+        { title: "Recently added", reload: "a" },
+        { title: "Recently played", reload: "p" },
+      ],
+    });
+  });
+
+  it("is empty for a list without a sort menu", () => {
+    expect(sortMenu(undefined)).toEqual({ sorts: [], applied: null, options: [] });
   });
 });

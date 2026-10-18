@@ -23,10 +23,14 @@ import {
   createPlaylist,
   getAlbum,
   getArtist,
+  getLibraryCards,
   getLibraryPlaylists,
   getPlaylistTargets,
+  openLibrarySongs,
   openPlaylist,
   playlistIdFromBrowseId,
+  type LibraryCards,
+  type LibraryKind,
   type NewPlaylist,
   type PlaylistMore,
   type PlaylistTarget,
@@ -369,6 +373,29 @@ export class YouTubeEngine {
   async libraryPlaylists(): Promise<BrowseCard[]> {
     if (this.#cookie === null) return [];
     return getLibraryPlaylists(await this.#browseClient());
+  }
+
+  /**
+   * The account's playlists, saved albums or library artists, in `sort`, one
+   * of the orders YouTube offers for the list, or its default. Empty when
+   * signed out.
+   */
+  async libraryCards(kind: LibraryKind, sort?: string): Promise<LibraryCards> {
+    if (this.#cookie === null) return { cards: [], sorts: [], sort: null };
+    return getLibraryCards(await this.#browseClient(), kind, sort);
+  }
+
+  /**
+   * The songs saved to the library, in `sort`, the first page of them; `more`,
+   * when set, is a handle for `playlistMore` to fetch the next. Empty when
+   * signed out.
+   */
+  async librarySongs(
+    sort?: string,
+  ): Promise<{ tracks: Track[]; more: string | null; sorts: string[]; sort: string | null }> {
+    if (this.#cookie === null) return { tracks: [], more: null, sorts: [], sort: null };
+    const songs = await openLibrarySongs(await this.#browseClient(), sort);
+    return { ...songs, more: this.#hold(songs.more) };
   }
 
   /**

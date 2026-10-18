@@ -51,8 +51,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
 
 pub const SELECT_TRACK_COLUMNS_NO_ORDER: &str =
     "SELECT id, path, title, artist, album, album_artist, \
-     track_number, disc_number, year, duration_ms, codec, bitrate, art_path, art_width, art_height \
-     FROM tracks";
+     track_number, disc_number, year, duration_ms, codec, bitrate, art_path, art_width, art_height, \
+     added_at FROM tracks";
 
 /// Album order, not filesystem order: within an album, disc then track number,
 /// with untagged entries falling back to title.
@@ -87,5 +87,6 @@ pub fn row_to_track(row: &Row<'_>) -> rusqlite::Result<LocalTrack> {
         codec: row.get("codec")?,
         bitrate: row.get("bitrate")?,
         cover_art,
+        added_at: row.get("added_at")?,
     })
 }

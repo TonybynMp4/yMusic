@@ -62,6 +62,8 @@ pub struct LocalTrack {
     pub codec: String,
     pub bitrate: Option<u32>,
     pub cover_art: Option<CoverArt>,
+    /// When the file was first scanned, in seconds since the Unix epoch.
+    pub added_at: i64,
 }
 
 /// Mirrors `StreamLease` in `@ymusic/core`.

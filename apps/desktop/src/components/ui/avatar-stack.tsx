@@ -19,22 +19,21 @@ function AvatarStack({
 }) {
   return (
     <div data-slot="avatar-stack" className={cn("flex items-center -space-x-1", className)}>
-      {Children.map(children, (child, index) =>
-        child ? (
-          <div
-            className="shrink-0 overflow-hidden rounded-full [&>*]:size-full"
-            style={{
-              width: size,
-              height: size,
-              maskImage: index
-                ? `radial-gradient(circle ${size / 2}px at -${size / 4 + size / 10}px 50%, transparent 99%, white 100%)`
-                : undefined,
-            }}
-          >
-            {child}
-          </div>
-        ) : null,
-      )}
+      {Children.toArray(children).map((child, index) => (
+        <div
+          key={index}
+          className="shrink-0 overflow-hidden rounded-full [&>*]:size-full"
+          style={{
+            width: size,
+            height: size,
+            maskImage: index
+              ? `radial-gradient(circle ${size / 2}px at -${size / 4 + size / 10}px 50%, transparent 99%, white 100%)`
+              : undefined,
+          }}
+        >
+          {child}
+        </div>
+      ))}
     </div>
   )
 }

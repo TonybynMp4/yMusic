@@ -191,12 +191,13 @@
     font-size: var(--text-base);
     line-height: var(--text-base--line-height);
   }
-  .typography :where(h2, h3, h4):first-child,
+  .typography :where(p, ul, ol, blockquote):where(:not(:first-child)) {
+    margin-top: calc(var(--spacing) * 3);
+  }
+  /* After the spacing above, so it wins at the same specificity. */
+  .typography :where(h2, h3, h4):where(:first-child),
   .typography :where(h2, h3, h4) + :where(p, ul, ol) {
     margin-top: 0;
-  }
-  .typography :where(p, ul, ol, blockquote):not(:first-child) {
-    margin-top: calc(var(--spacing) * 3);
   }
   .typography :where(ul, ol) {
     padding-left: calc(var(--spacing) * 5);

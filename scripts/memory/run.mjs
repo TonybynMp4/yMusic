@@ -74,6 +74,10 @@ for (let n = 1; n <= runs; n++) {
       `${result.timedOut ? "timed out" : "finished"}, ${result.warnings.length} warnings in the log` +
       (problems.length ? `, ${problems.map((m) => m.phase).join("; ")}` : ""),
   );
+  if (variant === "signed-in" && !result.marks.some((m) => m.phase === "account signed-in")) {
+    console.error("the run started signed out: sign in again with `node scripts/memory/run.mjs --sign-in`");
+    process.exit(1);
+  }
 }
 
 function build() {
@@ -148,6 +152,12 @@ async function runOnce() {
   await exited;
   clearInterval(timer);
   clearTimeout(limit);
+  // The app rotates a sign-in window session at launch, and Google retires the
+  // copy it replaced, so the next run starts from the one this run saved.
+  const rotated = join(dataDirs()[0], "account.bin");
+  if (variant === "signed-in" && marks.some((m) => m.phase === "account signed-in")) {
+    if (existsSync(rotated)) copyFileSync(rotated, savedAccount);
+  }
   return {
     ...meta,
     durationMs: Date.now() - started,

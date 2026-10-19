@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { queryClient } from "./query.ts";
 
 export interface LibraryPlaylistsState {
   playlists: BrowseCard[];
@@ -26,15 +28,18 @@ const LIST_RETRIES = 5;
 
 /**
  * The signed-in account's YouTube Music playlists, Liked Music first. Keyed
- * on who is signed in, so signing in or out swaps the list.
+ * on who is signed in, so signing in or out swaps the list, and another
+ * account's list never stays up while this one's loads. A failed refetch
+ * keeps the last good list, so a retry for a new playlist does not blank the
+ * sidebar.
  */
 export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylistsState {
-  const [generation, setGeneration] = useState(0);
-  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created" | "deleted">>({
-    playlists: [],
-    loading: false,
-    error: null,
+  const list = useQuery({
+    queryKey: ["library-playlists", accountKey],
+    queryFn: () => engine.libraryPlaylists(),
+    enabled: accountKey !== null,
   });
+  const listed = useMemo(() => (accountKey === null ? [] : (list.data ?? [])), [accountKey, list.data]);
   // Kept with the account that created them, so switching accounts drops them.
   const [pending, setPending] = useState<{ account: string | null; cards: BrowseCard[] }>({
     account: null,
@@ -44,59 +49,35 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     account: null,
     ids: [],
   });
-  // Whose list `state.playlists` is.
-  const listed = useRef<string | null>(null);
-  useEffect(() => {
-    if (accountKey === null) {
-      setState({ playlists: [], loading: false, error: null });
-      return;
-    }
-    let cancelled = false;
-    // Another account's list never stays up while this one's loads.
-    const same = listed.current === accountKey;
-    setState((s) => ({ ...s, playlists: same ? s.playlists : [], loading: true }));
-    engine.libraryPlaylists().then(
-      (playlists) => {
-        if (cancelled) return;
-        listed.current = accountKey;
-        setState({ playlists, loading: false, error: null });
-        setPending(({ account, cards }) => ({
-          account,
-          cards: cards.filter((card) => !playlists.some((p) => p.id === card.id)),
-        }));
-      },
-      // The last good list stays, so a failed refetch (a retry for a new
-      // playlist, say) does not blank the sidebar.
-      (error: unknown) =>
-        !cancelled &&
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: error instanceof Error ? error.message : String(error),
-        })),
-    );
-    return () => {
-      cancelled = true;
-    };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- generation reloads the list after a change
-  }, [accountKey, generation]);
+  const refetch = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: ["library-playlists"] }),
+    [],
+  );
+  // New playlists YouTube's list does not have yet.
+  const missing = useMemo(
+    () =>
+      pending.account === accountKey
+        ? pending.cards.filter((card) => !listed.some((p) => p.id === card.id))
+        : [],
+    [pending, accountKey, listed],
+  );
   // A new playlist reaches YouTube's library list a while after it exists, so
   // the list is fetched again, further apart each time, until it has it. Its
   // entry then swaps the placeholder for YouTube's, with its art.
   const retries = useRef(0);
-  const waiting = pending.account === accountKey && pending.cards.length > 0;
+  const waiting = missing.length > 0;
+  const loading = list.isFetching;
   useEffect(() => {
-    if (!waiting || state.loading || retries.current >= LIST_RETRIES) return;
+    if (!waiting || loading || retries.current >= LIST_RETRIES) return;
     const timer = setTimeout(
       () => {
         retries.current += 1;
-        setGeneration((g) => g + 1);
+        refetch();
       },
       (retries.current + 1) * 2000,
     );
     return () => clearTimeout(timer);
-  }, [waiting, state.loading]);
-  const reload = useCallback(() => setGeneration((g) => g + 1), []);
+  }, [waiting, loading, refetch]);
   const created = useCallback(
     (card: BrowseCard) => {
       retries.current = 0;
@@ -104,9 +85,9 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
         account: accountKey,
         cards: [card, ...(account === accountKey ? cards.filter((c) => c.id !== card.id) : [])],
       }));
-      setGeneration((g) => g + 1);
+      refetch();
     },
-    [accountKey],
+    [accountKey, refetch],
   );
   const deleted = useCallback(
     (id: string) => {
@@ -118,20 +99,23 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
         account,
         cards: cards.filter((card) => card.id !== id),
       }));
-      setGeneration((g) => g + 1);
+      refetch();
     },
-    [accountKey],
+    [accountKey, refetch],
   );
   // New playlists go where YouTube Music puts them: first, after Liked Music.
   const playlists = useMemo(() => {
     const hidden = gone.account === accountKey ? gone.ids : [];
-    const kept = state.playlists.filter((p) => !hidden.includes(p.id));
-    if (pending.account !== accountKey) return kept;
-    const shown = pending.cards.filter((card) => !kept.some((p) => p.id === card.id));
-    if (shown.length === 0) return kept;
+    const kept = listed.filter((p) => !hidden.includes(p.id));
+    if (missing.length === 0) return kept;
     const liked = kept.filter((p) => p.id === LIKED_MUSIC);
     const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
-    return [...liked, ...shown, ...rest];
-  }, [pending, gone, accountKey, state.playlists]);
-  return { ...state, playlists, reload, created, deleted };
+    return [...liked, ...missing, ...rest];
+  }, [missing, gone, accountKey, listed]);
+  const error = accountKey !== null && list.error ? message(list.error) : null;
+  return { playlists, loading: accountKey !== null && loading, error, reload: refetch, created, deleted };
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

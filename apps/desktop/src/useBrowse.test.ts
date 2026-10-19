@@ -14,8 +14,9 @@ const engine = vi.hoisted(() => ({
 // The real engine starts a worker; these tests only need what it returns.
 vi.mock("./engine.ts", () => ({ engine }));
 
-/** The module keeps its cache at the top level, so each test gets a fresh copy. */
+/** The cache is a module-level client, so each test gets a fresh copy. */
 let browse: typeof import("./useBrowse.ts");
+let queryClient: typeof import("./query.ts").queryClient;
 
 const album = (id: string) => ({ kind: "album", id }) as const;
 const playlistPage = { title: "Mix", tracks: [], itemIds: [] } as unknown as PlaylistPage;
@@ -37,6 +38,7 @@ beforeEach(async () => {
   engine.playlist.mockReset().mockResolvedValue({ page: playlistPage, more: null });
   engine.playlistMore.mockReset();
   browse = await import("./useBrowse.ts");
+  ({ queryClient } = await import("./query.ts"));
 });
 
 describe("the browse page cache", () => {
@@ -107,6 +109,42 @@ describe("the browse page cache", () => {
     await flush();
     expect(loading).toBe(false);
     stop();
+  });
+});
+
+describe("a page in the cache", () => {
+  it("fetches a page that failed again the next time it is asked for", async () => {
+    engine.album.mockRejectedValueOnce(new Error("offline"));
+    await expect(browse.settledPage(album("a"))).rejects.toThrow("offline");
+    await expect(browse.settledPage(album("a"))).resolves.toMatchObject({ page: { title: "a" } });
+    expect(albumFetches("a")).toBe(2);
+  });
+
+  it("keeps showing a page being refreshed until the new copy arrives", async () => {
+    await visit("a");
+    let arrive: (page: AlbumPage) => void = () => {};
+    engine.album.mockImplementationOnce(() => new Promise((resolve) => (arrive = resolve)));
+    const route = album("a");
+    browse.refreshPage(route);
+    // Nothing shows it, so it is only marked stale and fetched on the next look.
+    expect(albumFetches("a")).toBe(1);
+    const next = browse.settledPage(route);
+    expect(browse.browseState(route)).toMatchObject({ status: "ready", page: { page: { title: "a" } } });
+    arrive({ title: "renamed" } as AlbumPage);
+    await expect(next).resolves.toMatchObject({ page: { title: "renamed" } });
+    expect(albumFetches("a")).toBe(2);
+  });
+
+  it("shows a copy from an earlier run at once and fetches it again", async () => {
+    // What a persister would restore: a page last updated before this run.
+    queryClient.setQueryData(
+      ["browse", "album", "old"],
+      { page: { kind: "album", page: { title: "stale" } }, more: null },
+      { updatedAt: 0 },
+    );
+    expect(browse.browseState(album("old"))).toMatchObject({ page: { page: { title: "stale" } } });
+    await expect(browse.settledPage(album("old"))).resolves.toMatchObject({ page: { title: "old" } });
+    expect(albumFetches("old")).toBe(1);
   });
 });
 

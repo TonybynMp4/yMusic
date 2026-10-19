@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { BrowseCard, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { queryClient } from "./query.ts";
 
 /**
  * The playlists, saved albums, artists and songs in the account's library,
@@ -22,84 +24,53 @@ export type SavedKind = "playlists" | "albums" | "artists" | "songs";
 
 type Ready = Extract<SavedState<BrowseCard | Track>, { status: "ready" }>;
 
-interface Entry {
-  state: SavedState<BrowseCard | Track>;
-  listeners: Set<() => void>;
-}
-
-const entries = new Map<string, Entry>();
-/** What a dropped list held, shown again while its reload runs. */
-const previous = new Map<string, Ready>();
+/**
+ * What a list's query holds: the ready state, with `partial` set while the
+ * first load of a long list of songs is still arriving.
+ */
+type Loaded = Omit<Ready, "loadingMore"> & { partial?: true };
 
 /** `sort` empty for YouTube's default order. */
-function keyOf(account: string, kind: SavedKind, sort: string): string {
-  return `${account}\n${kind}\n${sort}`;
-}
-
-function entryFor(account: string, kind: SavedKind, sort: string): Entry {
-  const key = keyOf(account, kind, sort);
-  let entry = entries.get(key);
-  if (!entry) {
-    const seed = previous.get(key);
-    previous.delete(key);
-    const created: Entry = {
-      state: seed ? { ...seed, loadingMore: false } : { status: "loading" },
-      listeners: new Set(),
-    };
-    const set = (state: Entry["state"]) => {
-      created.state = state;
-      for (const listener of created.listeners) listener();
-    };
-    entries.set(key, created);
-    void load(kind, sort, set, () => entries.get(key) !== created, seed !== undefined).catch(
-      (error: unknown) => {
-        // A failed reload keeps the list it was refreshing.
-        if (seed) console.error("could not reload the library", error);
-        else {
-          set({ status: "error", error: error instanceof Error ? error.message : String(error) });
-        }
-      },
-    );
-    entry = created;
-  }
-  return entry;
+function savedKey(account: string, kind: SavedKind, sort: string) {
+  return ["saved", account, kind, sort] as const;
 }
 
 /**
- * `dropped` turns true once `forgetSaved` lets go of the entry, which stops the
- * paging. A `quiet` reload keeps the old list until every page is in, rather
- * than shrinking it to the first page.
+ * Bumped by `forgetSaved` for each kind, which stops a list of that kind
+ * still paging: the reload that follows owns the list from then on.
  */
-async function load(
-  kind: SavedKind,
-  sort: string,
-  set: (state: Entry["state"]) => void,
-  dropped: () => boolean,
-  quiet: boolean,
-): Promise<void> {
+const forgets = new Map<SavedKind, number>();
+
+function savedOptions(account: string, kind: SavedKind, sort: string) {
+  return queryOptions({
+    queryKey: savedKey(account, kind, sort),
+    queryFn: () => load(account, kind, sort),
+    // Kept for the run, per account and sort, like the browse pages.
+    gcTime: Infinity,
+  });
+}
+
+/**
+ * A list, whole. Songs arrive like a long playlist: on a first load, the first
+ * page shows at once and the rest as it comes. A reload keeps the list
+ * showing until every page is in, rather than shrinking it to the first page.
+ */
+async function load(account: string, kind: SavedKind, sort: string): Promise<Loaded> {
   if (kind !== "songs") {
     const list = await engine.libraryCards(kind, sort || undefined);
-    set({
-      status: "ready",
-      items: list.cards,
-      loadingMore: false,
-      sorts: list.sorts,
-      sort: list.sort,
-    });
-    return;
+    return { status: "ready", items: list.cards, sorts: list.sorts, sort: list.sort };
   }
-  // Songs arrive like a long playlist: the first page shows at once.
+  const key = savedKey(account, kind, sort);
+  const generation = forgets.get(kind) ?? 0;
+  const dropped = () => (forgets.get(kind) ?? 0) !== generation;
+  const quiet = queryClient.getQueryData(key) !== undefined;
   const first = await engine.librarySongs(sort || undefined);
   const { sorts } = first;
   let tracks = first.tracks;
-  const ready = (loadingMore: boolean): Ready => ({
-    status: "ready",
-    items: tracks,
-    loadingMore,
-    sorts,
-    sort: first.sort,
-  });
-  if (!quiet) set(ready(first.more !== null));
+  const loaded = (): Loaded => ({ status: "ready", items: tracks, sorts, sort: first.sort });
+  const show = () =>
+    !quiet && !dropped() && queryClient.setQueryData<Loaded>(key, { ...loaded(), partial: true });
+  if (first.more !== null) show();
   for (let more = first.more; more !== null && !dropped(); ) {
     try {
       const next = await engine.playlistMore(more);
@@ -107,37 +78,29 @@ async function load(
       more = next.more;
     } catch (error) {
       console.error("could not load the rest of the library's songs", error);
-      // A quiet reload keeps the old list rather than a shorter one.
-      if (quiet) return;
+      // A reload keeps the old list rather than a shorter one.
+      if (quiet) throw error;
       more = null;
     }
-    if (!quiet) set(ready(more !== null));
+    if (more !== null) show();
   }
-  if (quiet && !dropped()) set(ready(false));
+  return loaded();
 }
 
 /**
- * Drops the lists of `kind`, or every list, so the next look fetches them
- * again: after a save, a removal, a like, or Refresh. A list on screen stays
- * there until its reload comes back.
+ * Marks the lists of `kind`, or every list, out of date: after a save, a
+ * removal, a like, or Refresh. A list on screen is fetched again at once and
+ * stays there until its reload comes back; the others are fetched again the
+ * next time they show.
  */
 export function forgetSaved(kind?: SavedKind): void {
-  for (const [key, entry] of entries) {
-    if (kind !== undefined && key.split("\n")[1] !== kind) continue;
-    entries.delete(key);
-    if (entry.state.status === "ready") previous.set(key, entry.state);
+  for (const k of ["playlists", "albums", "artists", "songs"] as const) {
+    if (kind === undefined || kind === k) forgets.set(k, (forgets.get(k) ?? 0) + 1);
   }
-  generation += 1;
-  for (const listener of forgotten) listener();
-}
-
-/** Bumped by `forgetSaved`, so a page showing a list subscribes to its new entry. */
-let generation = 0;
-const forgotten = new Set<() => void>();
-
-function subscribeForgotten(listener: () => void): () => void {
-  forgotten.add(listener);
-  return () => void forgotten.delete(listener);
+  void queryClient.invalidateQueries({
+    queryKey: ["saved"],
+    predicate: ({ queryKey }) => kind === undefined || queryKey[2] === kind,
+  });
 }
 
 const idle: SavedState<never> = {
@@ -167,26 +130,20 @@ export function useSaved(
   kind: SavedKind | null,
   sort: string,
 ): SavedState<BrowseCard | Track> {
-  // Read for the re-render: after `forgetSaved`, `entryFor` makes a new entry.
-  useSyncExternalStore(subscribeForgotten, () => generation);
-  const entry = account === null || kind === null ? null : entryFor(account, kind, sort);
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      if (entry === null) return () => {};
-      entry.listeners.add(listener);
-      return () => void entry.listeners.delete(listener);
-    },
-    [entry],
-  );
-  const state = useSyncExternalStore(subscribe, () => entry?.state ?? idle);
-  // A failure is forgotten once its chip is left, so opening it again retries.
-  useEffect(
-    () => () => {
-      if (account === null || kind === null) return;
-      const key = keyOf(account, kind, sort);
-      if (entries.get(key)?.state.status === "error") entries.delete(key);
-    },
-    [account, kind, sort],
-  );
-  return state;
+  const enabled = account !== null && kind !== null;
+  const { data, status, error, isFetching } = useQuery({
+    ...savedOptions(account ?? "", kind ?? "playlists", sort),
+    enabled,
+  });
+  return useMemo((): SavedState<BrowseCard | Track> => {
+    if (!enabled) return idle;
+    if (data !== undefined) {
+      const { partial, ...ready } = data;
+      return { ...ready, loadingMore: isFetching && partial === true };
+    }
+    if (status === "error" && !isFetching) {
+      return { status: "error", error: error instanceof Error ? error.message : String(error) };
+    }
+    return { status: "loading" };
+  }, [enabled, data, status, error, isFetching]);
 }

@@ -12,6 +12,6 @@ Drive the app with `node scripts/drive.mjs`. Full reference: `docs/testing.md`, 
 5. `logs` when something fails, for the Rust and driver output.
 6. Always `stop` when done, including after a failure.
 
-Add `--signed-in` to test anything behind sign-in (library playlists, likes, Premium formats) on a copy of the user's session, and `--visible` when judging visuals at the user's real display scale. Without them the app runs on a clean profile, signed out, on a hidden display.
+`--signed-in` runs on a copy of the user's session for anything behind sign-in (library playlists, likes, Premium formats). Ask the user before every signed-in run: the copy holds live cookies, so anything done in it reaches their real YouTube account, and page text from YouTube lands in your context. Do not like, save, edit playlists or sign out in a signed-in run unless the user asked for that. Use `--visible` when judging visuals at the user's real display scale. Without them the app runs on a clean profile, signed out, on a hidden display.
 
 Audio is silent unless `--audio` is passed. Playback still goes through mpv, so the player bar's position and Pause button show whether a track really plays.

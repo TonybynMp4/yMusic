@@ -14,8 +14,8 @@
 //   node scripts/drive.mjs stop
 
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createConnection } from "node:net";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createConnection, createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,11 +23,16 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tauriDir = join(root, "apps/desktop/src-tauri");
 const binary = join(tauriDir, "target/debug/ymusic");
-const work = join(tmpdir(), "ymusic-drive");
+// Per user and private: it holds the state `stop` acts on and, with
+// --signed-in, a copy of your session.
+const work = process.env.XDG_RUNTIME_DIR
+  ? join(process.env.XDG_RUNTIME_DIR, "ymusic-drive")
+  : join(tmpdir(), `ymusic-drive-${process.getuid()}`);
 const statePath = join(work, "state.json");
-const driverPort = 4444;
 const vitePort = 1420;
-const base = `http://127.0.0.1:${driverPort}`;
+// tauri-driver has no auth and launches whatever binary a new session names,
+// so it listens on a random port rather than the well-known 4444.
+let base = null;
 
 const keys = {
   Enter: "",
@@ -41,7 +46,19 @@ const keys = {
   ArrowRight: "",
 };
 
-const readState = () => (existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : null);
+function ensureWork() {
+  mkdirSync(work, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(work);
+  if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0)
+    fail(`${work} must be a directory you own with mode 0700`);
+}
+
+function readState() {
+  if (!existsSync(statePath)) return null;
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (state.port) base = `http://127.0.0.1:${state.port}`;
+  return state;
+}
 
 function requireState() {
   const state = readState();
@@ -56,6 +73,14 @@ function fail(message) {
 }
 
 const save = (state) => writeFileSync(statePath, JSON.stringify(state));
+
+const freePort = () =>
+  new Promise((done) => {
+    const server = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => done(port));
+    });
+  });
 
 const portOpen = (port) =>
   new Promise((done) => {
@@ -97,12 +122,8 @@ async function find(state, target) {
 }
 
 async function start(flags) {
-  if (await portOpen(driverPort)) fail(`port ${driverPort} is taken, is another tauri-driver running?`);
   if (!existsSync("/usr/bin/WebKitWebDriver"))
     fail("WebKitWebDriver is missing: sudo apt install webkitgtk-webdriver");
-  // 0700: with --signed-in the profile holds a copy of your session.
-  mkdirSync(work, { recursive: true });
-  chmodSync(work, 0o700);
 
   if (!flags.has("--no-build")) {
     console.log("building the debug binary");
@@ -147,27 +168,31 @@ async function start(flags) {
       fail("could not export the account key, is the binary older than --export-account-key? Drop --no-build");
     env.YMUSIC_ACCOUNT_KEY_FILE = key;
   }
+  const port = await freePort();
+  const driverArgs = ["tauri-driver", "--port", String(port), "--native-port", String(await freePort())];
   const wrap = flags.has("--visible")
-    ? ["dbus-run-session", "--", "tauri-driver"]
-    : ["dbus-run-session", "--", "xvfb-run", "-a", "-s", "-screen 0 1440x900x24", "tauri-driver"];
+    ? ["dbus-run-session", "--", ...driverArgs]
+    : ["dbus-run-session", "--", "xvfb-run", "-a", "-s", "-screen 0 1440x900x24", ...driverArgs];
   if (!flags.has("--visible")) env.GDK_BACKEND = "x11";
   const driver = background(wrap[0], wrap.slice(1), "driver.log", env);
-  save({ vite, driver });
-  await waitForPort(driverPort, 15, "tauri-driver");
+  save({ vite, driver, port });
+  base = `http://127.0.0.1:${port}`;
+  await waitForPort(port, 15, "tauri-driver");
 
   const created = await wd("POST", "/session", {
     capabilities: { alwaysMatch: { "tauri:options": { application: binary } } },
   });
-  save({ session: created.sessionId, driver, vite });
+  save({ session: created.sessionId, driver, vite, port });
   console.log(`app running, logs in ${work}`);
 }
 
 async function stop() {
   const state = readState();
   if (!state) return console.log("nothing running");
-  if (state.session) await fetch(`${base}/session/${state.session}`, { method: "DELETE" }).catch(() => {});
+  if (state.session && base) await fetch(`${base}/session/${state.session}`, { method: "DELETE" }).catch(() => {});
   for (const pid of [state.driver, state.vite]) {
-    if (!pid) continue;
+    // Only a process group start spawned; -1 would signal everything.
+    if (!Number.isInteger(pid) || pid <= 1) continue;
     try {
       process.kill(-pid, "SIGTERM");
     } catch {}
@@ -239,6 +264,7 @@ const [command, ...args] = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 
 try {
+  if (command) ensureWork();
   await run();
 } catch (error) {
   if (!(error instanceof Failure)) throw error;

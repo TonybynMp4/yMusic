@@ -24,6 +24,10 @@ node scripts/drive.mjs stop
 
 Refs come from the last `snapshot` and go stale when the page changes, so take a new one after anything that rerenders.
 
-`start` isolates the app. It gets a fresh profile under `/tmp/ymusic-drive/profile` (its own library, settings and cache), its own D-Bus session (so the single-instance lock does not hand off to a yMusic you have open, and the keyring is empty), an Xvfb display, and `YMUSIC_AUDIO_OUTPUT=null`. `--visible` shows the window on your screen instead of Xvfb, for visual checks at your real scale and theme. `--audio` plays through your speakers, `--no-build` skips `cargo build`.
+`start` isolates the app. It gets a fresh profile under `$XDG_RUNTIME_DIR/ymusic-drive/profile` (its own library, settings and cache), its own D-Bus session (so the single-instance lock does not hand off to a yMusic you have open, and the keyring is empty), an Xvfb display, and `YMUSIC_AUDIO_OUTPUT=null`. `--visible` shows the window on your screen instead of Xvfb, for visual checks at your real scale and theme. `--audio` plays through your speakers, `--no-build` skips `cargo build`.
 
 `--signed-in` copies your `account.bin` into the profile and has the debug binary export its key from your keyring to `profile/account.key` (`--export-account-key`, debug builds only). The app then reads the key from that file through `YMUSIC_ACCOUNT_KEY_FILE` instead of the keyring, so signing out in the copy cannot sign out your own app. `stop` deletes the key file. Re-importing a stale browser session does not work in the copy, since the browser's key is in your keyring and the copy has its own.
+
+A signed-in run acts on your real account: the copy holds your live cookies, so a like, a playlist edit or a sign-out in the copy reaches YouTube. The app shows YouTube's text (titles, descriptions), and `snapshot` hands that text to the agent, which is why the skill makes agents ask before using `--signed-in`.
+
+`tauri-driver` has no authentication, and a new session launches whatever binary it names. `start` puts it on a random port and opens its one session straight away (a second one is refused), but until `stop` it is a local surface into the app, so stop it when you are done.

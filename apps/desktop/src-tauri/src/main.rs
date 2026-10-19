@@ -3,6 +3,16 @@
 
 fn main() {
     limit_malloc_arenas();
+    #[cfg(debug_assertions)]
+    if let [_, flag, path] = std::env::args().collect::<Vec<_>>().as_slice() {
+        if flag == "--export-account-key" {
+            if let Err(error) = ymusic_lib::account::export_key(path.as_ref()) {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+            return;
+        }
+    }
     ymusic_lib::run()
 }
 

@@ -37,6 +37,12 @@ export const commands = {
 	 */
 	attempt: number,
 } | null) => __TAURI_INVOKE<null>("player_queue_next", { after, request }),
+	/**
+	 *  Writes a song that failed to play to the log, with the raw error the
+	 *  snackbar leaves out. Failures before mpv (a stream that won't resolve, a
+	 *  missing file) are otherwise only in the webview's console.
+	 */
+	playerLogFailure: (trackId: string, message: string) => __TAURI_INVOKE<void>("player_log_failure", { trackId, message }),
 	playerPlay: () => __TAURI_INVOKE<null>("player_play"),
 	playerPause: () => __TAURI_INVOKE<null>("player_pause"),
 	playerSeek: (positionMs: number) => __TAURI_INVOKE<null>("player_seek", { positionMs }),

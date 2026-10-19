@@ -43,7 +43,6 @@ import {
   cloneElement,
   createContext,
   isValidElement,
-  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -170,10 +169,10 @@ export function InteractionsProvider({
   const [songs, setSongs] = useState<(() => Promise<VideoId[]>) | null>(null);
   const [menu, setMenu] = useState<MenuRequest | null>(null);
   const [open, setOpen] = useState(false);
-  const openMenu = useCallback((request: MenuRequest) => {
+  const openMenu = (request: MenuRequest) => {
     setMenu(request);
     setOpen(true);
-  }, []);
+  };
   // What a trigger of its own would set, for the dots to stay shown while open.
   useEffect(() => {
     if (!open || menu?.from !== "button") return;

@@ -27,6 +27,7 @@ export function VirtualList({
   overscan = 8,
   className,
 }: Props) {
+  "use no memo"; // useVirtualizer returns one mutable object, which the compiler would cache stale.
   const list = useRef<HTMLUListElement>(null);
   // Where the list starts inside the scrolled content. It moves when anything
   // above it changes height, such as a description being expanded.
@@ -46,6 +47,7 @@ export function VirtualList({
     return () => observer.disconnect();
   }, [scroller]);
 
+  // oxlint-disable-next-line react/incompatible-library -- opted out above with "use no memo"
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => scroller,

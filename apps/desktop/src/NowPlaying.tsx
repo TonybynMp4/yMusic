@@ -142,11 +142,6 @@ export function NowPlaying(props: Props) {
       }}
       className={cn("border-t bg-card px-4 py-3", track && "cursor-pointer")}
     >
-      {playback.error && (
-        <p className="mb-2 truncate text-xs text-destructive" title={playback.error}>
-          {playback.error}
-        </p>
-      )}
       {/* No side shrinks past its own controls, so nothing overlaps; only the
           title gives way. Below 768 px the song side takes the spare room, the
           controls keep their own width and the volume slider moves into a

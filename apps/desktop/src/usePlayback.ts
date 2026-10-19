@@ -87,11 +87,9 @@ export function usePlayback() {
     async (lease: StreamLease, paused = false, startMs?: number) => {
       position.set(startMs ?? 0);
       setState({ status: "loading", durationMs: null, error: null });
-      try {
-        await engineRef.current.load(lease, paused, startMs);
-      } catch (error) {
-        setState((previous) => ({ ...previous, status: "idle", error: String(error) }));
-      }
+      // A refused load throws on to the caller, which reports it with the
+      // track it was for.
+      await engineRef.current.load(lease, paused, startMs);
     },
     [position],
   );

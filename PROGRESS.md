@@ -16,6 +16,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
 - [x] Single instance: a second launch focuses the running window
 - [x] Explicit libmpv version floor with a clear startup error
+- [x] YouTube Music's snackbar on Base UI's Toast, one at a time, for the whole app
 
 ### Playback
 
@@ -26,6 +27,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Stale stream leases re-resolved before playing
 - [x] Resolve the next YouTube track while the current one plays, so there is no gap while its stream resolves
 - [x] Media keys and the desktop media widget over MPRIS
+- [x] A song that fails shows a snackbar with plain copy and Retry, or Skip when it can never play; the raw error goes to the log
 - [ ] SMTC on Windows (shares the `souvlaki` code path, never run)
 
 ### YouTube

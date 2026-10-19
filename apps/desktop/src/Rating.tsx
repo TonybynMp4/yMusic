@@ -33,7 +33,11 @@ export function RatingButtons(props: RatingProps & { size?: number }) {
         label={disliked ? "Remove dislike" : "Dislike"}
         onClick={() => onRate(toggled(rating, "dislike"))}
       >
-        {disliked ? <IconThumbDownFilled size={size} /> : <IconThumbDown size={size} stroke={1.75} />}
+        {disliked ? (
+          <IconThumbDownFilled size={size} />
+        ) : (
+          <IconThumbDown size={size} stroke={1.75} />
+        )}
       </IconButton>
       <IconButton
         label={liked ? "Remove like" : "Like"}

@@ -108,11 +108,9 @@ function stableVolume(s: AudioStats | null): ReactNode {
 }
 
 function format(s: AudioStats | null): string {
-  const parts = [
-    s?.codec,
-    s?.sampleRate ? `${s.sampleRate / 1000} kHz` : null,
-    s?.channels,
-  ].filter(Boolean);
+  const parts = [s?.codec, s?.sampleRate ? `${s.sampleRate / 1000} kHz` : null, s?.channels].filter(
+    Boolean,
+  );
   return parts.length > 0 ? parts.join(", ") : NONE;
 }
 

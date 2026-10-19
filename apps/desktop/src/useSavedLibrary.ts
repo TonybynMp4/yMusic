@@ -100,7 +100,7 @@ async function load(
     sort: first.sort,
   });
   if (!quiet) set(ready(first.more !== null));
-  for (let more = first.more; more !== null && !dropped(); ) {
+  for (let more = first.more; more !== null && !dropped();) {
     try {
       const next = await engine.playlistMore(more);
       tracks = [...tracks, ...next.tracks];

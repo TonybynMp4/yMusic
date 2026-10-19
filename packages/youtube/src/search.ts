@@ -74,7 +74,11 @@ export async function searchSongs(youtube: Innertube, query: string): Promise<Tr
 
 /** youtubei.js's `SearchContinuation`: one more page of the chip's shelf. */
 interface RawContinuation {
-  contents?: { type?: unknown; contents?: readonly unknown[] | null; continuation?: unknown } | null;
+  contents?: {
+    type?: unknown;
+    contents?: readonly unknown[] | null;
+    continuation?: unknown;
+  } | null;
   getContinuation(): Promise<RawContinuation>;
 }
 
@@ -88,7 +92,8 @@ export function searchMore(
     const shelf = next.contents;
     return {
       results: resultsFrom({ contents: shelf ? [shelf] : [] }),
-      more: shelf?.continuation && pages + 1 < MAX_SEARCH_PAGES ? searchMore(next, pages + 1) : null,
+      more:
+        shelf?.continuation && pages + 1 < MAX_SEARCH_PAGES ? searchMore(next, pages + 1) : null,
     };
   };
 }
@@ -113,7 +118,9 @@ interface RawRow extends Omit<RawSong, "flex_columns"> {
   subtitle?: RawText | null;
   author?: { name?: unknown; channel_id?: unknown } | null;
   endpoint?: { payload?: RawPayload | null } | null;
-  flex_columns?: readonly { title?: (RawText & { runs?: readonly RawRun[] | null }) | null }[] | null;
+  flex_columns?:
+    | readonly { title?: (RawText & { runs?: readonly RawRun[] | null }) | null }[]
+    | null;
 }
 
 interface RawCardShelf {

@@ -148,7 +148,9 @@ function continuations(pages: number, ms: number) {
 /** Every update a queue following the playlist would get. */
 function follow(id: string) {
   const seen: { count: number; loading: boolean }[] = [];
-  const stop = browse.followPlaylist(id, (list, loading) => seen.push({ count: list.length, loading }));
+  const stop = browse.followPlaylist(id, (list, loading) =>
+    seen.push({ count: list.length, loading }),
+  );
   return { seen, stop };
 }
 

@@ -53,12 +53,7 @@ interface Props {
 }
 
 /** Every setting on one page, in sections, as YouTube Music lays its own out. */
-export function SettingsView({
-  settings: { settings, update },
-  library,
-  updates,
-  account,
-}: Props) {
+export function SettingsView({ settings: { settings, update }, library, updates, account }: Props) {
   const devices = useAudioDevices();
   const available = updates.update;
   const platform = usePlatform();
@@ -437,7 +432,8 @@ function cacheDescription(bytes: number | null): string {
   const what = `album art and thumbnails kept on this computer. Clearing deletes them, along with ${memory}. ${kept}`;
   if (bytes === null) return `The ${what}`;
   const mb = bytes / (1024 * 1024);
-  const size = mb >= 10 ? `${Math.round(mb)} MB` : mb >= 0.1 ? `${mb.toFixed(1)} MB` : "Under 0.1 MB";
+  const size =
+    mb >= 10 ? `${Math.round(mb)} MB` : mb >= 0.1 ? `${mb.toFixed(1)} MB` : "Under 0.1 MB";
   return `${size} of ${what}`;
 }
 
@@ -487,7 +483,10 @@ function deviceOptions(devices: AudioDevice[] | null, saved: string) {
     ...(devices ?? []).map((device) => ({ value: device.name, label: device.description })),
   ];
   if (!options.some((option) => option.value === saved)) {
-    options.push({ value: saved, label: devices === null ? "Saved device" : "Disconnected device" });
+    options.push({
+      value: saved,
+      label: devices === null ? "Saved device" : "Disconnected device",
+    });
   }
   return options;
 }

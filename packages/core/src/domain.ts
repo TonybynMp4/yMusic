@@ -144,7 +144,10 @@ export const ArtistPage = z.object({
   /** The playlist behind "Top songs", when YouTube offers the full list. */
   topSongsPlaylistId: z.string().nullable(),
   /** What the header's "Mix" button plays: the artist's radio. */
-  mix: z.object({ playlistId: z.string(), videoId: z.string().nullable() }).nullable().default(null),
+  mix: z
+    .object({ playlistId: z.string(), videoId: z.string().nullable() })
+    .nullable()
+    .default(null),
   /** Null when YouTube does not offer the button. */
   subscribed: z.boolean().nullable().default(null),
   /** Albums, singles, "fans might also like", in YouTube's order. */

@@ -42,7 +42,10 @@ describe("moveAction", () => {
       setVideoId: "S1",
       movedSetVideoIdSuccessor: "S3",
     });
-    expect(moveAction("S1", null)).toEqual({ action: "ACTION_MOVE_VIDEO_BEFORE", setVideoId: "S1" });
+    expect(moveAction("S1", null)).toEqual({
+      action: "ACTION_MOVE_VIDEO_BEFORE",
+      setVideoId: "S1",
+    });
   });
 });
 

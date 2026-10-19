@@ -352,10 +352,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                   />
                 )}
               </div>
-              <AccountMenu
-                state={account}
-                onSettings={() => go({ kind: "settings", id: "" })}
-              />
+              <AccountMenu state={account} onSettings={() => go({ kind: "settings", id: "" })} />
             </div>
 
             <div className="relative flex min-h-0 flex-1">

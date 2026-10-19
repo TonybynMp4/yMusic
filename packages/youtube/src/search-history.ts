@@ -55,7 +55,10 @@ export function searchHistoryFrom(data: RawSuggestions): SearchHistoryEntry[] {
 }
 
 /** Removes a search from the account's history, as its remove button does on the web. */
-export async function removeSearchHistory(youtube: Innertube, feedbackToken: string): Promise<void> {
+export async function removeSearchHistory(
+  youtube: Innertube,
+  feedbackToken: string,
+): Promise<void> {
   await youtube.actions.execute("/feedback", {
     feedbackTokens: [feedbackToken],
     client: "YTMUSIC",

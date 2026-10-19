@@ -38,7 +38,9 @@ interface Props {
   /** Leave the album out of the byline, as on the album's own page. */
   hideAlbum?: boolean;
   /** Set on your own playlist: rows can be removed, and reordered by dragging. */
-  editing?: { onRemove: (index: number) => void; onMove: (from: number, to: number) => void } | undefined;
+  editing?:
+    | { onRemove: (index: number) => void; onMove: (from: number, to: number) => void }
+    | undefined;
 }
 
 /** Every row is this tall, which is what lets long lists skip rendering most of them. */

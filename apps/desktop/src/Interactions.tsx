@@ -679,7 +679,11 @@ function Membership({
   // Your own playlists, and anything YouTube does not say, cannot be saved.
   if (saved === null) return null;
   const id =
-    page?.kind === "album" ? page.page.audioPlaylistId : page?.kind === "playlist" ? route.id : null;
+    page?.kind === "album"
+      ? page.page.audioPlaylistId
+      : page?.kind === "playlist"
+        ? route.id
+        : null;
   return (
     <DropdownMenuItem
       disabled={saved === undefined || id === null}
@@ -713,7 +717,10 @@ function SaveToPlaylist({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
           <IconPlaylistAdd />
           Save to playlist
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="flex max-h-80 w-56 flex-col overflow-hidden" {...contained}>
+        <DropdownMenuSubContent
+          className="flex max-h-80 w-56 flex-col overflow-hidden"
+          {...contained}
+        >
           <DropdownMenuInput placeholder="Search playlists" aria-label="Search playlists" />
           <DropdownMenuList>
             <NewPlaylistItem videoIds={videoIds} />
@@ -771,7 +778,8 @@ function PlaylistTargets({
   }
   const needle = query.trim();
   const targets = state.targets.filter((target) => filter.contains(target.title, needle));
-  if (targets.length === 0) return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
+  if (targets.length === 0)
+    return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
   return targets.map((target) => (
     <DropdownMenuItem
       key={target.id}
@@ -781,8 +789,7 @@ function PlaylistTargets({
             playlistChanged(target.id);
             x.notify(`Saved to ${target.title}`);
           },
-          (error: unknown) =>
-            x.notify(error instanceof Error ? error.message : String(error)),
+          (error: unknown) => x.notify(error instanceof Error ? error.message : String(error)),
         );
       }}
     >
@@ -841,7 +848,10 @@ function NewPlaylistDialog({
     try {
       const name = title.trim();
       const ids = await songs();
-      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
+      const id = await engine.createPlaylist(
+        { title: name, description: description.trim(), privacy },
+        ids,
+      );
       x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
       x.notify(ids.length > 0 ? `Saved to ${name}` : `Created ${name}`);
       onClose();

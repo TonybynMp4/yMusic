@@ -37,7 +37,10 @@ export function Art({ thumbnails, width, className, style, fallback, lazy = true
   if (index >= urls.length) {
     return (
       <span
-        className={cn("flex items-center justify-center bg-secondary text-muted-foreground", className)}
+        className={cn(
+          "flex items-center justify-center bg-secondary text-muted-foreground",
+          className,
+        )}
         style={style}
       >
         {fallback}

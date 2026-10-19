@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  amplitudeForVolume,
-  decibelsForVolume,
-  volumeForAmplitude,
-} from "./volume.ts";
+import { amplitudeForVolume, decibelsForVolume, volumeForAmplitude } from "./volume.ts";
 
 describe("volume curve", () => {
   it("is exponential, not linear, between the endpoints", () => {

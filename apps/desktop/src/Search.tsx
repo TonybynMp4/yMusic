@@ -125,7 +125,13 @@ function Everything({
 }
 
 /** The card YouTube Music leads with, beside the songs it lists. */
-function TopResult({ top, actions }: { top: NonNullable<SearchResults["top"]>; actions: BrowseActions }) {
+function TopResult({
+  top,
+  actions,
+}: {
+  top: NonNullable<SearchResults["top"]>;
+  actions: BrowseActions;
+}) {
   const { item } = top;
   return (
     <section className="mb-6">

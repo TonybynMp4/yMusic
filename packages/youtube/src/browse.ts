@@ -186,7 +186,7 @@ export async function getPlaylist(youtube: Innertube, id: string): Promise<Playl
   const { page, more } = await openPlaylist(youtube, id);
   const tracks = [...page.tracks];
   const itemIds = [...page.itemIds];
-  for (let next = more; next; ) {
+  for (let next = more; next;) {
     const chunk = await next();
     tracks.push(...chunk.tracks);
     itemIds.push(...chunk.itemIds);
@@ -212,9 +212,11 @@ function rowsFrom(rows: readonly unknown[]): { tracks: Track[]; itemIds: (string
 
 interface RawRow {
   menu?: {
-    items?: readonly {
-      endpoint?: { payload?: { actions?: readonly RawEditAction[] | null } | null } | null;
-    }[] | null;
+    items?:
+      | readonly {
+          endpoint?: { payload?: { actions?: readonly RawEditAction[] | null } | null } | null;
+        }[]
+      | null;
   } | null;
 }
 

@@ -30,11 +30,13 @@ const LIST_RETRIES = 5;
  */
 export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylistsState {
   const [generation, setGeneration] = useState(0);
-  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created" | "deleted">>({
-    playlists: [],
-    loading: false,
-    error: null,
-  });
+  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created" | "deleted">>(
+    {
+      playlists: [],
+      loading: false,
+      error: null,
+    },
+  );
   // Kept with the account that created them, so switching accounts drops them.
   const [pending, setPending] = useState<{ account: string | null; cards: BrowseCard[] }>({
     account: null,

@@ -37,10 +37,7 @@ export async function invokeParsed<T extends z.ZodType>(
 }
 
 /** Fire-and-forget commands that return nothing but can still fail in Rust. */
-export async function invokeVoid(
-  command: string,
-  args?: Record<string, unknown>,
-): Promise<void> {
+export async function invokeVoid(command: string, args?: Record<string, unknown>): Promise<void> {
   if (!isTauri) throw new NotInTauriError(command);
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke(command, args);

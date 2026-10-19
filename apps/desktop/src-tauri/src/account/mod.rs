@@ -67,6 +67,46 @@ impl KeyStore for OsKeyring {
     }
 }
 
+/// The key in a plain file, for `scripts/drive.mjs`: an agent runs the debug
+/// app on a copy of your session without sharing your keyring, so signing
+/// out there cannot delete your key. Debug builds only.
+#[cfg(debug_assertions)]
+pub struct KeyFile(pub PathBuf);
+
+#[cfg(debug_assertions)]
+impl KeyStore for KeyFile {
+    fn get(&self) -> Result<Option<Vec<u8>>, String> {
+        match fs::read(&self.0) {
+            Ok(key) => Ok(Some(key)),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(format!("could not read the account key: {error}")),
+        }
+    }
+
+    fn set(&self, key: &[u8]) -> Result<(), String> {
+        fs::write(&self.0, key).map_err(|error| format!("could not store the account key: {error}"))
+    }
+
+    fn delete(&self) -> Result<(), String> {
+        match fs::remove_file(&self.0) {
+            Err(error) if error.kind() != ErrorKind::NotFound => {
+                Err(format!("could not delete the account key: {error}"))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Copies the keyring's account key into a file for `KeyFile`, so
+/// `scripts/drive.mjs --signed-in` can unseal a copy of `account.bin`.
+#[cfg(debug_assertions)]
+pub fn export_key(path: &std::path::Path) -> Result<(), String> {
+    let key = OsKeyring
+        .get()?
+        .ok_or("not signed in: the keyring has no account key")?;
+    KeyFile(path.to_path_buf()).set(&key)
+}
+
 #[derive(Default)]
 pub struct MemoryKeys(Mutex<Option<Vec<u8>>>);
 

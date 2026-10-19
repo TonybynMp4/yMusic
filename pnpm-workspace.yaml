@@ -4,3 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+# Refuse npm versions published less than 3 days ago (in minutes), so a
+# hijacked release is usually caught and pulled before it can be installed.
+minimumReleaseAge: 4320

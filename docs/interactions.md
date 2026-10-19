@@ -16,6 +16,10 @@ The player bar and the full player show the song's byline as YouTube Music's bar
 
 The player bar gives way on narrow windows without anything overlapping: only the title and byline shrink. Below 768 px the song takes the spare room and the volume slider becomes a vertical popup over its button. Below 640 px the thumbs are hidden, and below 520 px the song is its cover alone, which still opens the full player.
 
+The top bar keeps its buttons whole: below 640 px Sign in is its icon alone, and only the search box shrinks. Below 768 px the sidebar is collapsed whatever was saved, as YouTube Music's guide is. Expanding it there holds until the window widens again, and the saved choice is left alone.
+
+The full player narrows the same way, measured on its own width since the sidebar's varies. Below 768 px the tabs move under the artwork, which shrinks to fit the window's height. Pressing a tab raises it as a sheet over the artwork; the arrow beside the tabs, or pressing the open tab again, lowers it.
+
 The year comes with a song from an album page (the header's subtitle), from an up-next panel (radio, mix, the resumed queue, where youtubei.js reads it off the byline's last run) and from a local file's tags. A YouTube song from a search or a playlist has none, so `useSongYear` asks for it with a plain `/next` for that song and reads its own panel row. The answer is kept for the session (a failed lookup is not, and is tried again the next time the song shows), and a song with no album on YouTube, such as a music video, shows no year.
 
 ## Your playlists

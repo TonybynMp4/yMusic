@@ -83,8 +83,24 @@ impl KeyStore for KeyFile {
         }
     }
 
+    /// Owner-only, whatever the umask and whatever mode a file already
+    /// there had.
     fn set(&self, key: &[u8]) -> Result<(), String> {
-        fs::write(&self.0, key).map_err(|error| format!("could not store the account key: {error}"))
+        use std::io::Write;
+        #[cfg(unix)]
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
+            .open(&self.0)
+            .map_err(|error| format!("could not store the account key: {error}"))?;
+        #[cfg(unix)]
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("could not store the account key: {error}"))?;
+        file.write_all(key)
+            .map_err(|error| format!("could not store the account key: {error}"))
     }
 
     fn delete(&self) -> Result<(), String> {

@@ -49,10 +49,13 @@ function requireState() {
   return state;
 }
 
+class Failure extends Error {}
+
 function fail(message) {
-  console.error(message);
-  process.exit(1);
+  throw new Failure(message);
 }
+
+const save = (state) => writeFileSync(statePath, JSON.stringify(state));
 
 const portOpen = (port) =>
   new Promise((done) => {
@@ -95,6 +98,7 @@ async function find(state, target) {
 
 async function start(flags) {
   if (readState()) fail("already running, run `stop` first");
+  if (await portOpen(driverPort)) fail(`port ${driverPort} is taken, is another tauri-driver running?`);
   if (!existsSync("/usr/bin/WebKitWebDriver"))
     fail("WebKitWebDriver is missing: sudo apt install webkitgtk-webdriver");
   // 0700: with --signed-in the profile holds a copy of your session.
@@ -111,8 +115,10 @@ async function start(flags) {
   let vite = null;
   if (!(await portOpen(vitePort))) {
     vite = background("pnpm", ["--filter", "@ymusic/desktop", "dev"], "vite.log", process.env);
+    save({ vite });
     await waitForPort(vitePort, 30, "vite");
   }
+  save({ vite });
 
   // A private profile, D-Bus session and (by default) X display: the app
   // does not touch your library or keyring, the single-instance lock does
@@ -135,8 +141,11 @@ async function start(flags) {
     if (!existsSync(join(realData, "account.bin"))) fail("not signed in: no account.bin in " + realData);
     copyFileSync(join(realData, "account.bin"), join(dataDir, "account.bin"));
     const key = join(profile, "account.key");
-    const exported = spawnSync(binary, ["--export-account-key", key], { stdio: "inherit" });
-    if (exported.status !== 0) fail("could not read the account key from your keyring");
+    // The private profile and the timeout are for a binary older than
+    // `--export-account-key`, which would start the whole app instead.
+    const exported = spawnSync(binary, ["--export-account-key", key], { stdio: "inherit", env, timeout: 15000 });
+    if (exported.status !== 0 || !existsSync(key))
+      fail("could not export the account key, is the binary older than --export-account-key? Drop --no-build");
     env.YMUSIC_ACCOUNT_KEY_FILE = key;
   }
   const wrap = flags.has("--visible")
@@ -144,26 +153,27 @@ async function start(flags) {
     : ["dbus-run-session", "--", "xvfb-run", "-a", "-s", "-screen 0 1440x900x24", "tauri-driver"];
   if (!flags.has("--visible")) env.GDK_BACKEND = "x11";
   const driver = background(wrap[0], wrap.slice(1), "driver.log", env);
+  save({ vite, driver });
   await waitForPort(driverPort, 15, "tauri-driver");
 
   const created = await wd("POST", "/session", {
     capabilities: { alwaysMatch: { "tauri:options": { application: binary } } },
   });
-  writeFileSync(statePath, JSON.stringify({ session: created.sessionId, driver, vite }));
+  save({ session: created.sessionId, driver, vite });
   console.log(`app running, logs in ${work}`);
 }
 
 async function stop() {
   const state = readState();
   if (!state) return console.log("nothing running");
-  await fetch(`${base}/session/${state.session}`, { method: "DELETE" }).catch(() => {});
+  if (state.session) await fetch(`${base}/session/${state.session}`, { method: "DELETE" }).catch(() => {});
   for (const pid of [state.driver, state.vite]) {
     if (!pid) continue;
     try {
       process.kill(-pid, "SIGTERM");
     } catch {}
   }
-  rmSync(statePath);
+  rmSync(statePath, { force: true });
   rmSync(join(work, "profile", "account.key"), { force: true });
   console.log("stopped");
 }
@@ -229,65 +239,79 @@ const snapshotScript = `
 const [command, ...args] = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 
-switch (command) {
-  case "start":
-    await start(flags);
-    break;
-  case "stop":
-    await stop();
-    break;
-  case "snapshot": {
-    const state = requireState();
-    console.log(await session(state, "POST", "/execute/sync", { script: snapshotScript, args: [] }));
-    break;
-  }
-  case "click": {
-    const state = requireState();
-    const el = await find(state, args[0]);
-    await session(state, "POST", `/element/${el}/click`, {});
-    break;
-  }
-  case "type": {
-    const state = requireState();
-    const el = await find(state, args[0]);
-    await session(state, "POST", `/element/${el}/value`, { text: args.slice(1).join(" ") });
-    break;
-  }
-  case "press": {
-    const state = requireState();
-    const value = keys[args[0]] ?? args[0];
-    await session(state, "POST", "/actions", {
-      actions: [{ type: "key", id: "kb", actions: [{ type: "keyDown", value }, { type: "keyUp", value }] }],
-    });
-    break;
-  }
-  case "wait": {
-    const state = requireState();
-    const deadline = Date.now() + Number(args[1] ?? 10) * 1000;
-    while (Date.now() < deadline) {
-      const text = await session(state, "POST", "/execute/sync", { script: "return document.body.innerText", args: [] });
-      if (text.includes(args[0])) process.exit(0);
-      await new Promise((r) => setTimeout(r, 300));
+try {
+  await run();
+} catch (error) {
+  if (!(error instanceof Failure)) throw error;
+  console.error(error.message);
+  process.exit(1);
+}
+
+async function run() {
+  switch (command) {
+    case "start":
+      // A failed start stops whatever it got running, and the key file with it.
+      await start(flags).catch(async (error) => {
+        if (readState() && !error.message.startsWith("already running")) await stop();
+        throw error;
+      });
+      break;
+    case "stop":
+      await stop();
+      break;
+    case "snapshot": {
+      const state = requireState();
+      console.log(await session(state, "POST", "/execute/sync", { script: snapshotScript, args: [] }));
+      break;
     }
-    fail(`"${args[0]}" did not appear`);
-    break;
+    case "click": {
+      const state = requireState();
+      const el = await find(state, args[0]);
+      await session(state, "POST", `/element/${el}/click`, {});
+      break;
+    }
+    case "type": {
+      const state = requireState();
+      const el = await find(state, args[0]);
+      await session(state, "POST", `/element/${el}/value`, { text: args.slice(1).join(" ") });
+      break;
+    }
+    case "press": {
+      const state = requireState();
+      const value = keys[args[0]] ?? args[0];
+      await session(state, "POST", "/actions", {
+        actions: [{ type: "key", id: "kb", actions: [{ type: "keyDown", value }, { type: "keyUp", value }] }],
+      });
+      break;
+    }
+    case "wait": {
+      const state = requireState();
+      const deadline = Date.now() + Number(args[1] ?? 10) * 1000;
+      while (Date.now() < deadline) {
+        const text = await session(state, "POST", "/execute/sync", { script: "return document.body.innerText", args: [] });
+        if (text.includes(args[0])) process.exit(0);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      fail(`"${args[0]}" did not appear`);
+      break;
+    }
+    case "shot": {
+      const state = requireState();
+      const file = resolve(args[0] ?? join(work, `shot-${Date.now()}.png`));
+      writeFileSync(file, Buffer.from(await session(state, "GET", "/screenshot"), "base64"));
+      console.log(file);
+      break;
+    }
+    case "eval": {
+      const state = requireState();
+      const value = await session(state, "POST", "/execute/sync", { script: args.join(" "), args: [] });
+      console.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
+      break;
+    }
+    case "logs":
+      console.log(readFileSync(join(work, "driver.log"), "utf8").split("\n").slice(-60).join("\n"));
+      break;
+    default:
+      console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 16).join("\n"));
   }
-  case "shot": {
-    const state = requireState();
-    const file = resolve(args[0] ?? join(work, `shot-${Date.now()}.png`));
-    writeFileSync(file, Buffer.from(await session(state, "GET", "/screenshot"), "base64"));
-    console.log(file);
-    break;
-  }
-  case "eval": {
-    const state = requireState();
-    const value = await session(state, "POST", "/execute/sync", { script: args.join(" "), args: [] });
-    console.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
-    break;
-  }
-  case "logs":
-    console.log(readFileSync(join(work, "driver.log"), "utf8").split("\n").slice(-60).join("\n"));
-    break;
-  default:
-    console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 16).join("\n"));
 }

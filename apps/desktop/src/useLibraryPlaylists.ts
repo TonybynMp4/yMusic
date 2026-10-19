@@ -49,6 +49,8 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
   });
   /** The last list fetched, and which fetch it answered. */
   const [listed, setListed] = useState<Listed | null>(null);
+  // Dropped on sign-out, so signing back in to the same account loads again.
+  if (accountKey === null && listed !== null) setListed(null);
   useEffect(() => {
     if (accountKey === null) return;
     let cancelled = false;

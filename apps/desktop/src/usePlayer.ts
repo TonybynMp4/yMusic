@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import {
   currentTrack,
   emptyQueue,
@@ -117,18 +117,16 @@ export function usePlayer(
   const cameUp = useRef(false);
   const ratings = useRatings(account);
   /** The current track, for answers that arrive after it may have changed. */
-  const currentId = useRef(trackId);
-  currentId.current = trackId;
+  const currentId = useEffectEvent(() => trackId);
   /** Tracks skipped in a row, so a queue of only disliked songs stops after one pass. */
   const skipped = useRef(0);
   /**
-   * Whether to pass over a track rather than play it. Read through a ref so
-   * the load effect does not rerun, and cancel its load, when a rating or the
+   * Whether to pass over a track rather than play it. An effect event, so the
+   * load effect does not rerun, and cancel its load, when a rating or the
    * setting changes. A track is played anyway when skipping would not move to
    * a different one, as on the last track or under repeat-one.
    */
-  const skips = useRef<(id: TrackId) => boolean>(() => false);
-  skips.current = (id) => {
+  const skips = useEffectEvent((id: TrackId): boolean => {
     const videoId = videoIdFromTrackId(id);
     if (
       !settings.skipDisliked ||
@@ -141,7 +139,7 @@ export function usePlayer(
     }
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
-  };
+  });
   /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
   const playlistOf = useCallback((id: TrackId) => {
     const from = source.current;
@@ -205,7 +203,7 @@ export function usePlayer(
       return;
     }
     if (loadedId.current === trackId) return;
-    if (skips.current(trackId)) {
+    if (skips(trackId)) {
       skipped.current++;
       dispatch({ type: "next", reason: "user" });
       return;
@@ -238,6 +236,7 @@ export function usePlayer(
     });
 
     return () => {
+      // oxlint-disable-next-line react/immutability -- a local of the effect, never read in render
       cancelled = true;
     };
   }, [trackId, engine, load, reportError, leaseFor]);
@@ -347,7 +346,7 @@ export function usePlayer(
         if (event.type !== "advanced") return;
         // The user picked another song while mpv was finishing this one. Its
         // load replaces what mpv started, so the queue stays on it.
-        if (inMpv.current !== currentId.current) return;
+        if (inMpv.current !== currentId()) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
         setStreaming(
@@ -515,7 +514,7 @@ export function usePlayer(
         learn(videoId, rating, asked);
         // Disliked elsewhere since it was last seen here: it started, so skip
         // it now, unless the user has already moved on to another track.
-        if (currentId.current === trackId && skips.current(trackId)) {
+        if (currentId() === trackId && skips(trackId)) {
           skipped.current++;
           dispatch({ type: "next", reason: "user" });
         }
@@ -646,7 +645,7 @@ export function usePlayer(
     setAutoplay,
     track,
     /** The playing song's stream, once mpv has it. */
-    lease: streaming?.trackId === track?.id ? streaming : null,
+    lease: streaming !== null && streaming.trackId === trackId ? streaming : null,
     playback: state,
     position,
     loadedTrack,

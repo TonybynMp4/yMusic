@@ -147,13 +147,14 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   useLayoutEffect(() => {
     if (!viewport) return;
     const target = scrolls.current[depth] ?? 0;
-    viewport.scrollTop = target;
+    viewport.scrollTo({ top: target });
     const content = viewport.firstElementChild;
     if (viewport.scrollTop >= target || !content) return;
     let applied = viewport.scrollTop;
     const observer = new ResizeObserver(() => {
       if (viewport.scrollTop !== applied) return observer.disconnect();
-      viewport.scrollTop = target;
+      viewport.scrollTo({ top: target });
+      // oxlint-disable-next-line react/immutability -- a local of the effect, never read in render
       applied = viewport.scrollTop;
       if (applied >= target) observer.disconnect();
     });

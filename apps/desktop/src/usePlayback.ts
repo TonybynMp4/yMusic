@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { PlaybackStatus, StreamLease } from "@ymusic/core";
 import { MpvPlaybackEngine } from "@ymusic/ipc";
 
@@ -46,15 +46,13 @@ export function usePosition(store: PositionStore): number {
  * player on mobile costs nothing above this hook.
  */
 export function usePlayback() {
-  const engine = useMemo(() => new MpvPlaybackEngine(), []);
+  const [engine] = useState(() => new MpvPlaybackEngine());
   const [state, setState] = useState<PlaybackState>({
     status: "idle",
     durationMs: null,
     error: null,
   });
-  const position = useMemo(createPositionStore, []);
-  const engineRef = useRef(engine);
-  engineRef.current = engine;
+  const [position] = useState(createPositionStore);
 
   useEffect(
     () =>
@@ -90,12 +88,13 @@ export function usePlayback() {
       position.set(startMs ?? 0);
       setState({ status: "loading", durationMs: null, error: null });
       try {
-        await engineRef.current.load(lease, paused, startMs);
+        await engine.load(lease, paused, startMs);
       } catch (error) {
-        setState((previous) => ({ ...previous, status: "idle", error: String(error) }));
+        const message = String(error);
+        setState((previous) => ({ ...previous, status: "idle", error: message }));
       }
     },
-    [position],
+    [engine, position],
   );
 
   /**

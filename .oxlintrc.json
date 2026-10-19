@@ -15,15 +15,6 @@
     // The automatic JSX runtime needs no React import.
     "react/react-in-jsx-scope": "off",
 
-    // React Compiler rules. The app doesn't use the compiler, and these flag
-    // patterns it relies on on purpose: the latest-value ref, loading state
-    // set from an effect, and scrolling a DOM node held in state.
-    "react/set-state-in-effect": "off",
-    "react/refs": "off",
-    "react/immutability": "off",
-    "react/use-memo": "off",
-    "react/incompatible-library": "off",
-
     // Every hit sets the one handler a MessagePort or Worker has.
     "unicorn/prefer-add-event-listener": "off",
     // Only flags small helpers in tests; hoisting them reads worse.

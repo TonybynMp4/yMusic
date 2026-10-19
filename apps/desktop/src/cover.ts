@@ -14,6 +14,8 @@ const MAX_SIDE = 1200;
 export interface Picked {
   file: File;
   bitmap: ImageBitmap;
+  /** An object URL of `file`, for the cropper to show. */
+  url: string;
   width: number;
   height: number;
 }
@@ -54,11 +56,12 @@ export async function openImage(file: File): Promise<Picked> {
     throw new Error(`Images must be at least ${MIN_SIDE} x ${MIN_SIDE} pixels`);
   }
   const { width, height } = bitmap;
-  return { file, bitmap, width, height };
+  return { file, bitmap, url: URL.createObjectURL(file), width, height };
 }
 
 export function closePicked(picked: Picked): void {
   picked.bitmap.close();
+  URL.revokeObjectURL(picked.url);
 }
 
 /** The largest square in the middle, where the crop starts. */

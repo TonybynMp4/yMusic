@@ -6,6 +6,7 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Playback](playback.md): libmpv, stream leases and volume.
 - [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution, PO tokens, reporting plays and resume.
 - [Sign-in](sign-in.md): the cookie session, browser import and why OAuth is out.
+- [The IPC layer](ipc.md): the TypeScript bindings generated from the Rust commands, and where zod still parses.
 - [Settings](settings.md): the settings file, and how each setting reaches mpv, the engine or the window.
 - [Interactions](interactions.md): the menus on songs, albums, playlists and artists, and liking songs.
 - [Artwork](artwork.md): the `img` scheme, WebP requests and the capped disk cache.

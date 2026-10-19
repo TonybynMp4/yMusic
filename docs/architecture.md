@@ -17,7 +17,7 @@ The colours are YouTube Music's own dark palette on both platforms, not the syst
 
 ## Libraries and why each is here
 
-- **zod** parses every InnerTube response at the engine boundary into a domain model, so a changed response becomes a clear error instead of an `undefined` three layers down. Also used for the Rust/TS payloads in `packages/ipc`. Types derive from schemas, never the reverse.
+- **zod** parses every InnerTube response at the engine boundary into a domain model, so a changed response becomes a clear error instead of an `undefined` three layers down. It does not parse the Rust payloads, whose types are generated (see [The IPC layer](ipc.md)). Types derive from schemas, never the reverse.
 - **Comlink** for the worker, and later for the plugin sandbox, so the app has one worker-RPC mechanism.
 - **tRPC** is not in the core. It recovers types lost across a network, and the worker and the UI are compiled together, so nothing is lost. It comes back for plugin backends, where there is a real process boundary (see [Plugins](../PLAN.md#plugins)).
 - **shadcn/ui on Base UI** (not Radix), with Tailwind v4. Owned source, which a music player needs for its sliders, menus and virtualized lists. Icons come from `@tabler/icons-react`.
@@ -30,5 +30,5 @@ pnpm workspaces and Turborepo. TypeScript 7 (the native `tsc`) type-checks the w
 
 - `packages/core`: pure TypeScript, no Tauri, no DOM. Domain models and zod schemas, the queue reducer, and the `PlaybackEngine` interface. Mobile can reuse it as is.
 - `packages/youtube`: the data engine. The youtubei.js wrapper, the PO-token minter, and the Comlink API, split into `worker` and `host` entry points so the main bundle never imports youtubei.js.
-- `packages/ipc`: typed, zod-validated wrappers over Tauri commands and channels. The only package that calls `invoke`.
+- `packages/ipc`: the TypeScript bindings generated from the Rust commands, and the wrappers over them. The only package that calls `invoke`.
 - `apps/desktop`: the Tauri app. `src/` is the React frontend and its shadcn components. `src-tauri/` is the Rust core: mpv playback, the sealed session and sign-in window, the local library, the `img` scheme, media controls and window chrome. Platform differences live in `platform/`, one module per concern, rather than `#[cfg]`s scattered through features.

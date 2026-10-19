@@ -16,6 +16,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Mica on Windows (code is in `platform/window.rs`, never run)
 - [x] Single instance: a second launch focuses the running window
 - [x] Explicit libmpv version floor with a clear startup error
+- [x] TypeScript types for the Tauri commands generated from Rust (tauri-specta)
 
 ### Playback
 

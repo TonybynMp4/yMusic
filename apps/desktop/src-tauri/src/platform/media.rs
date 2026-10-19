@@ -28,7 +28,7 @@ const DEFAULT_SEEK_STEP: Duration = Duration::from_secs(10);
 const DRIFT_TOLERANCE_MS: u64 = 1500;
 
 /// A media key or widget action, as the frontend handles it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MediaKeyEvent {
     Play,
@@ -47,12 +47,14 @@ pub enum MediaKeyEvent {
     },
     /// A slider position in 0..=1, the same unit the player's volume takes.
     SetVolume {
+        // Clamped before it is sent, so never NaN, which JSON would make null.
+        #[specta(type = specta_typescript::Number)]
         volume: f64,
     },
 }
 
 /// What the frontend knows about the current track.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaTrack {
     pub title: String,

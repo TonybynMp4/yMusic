@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 const RELEASES: &str = "https://api.github.com/repos/TonybynMp4/yMusic/releases?per_page=20";
 
 /// A release newer than the running build.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Update {
     pub version: String,

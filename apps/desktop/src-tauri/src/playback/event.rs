@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PlaybackStatus {
     Idle,
@@ -13,7 +13,7 @@ pub enum PlaybackStatus {
     Ended,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PlaybackEvent {
     #[serde(rename_all = "camelCase")]

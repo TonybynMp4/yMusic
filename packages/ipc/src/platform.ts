@@ -1,58 +1,40 @@
-import { z } from "zod";
-import { invokeParsed, invokeVoid } from "./tauri.ts";
+import type { PlatformSummary, Update } from "./bindings.ts";
+import { call } from "./tauri.ts";
 
-export const InstallFlavor = z.enum(["deb", "windows-installer", "unknown"]);
-export type InstallFlavor = z.infer<typeof InstallFlavor>;
+export type { InstallFlavor, PlatformSummary, Update } from "./bindings.ts";
 
-export const PlatformSummary = z.object({
-  os: z.string(),
-  arch: z.string(),
-  appVersion: z.string(),
-  installFlavor: InstallFlavor,
-  /**
-   * False when the build cannot install an update itself: a hand-run binary,
-   * or a `.deb` on a desktop with no polkit. The UI links to a download
-   * instead of offering a button that cannot work.
-   */
-  supportsInAppUpdate: z.boolean(),
-  /**
-   * False on Linux without libayatana-appindicator, where "keep playing in
-   * the tray" would quit on close anyway.
-   */
-  hasTray: z.boolean(),
-});
-export type PlatformSummary = z.infer<typeof PlatformSummary>;
-
-export function platformSummary(): Promise<PlatformSummary> {
-  return invokeParsed("platform_summary", PlatformSummary);
+/**
+ * Where the app runs. `supportsInAppUpdate` is false when the build cannot
+ * install an update itself (a hand-run binary, or a `.deb` on a desktop with
+ * no polkit), so the UI links to a download instead of offering a button that
+ * cannot work. `hasTray` is false on Linux without libayatana-appindicator,
+ * where "keep playing in the tray" would quit on close anyway.
+ */
+export async function platformSummary(): Promise<PlatformSummary> {
+  return call("platformSummary");
 }
 
-export const Update = z.object({
-  version: z.string(),
-  /** The release page on GitHub. */
-  url: z.url(),
-  prerelease: z.boolean(),
-});
-export type Update = z.infer<typeof Update>;
-
-/** A release newer than this build, or null. Prereleases count when the settings say so. */
-export function updateCheck(): Promise<Update | null> {
-  return invokeParsed("update_check", Update.nullable());
+/**
+ * A release newer than this build, or null. Prereleases count when the
+ * settings say so. `url` is the release page on GitHub.
+ */
+export async function updateCheck(): Promise<Update | null> {
+  return call("updateCheck");
 }
 
-export function openLogsFolder(): Promise<void> {
-  return invokeVoid("open_logs_folder");
+export async function openLogsFolder(): Promise<void> {
+  await call("openLogsFolder");
 }
 
 /** How many bytes the artwork cache takes on disk, the only cache with a size to show. */
-export function cacheSize(): Promise<number> {
-  return invokeParsed("cache_size", z.number().int().nonnegative());
+export async function cacheSize(): Promise<number> {
+  return call("cacheSize");
 }
 
 /**
  * Deletes the cached artwork and empties the webview's memory and disk caches.
  * Cookies, storage, settings and the account stay.
  */
-export function cacheClear(): Promise<void> {
-  return invokeVoid("cache_clear");
+export async function cacheClear(): Promise<void> {
+  await call("cacheClear");
 }

@@ -10,7 +10,7 @@ use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AudioQuality {
     #[default]
@@ -20,7 +20,7 @@ pub enum AudioQuality {
 }
 
 /// How stable volume evens songs out.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum StableVolume {
     #[default]
@@ -31,8 +31,8 @@ pub enum StableVolume {
     LoudOnly,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     /// When the queue runs out, its suggestions play on.
     pub autoplay: bool,
@@ -69,7 +69,64 @@ impl Default for Settings {
     }
 }
 
+/// The settings `settings_set` changes: each field present replaces the
+/// saved one, and the rest stay. One field per setting, so the frontend's type
+/// for a patch comes from here too.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SettingsPatch {
+    #[specta(optional)]
+    pub autoplay: Option<bool>,
+    #[specta(optional)]
+    pub audio_quality: Option<AudioQuality>,
+    #[specta(optional)]
+    pub stable_volume: Option<StableVolume>,
+    #[specta(optional)]
+    pub audio_device: Option<String>,
+    #[specta(optional)]
+    pub skip_disliked: Option<bool>,
+    #[specta(optional)]
+    pub pause_watch_history: Option<bool>,
+    #[specta(optional)]
+    pub pause_search_history: Option<bool>,
+    #[specta(optional)]
+    pub close_to_tray: Option<bool>,
+    #[specta(optional)]
+    pub check_for_updates: Option<bool>,
+    #[specta(optional)]
+    pub include_prereleases: Option<bool>,
+    #[specta(optional)]
+    pub stats_for_nerds: Option<bool>,
+}
+
+impl SettingsPatch {
+    /// The patch as the JSON object `Settings::merge` takes, with only the
+    /// fields it sets.
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut json = serde_json::to_value(self).expect("settings patch serialize");
+        if let serde_json::Value::Object(fields) = &mut json {
+            fields.retain(|_, value| !value.is_null());
+        }
+        json
+    }
+}
+
 impl Settings {
+    /// A settings file, with the defaults for fields it lacks, as one written
+    /// before a setting existed does, and unknown fields ignored, as one
+    /// written by a newer version may have.
+    fn from_file(bytes: &[u8]) -> Result<Self, serde_json::Error> {
+        let file: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+        let mut json = serde_json::to_value(Self::default()).expect("settings serialize");
+        let fields = json.as_object_mut().expect("settings are an object");
+        for (key, value) in file {
+            if fields.contains_key(&key) {
+                fields.insert(key, value);
+            }
+        }
+        serde_json::from_value(json)
+    }
+
     /// Applies the fields present in `patch` and leaves the rest alone.
     pub fn merge(&self, patch: serde_json::Value) -> Result<Self, String> {
         let serde_json::Value::Object(patch) = patch else {
@@ -96,7 +153,7 @@ pub struct SettingsStore {
 impl SettingsStore {
     pub fn open(path: PathBuf) -> Self {
         let current = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+            Ok(bytes) => Settings::from_file(&bytes).unwrap_or_else(|error| {
                 log::error!(
                     "ignoring unreadable settings in {}: {error}",
                     path.display()

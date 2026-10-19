@@ -20,7 +20,8 @@
     "lint": "oxlint --deny-warnings",
     "test": "turbo run test",
     "tauri": "pnpm --filter @ymusic/desktop tauri",
-    "app": "pnpm --filter @ymusic/desktop tauri dev"
+    "app": "pnpm --filter @ymusic/desktop tauri dev",
+    "bindings": "cd apps/desktop/src-tauri && YMUSIC_WRITE_BINDINGS=1 cargo test --test bindings"
   },
   "devDependencies": {
     "oxlint": "^1.86.0",

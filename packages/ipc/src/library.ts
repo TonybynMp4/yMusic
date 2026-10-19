@@ -7,35 +7,28 @@
  * is the only place that knows local tracks have a filesystem path.
  */
 
-import { AudioCodec, StreamLease, type Thumbnail, type Track, TrackId } from "@ymusic/core";
-import { z } from "zod";
+import type {
+  AudioCodec as CoreAudioCodec,
+  TrackId,
+  StreamLease,
+  Thumbnail,
+  Track,
+} from "@ymusic/core";
 
-import { invokeParsed, invokeVoid } from "./tauri.ts";
+import type {
+  AudioCodec,
+  CoverArt,
+  LocalLease,
+  LocalTrack as LocalTrackRow,
+  ScanReport,
+} from "./bindings.ts";
+import { call, rustTrackId, type Same } from "./tauri.ts";
 
-const CoverArt = z.object({
-  path: z.string(),
-  width: z.number().int().nonnegative(),
-  height: z.number().int().nonnegative(),
-});
-type CoverArt = z.infer<typeof CoverArt>;
+export type { ScanFailure, ScanReport } from "./bindings.ts";
 
-/** The raw row as Rust serialises it. Not exported: callers want `Track`. */
-const LocalTrackRow = z.object({
-  id: TrackId,
-  path: z.string(),
-  title: z.string(),
-  artist: z.string(),
-  album: z.string().nullable(),
-  albumArtist: z.string().nullable(),
-  trackNumber: z.number().int().nullable(),
-  discNumber: z.number().int().nullable(),
-  year: z.number().int().nullable(),
-  durationMs: z.number().int().nonnegative().nullable(),
-  codec: AudioCodec,
-  bitrate: z.number().int().positive().nullable(),
-  coverArt: CoverArt.nullable(),
-});
-type LocalTrackRow = z.infer<typeof LocalTrackRow>;
+/** A local lease plays through the same path as a YouTube one. */
+const codecsMatch: Same<AudioCodec, CoreAudioCodec> = true;
+void codecsMatch;
 
 /** A library track plus the local-only details the library view shows. */
 export interface LocalTrack extends Track {
@@ -44,18 +37,6 @@ export interface LocalTrack extends Track {
   trackNumber: number | null;
   discNumber: number | null;
 }
-
-export const ScanFailure = z.object({ path: z.string(), reason: z.string() });
-export type ScanFailure = z.infer<typeof ScanFailure>;
-
-export const ScanReport = z.object({
-  added: z.number().int().nonnegative(),
-  updated: z.number().int().nonnegative(),
-  unchanged: z.number().int().nonnegative(),
-  removed: z.number().int().nonnegative(),
-  failed: z.array(ScanFailure),
-});
-export type ScanReport = z.infer<typeof ScanReport>;
 
 /**
  * Cover art lives outside the bundle, so the webview cannot load it from a
@@ -95,7 +76,7 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
   const thumbnails = await toThumbnails(row.coverArt);
 
   return {
-    id: row.id,
+    id: rustTrackId(row.id),
     title: row.title,
     artists: [{ name: row.artist, channelId: null }],
     album: row.album,
@@ -111,47 +92,48 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
   };
 }
 
-const LocalTrackRows = z.array(LocalTrackRow);
-
 export async function libraryFolders(): Promise<string[]> {
-  return invokeParsed("library_folders", z.array(z.string()));
+  return call("libraryFolders");
 }
 
 /** The cover image at the top of a library folder, or none. Songs never use it. */
 export async function libraryFolderCover(path: string): Promise<Thumbnail[]> {
-  return toThumbnails(await invokeParsed("library_folder_cover", CoverArt.nullable(), { path }));
+  return toThumbnails(await call("libraryFolderCover", path));
 }
 
 /** Registers the folder and scans it in one step. */
 export async function libraryAddFolder(path: string): Promise<ScanReport> {
-  return invokeParsed("library_add_folder", ScanReport, { path });
+  return call("libraryAddFolder", path);
 }
 
 export async function libraryRemoveFolder(path: string): Promise<void> {
-  return invokeVoid("library_remove_folder", { path });
+  await call("libraryRemoveFolder", path);
 }
 
 export async function libraryScan(): Promise<ScanReport> {
-  return invokeParsed("library_scan", ScanReport);
+  return call("libraryScan");
 }
 
 export async function libraryTracks(): Promise<LocalTrack[]> {
-  const rows = await invokeParsed("library_tracks", LocalTrackRows);
-  return Promise.all(rows.map(toTrack));
+  return Promise.all((await call("libraryTracks")).map(toTrack));
 }
 
 /** Blank query returns everything, matching the Rust side. */
 export async function librarySearch(query: string): Promise<LocalTrack[]> {
-  const rows = await invokeParsed("library_search", LocalTrackRows, { query });
-  return Promise.all(rows.map(toTrack));
+  return Promise.all((await call("librarySearch", query)).map(toTrack));
 }
 
 /**
- * Resolves a local track to a lease. Same signature shape as the eventual
- * YouTube resolver, so the player never branches on where a track came from.
+ * Resolves a local track to a lease. Same signature shape as the YouTube
+ * resolver, so the player never branches on where a track came from.
  */
 export async function libraryResolve(id: TrackId): Promise<StreamLease> {
-  return invokeParsed("library_resolve", StreamLease, { id });
+  return toStreamLease(await call("libraryResolve", id));
+}
+
+/** Rust's lease is core's `StreamLease` with the track id unbranded. */
+export function toStreamLease(lease: LocalLease): StreamLease {
+  return { ...lease, trackId: rustTrackId(lease.trackId) };
 }
 
 /** Opens the native folder picker. Null when the user cancels. */
@@ -163,10 +145,10 @@ export async function pickMusicFolder(): Promise<string | null> {
 
 /** Opens a library folder in the system file manager. */
 export async function libraryOpenFolder(path: string): Promise<void> {
-  return invokeVoid("library_open_folder", { path });
+  await call("libraryOpenFolder", path);
 }
 
 /** Shows a local track's file in the system file manager, selected. */
 export async function libraryReveal(id: TrackId): Promise<void> {
-  return invokeVoid("library_reveal", { id });
+  await call("libraryReveal", id);
 }

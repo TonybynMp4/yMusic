@@ -2,19 +2,19 @@
 //!
 //! They live in their own module because `#[tauri::command]` generates helper
 //! macros beside each function, and those collide with the crate root once the
-//! functions are public enough for `ymusic_commands!` to name them.
+//! functions are public enough for `ymusic_specta!` to name them.
 
 use crate::account::{import, rotate, sign_in, Account, Session};
 use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{Settings, SettingsPatch, SettingsStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
 /// on the about screen; the updater decides what it may do with the rest.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformSummary {
     os: String,
@@ -27,6 +27,7 @@ pub struct PlatformSummary {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary {
     let flavor = InstallFlavor::current();
     PlatformSummary {
@@ -52,16 +53,19 @@ pub async fn http_fetch(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_subscribe(player: State<'_, Player>, channel: Channel<PlaybackEvent>) {
     player.subscribe(channel);
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_load(player: State<'_, Player>, request: LoadRequest) -> Result<(), String> {
     player.load(request)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_queue_next(
     player: State<'_, Player>,
     after: String,
@@ -71,36 +75,43 @@ pub fn player_queue_next(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_play(player: State<'_, Player>) -> Result<(), String> {
     player.play()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_pause(player: State<'_, Player>) -> Result<(), String> {
     player.pause()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), String> {
     player.seek(position_ms)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), String> {
     player.set_volume(volume)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_audio_devices(player: State<'_, Player>) -> Result<Vec<AudioDevice>, String> {
     player.audio_devices()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_stats(player: State<'_, Player>) -> AudioStats {
     player.stats()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn player_stop(player: State<'_, Player>) -> Result<(), String> {
     player.stop()
 }
@@ -110,16 +121,19 @@ pub fn player_stop(player: State<'_, Player>) -> Result<(), String> {
 use crate::platform::media::{MediaKeyEvent, MediaSession, MediaTrack};
 
 #[tauri::command]
+#[specta::specta]
 pub fn media_subscribe(media: State<'_, MediaSession>, channel: Channel<MediaKeyEvent>) {
     media.subscribe(channel);
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn media_set_track(media: State<'_, MediaSession>, track: Option<MediaTrack>) {
     media.set_track(track);
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn media_set_volume(media: State<'_, MediaSession>, volume: f64) {
     media.set_volume(volume);
 }
@@ -129,11 +143,13 @@ pub fn media_set_volume(media: State<'_, MediaSession>, volume: f64) {
 use crate::library::{CoverArt, Library, LocalLease, LocalTrack, ScanReport};
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_folders(library: State<'_, Library>) -> Result<Vec<String>, String> {
     library.folders().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn library_folder_cover(
     library: State<'_, Library>,
     path: String,
@@ -142,6 +158,7 @@ pub async fn library_folder_cover(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_add_folder(library: State<'_, Library>, path: String) -> Result<ScanReport, String> {
     let path = std::path::PathBuf::from(path);
     library.add_folder(&path).map_err(|e| e.to_string())?;
@@ -151,21 +168,25 @@ pub fn library_add_folder(library: State<'_, Library>, path: String) -> Result<S
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_remove_folder(library: State<'_, Library>, path: String) -> Result<(), String> {
     library.remove_folder(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_scan(library: State<'_, Library>) -> Result<ScanReport, String> {
     library.scan_all().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_tracks(library: State<'_, Library>) -> Result<Vec<LocalTrack>, String> {
     library.tracks().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn library_search(
     library: State<'_, Library>,
     query: String,
@@ -176,6 +197,7 @@ pub fn library_search(
 /// The local half of stream resolution. Returns the same shape the YouTube
 /// resolver will, so the frontend can treat the two interchangeably.
 #[tauri::command]
+#[specta::specta]
 pub fn library_resolve(library: State<'_, Library>, id: String) -> Result<LocalLease, String> {
     library.resolve(&id).map_err(|e| e.to_string())
 }
@@ -184,6 +206,7 @@ pub fn library_resolve(library: State<'_, Library>, id: String) -> Result<LocalL
 /// so the webview cannot open arbitrary paths. Async to keep the file
 /// manager's D-Bus call off the main thread.
 #[tauri::command]
+#[specta::specta]
 pub async fn library_open_folder(library: State<'_, Library>, path: String) -> Result<(), String> {
     let known = library.folders().map_err(|e| e.to_string())?;
     if !known.contains(&path) {
@@ -195,6 +218,7 @@ pub async fn library_open_folder(library: State<'_, Library>, path: String) -> R
 /// Shows a local track's file in the file manager, selected. Takes the track
 /// id rather than a path for the same reason as `library_open_folder`.
 #[tauri::command]
+#[specta::specta]
 pub async fn library_reveal(library: State<'_, Library>, id: String) -> Result<(), String> {
     let track = library.track(&id).map_err(|e| e.to_string())?;
     if !std::path::Path::new(&track.path).exists() {
@@ -206,6 +230,7 @@ pub async fn library_reveal(library: State<'_, Library>, id: String) -> Result<(
 /// The saved session's cookie header, for the engine worker to send. None when
 /// signed out.
 #[tauri::command]
+#[specta::specta]
 pub fn account_cookie(account: State<'_, Account>) -> Option<String> {
     account.cookie()
 }
@@ -214,6 +239,7 @@ pub fn account_cookie(account: State<'_, Account>) -> Option<String> {
 /// closed the window, which is a cancel rather than an error. Google's cookies
 /// from the last sign-in window go into this one, so it knows the device.
 #[tauri::command]
+#[specta::specta]
 pub async fn account_sign_in<R: Runtime>(
     app: tauri::AppHandle<R>,
     account: State<'_, Account>,
@@ -232,6 +258,7 @@ pub async fn account_sign_in<R: Runtime>(
 
 /// The browser profiles a session can be imported from.
 #[tauri::command]
+#[specta::specta]
 pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
     tauri::async_runtime::spawn_blocking(import::browsers)
         .await
@@ -240,6 +267,7 @@ pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
 
 /// Takes the YouTube session from a browser profile listed by `account_browsers`.
 #[tauri::command]
+#[specta::specta]
 pub async fn account_import(account: State<'_, Account>, id: String) -> Result<String, String> {
     let cookie = import_from(id.clone()).await?;
     account.save(Session {
@@ -257,6 +285,7 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
 /// it shares with us, so its copy is the live one, and a sign-in window
 /// session is rotated here. None when nothing gives anything newer.
 #[tauri::command]
+#[specta::specta]
 pub async fn account_refresh(
     account: State<'_, Account>,
     stale: String,
@@ -287,6 +316,7 @@ pub async fn account_refresh(
 /// None for an imported session, which its browser keeps alive, or when the
 /// rotation did not take.
 #[tauri::command]
+#[specta::specta]
 pub async fn account_rotate(account: State<'_, Account>) -> Result<Option<String>, String> {
     match account.session() {
         Some(session) if session.browser.is_none() => rotated(&account, session).await,
@@ -318,11 +348,13 @@ async fn import_from(id: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn account_sign_out(account: State<'_, Account>) -> Result<(), String> {
     account.clear()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn settings_get(settings: State<'_, SettingsStore>) -> Settings {
     settings.get()
 }
@@ -330,12 +362,13 @@ pub fn settings_get(settings: State<'_, SettingsStore>) -> Settings {
 /// Changes the settings named in `patch`, applies the ones mpv owns, and
 /// returns all of them.
 #[tauri::command]
+#[specta::specta]
 pub fn settings_set<R: Runtime>(
     app: tauri::AppHandle<R>,
     settings: State<'_, SettingsStore>,
-    patch: serde_json::Value,
+    patch: SettingsPatch,
 ) -> Result<Settings, String> {
-    let next = settings.update(patch)?;
+    let next = settings.update(patch.to_json())?;
     if let Some(player) = app.try_state::<Player>() {
         player.apply_settings(&next);
     }
@@ -346,6 +379,7 @@ pub fn settings_set<R: Runtime>(
 /// A release newer than this build, if there is one. Prereleases count when
 /// the settings say so.
 #[tauri::command]
+#[specta::specta]
 pub async fn update_check<R: Runtime>(
     app: tauri::AppHandle<R>,
     settings: State<'_, SettingsStore>,
@@ -357,6 +391,7 @@ pub async fn update_check<R: Runtime>(
 /// Opens the folder `tauri-plugin-log` writes to, for attaching a log to a bug
 /// report.
 #[tauri::command]
+#[specta::specta]
 pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -366,6 +401,7 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
 /// How many bytes the artwork cache takes on disk, the only cache with a size
 /// worth showing.
 #[tauri::command]
+#[specta::specta]
 pub async fn cache_size(images: State<'_, Images>) -> Result<u64, String> {
     let images = images.inner().clone();
     tauri::async_runtime::spawn_blocking(move || images.size())
@@ -378,6 +414,7 @@ pub async fn cache_size(images: State<'_, Images>) -> Result<u64, String> {
 /// caches, so the app fetches and draws as on a cold start. Cookies and
 /// storage stay. The frontend drops its in-memory pages itself.
 #[tauri::command]
+#[specta::specta]
 pub async fn cache_clear<R: Runtime>(
     app: tauri::AppHandle<R>,
     images: State<'_, Images>,

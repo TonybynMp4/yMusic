@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use super::{CoverArt, Library, Result};
+use super::{AudioCodec, CoverArt, Library, Result};
 
 /// Extensions mpv can decode and lofty can read tags from. Checked before
 /// opening anything, so a folder of JPEGs costs one string compare each.
@@ -32,7 +32,7 @@ pub fn is_supported_audio(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanReport {
     pub added: usize,
@@ -46,7 +46,7 @@ pub struct ScanReport {
     pub removed: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanFailure {
     pub path: String,
@@ -171,7 +171,7 @@ fn index_file(
             Some(ms as i64)
         }
     };
-    let codec = codec_name(tagged.file_type());
+    let codec = codec_of(tagged.file_type());
     let bitrate = properties.audio_bitrate().filter(|b| *b > 0);
 
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
@@ -366,20 +366,18 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
-/// Matches the `AudioCodec` enum in `@ymusic/core`.
-fn codec_name(file_type: FileType) -> String {
+fn codec_of(file_type: FileType) -> AudioCodec {
     match file_type {
-        FileType::Mpeg => "mp3",
-        FileType::Flac => "flac",
+        FileType::Mpeg => AudioCodec::Mp3,
+        FileType::Flac => AudioCodec::Flac,
         // Could also be ALAC; lofty does not expose the codec through the
         // generic handle, and the distinction does not change playback.
-        FileType::Mp4 => "aac",
-        FileType::Opus => "opus",
-        FileType::Vorbis => "vorbis",
-        FileType::Wav | FileType::Aiff => "pcm",
-        _ => "unknown",
+        FileType::Mp4 => AudioCodec::Aac,
+        FileType::Opus => AudioCodec::Opus,
+        FileType::Vorbis => AudioCodec::Vorbis,
+        FileType::Wav | FileType::Aiff => AudioCodec::Pcm,
+        _ => AudioCodec::Unknown,
     }
-    .to_string()
 }
 
 fn to_io(err: lofty::error::FileParseError) -> std::io::Error {

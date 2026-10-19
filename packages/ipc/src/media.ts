@@ -7,35 +7,14 @@
  * frontend owns the queue that "next" moves through.
  */
 
+import { Channel } from "@tauri-apps/api/core";
 import type { Track } from "@ymusic/core";
-import { z } from "zod";
 
+import type { MediaKeyEvent, MediaTrack } from "./bindings.ts";
 import { localPathFromArtUrl } from "./library.ts";
-import { invokeVoid, isTauri } from "./tauri.ts";
+import { call, isTauri } from "./tauri.ts";
 
-/** Mirrors the Rust `MediaKeyEvent`. */
-export const MediaKeyEvent = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("play") }),
-  z.object({ type: z.literal("pause") }),
-  z.object({ type: z.literal("toggle") }),
-  z.object({ type: z.literal("next") }),
-  z.object({ type: z.literal("previous") }),
-  z.object({ type: z.literal("stop") }),
-  z.object({ type: z.literal("seekBy"), offsetMs: z.number().int() }),
-  z.object({ type: z.literal("setPosition"), positionMs: z.number().int().nonnegative() }),
-  z.object({ type: z.literal("setVolume"), volume: z.number().min(0).max(1) }),
-]);
-export type MediaKeyEvent = z.infer<typeof MediaKeyEvent>;
-
-/** The payload `media_set_track` takes. */
-export interface MediaTrack {
-  title: string;
-  artist: string;
-  album: string | null;
-  coverUrl: string | null;
-  coverPath: string | null;
-  durationMs: number | null;
-}
+export type { MediaKeyEvent, MediaTrack } from "./bindings.ts";
 
 /**
  * Lifts a `Track` into what the OS shows. The largest thumbnail, because the
@@ -60,13 +39,13 @@ export function toMediaTrack(track: Track, durationMs: number | null): MediaTrac
 
 export async function mediaSetTrack(track: MediaTrack | null): Promise<void> {
   if (!isTauri) return;
-  await invokeVoid("media_set_track", { track });
+  await call("mediaSetTrack", track);
 }
 
 /** A slider position in 0..1, as the player takes it. */
 export async function mediaSetVolume(volume: number): Promise<void> {
   if (!isTauri) return;
-  await invokeVoid("media_set_volume", { volume });
+  await call("mediaSetVolume", volume);
 }
 
 /**
@@ -76,20 +55,13 @@ export async function mediaSetVolume(volume: number): Promise<void> {
 export function subscribeMediaKeys(listener: (event: MediaKeyEvent) => void): () => void {
   let active = true;
   if (isTauri) {
-    void (async () => {
-      const { Channel } = await import("@tauri-apps/api/core");
-      const channel = new Channel<unknown>();
-      channel.onmessage = (message) => {
-        if (!active) return;
-        const parsed = MediaKeyEvent.safeParse(message);
-        if (!parsed.success) {
-          console.error("dropping malformed media key event", parsed.error, message);
-          return;
-        }
-        listener(parsed.data);
-      };
-      await invokeVoid("media_subscribe", { channel });
-    })().catch((error: unknown) => console.error("could not subscribe to media keys", error));
+    const channel = new Channel<MediaKeyEvent>();
+    channel.onmessage = (event) => {
+      if (active) listener(event);
+    };
+    call("mediaSubscribe", channel).catch((error: unknown) =>
+      console.error("could not subscribe to media keys", error),
+    );
   }
   return () => {
     active = false;

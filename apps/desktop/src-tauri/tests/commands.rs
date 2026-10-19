@@ -21,7 +21,7 @@ use ymusic_lib::{
     platform::media::MediaSession,
     playback::{EventSink, PlaybackEvent, Player},
     settings::SettingsStore,
-    ymusic_commands,
+    ymusic_invoke_handler,
 };
 
 /// Flips once mpv reports a position, which only happens after `loadfile` has
@@ -54,7 +54,7 @@ fn every_command_is_reachable_over_ipc() {
     std::env::set_var("YMUSIC_AUDIO_OUTPUT", "null");
 
     let app = mock_builder()
-        .invoke_handler(ymusic_commands!())
+        .invoke_handler(ymusic_invoke_handler!(tauri::test::MockRuntime))
         .build(tauri::generate_context!())
         .expect("mock app");
     let player = Player::new().expect("libmpv");
@@ -179,7 +179,7 @@ fn every_command_is_reachable_over_ipc() {
 #[test]
 fn http_fetch_reads_a_raw_frame_over_ipc() {
     let app = mock_builder()
-        .invoke_handler(ymusic_commands!())
+        .invoke_handler(ymusic_invoke_handler!(tauri::test::MockRuntime))
         .build(tauri::generate_context!())
         .expect("mock app");
     app.manage(ymusic_lib::http::Http::new());
@@ -217,7 +217,7 @@ fn http_fetch_reads_a_raw_frame_over_ipc() {
 #[test]
 fn settings_round_trip_over_ipc() {
     let app = mock_builder()
-        .invoke_handler(ymusic_commands!())
+        .invoke_handler(ymusic_invoke_handler!(tauri::test::MockRuntime))
         .build(tauri::generate_context!())
         .expect("mock app");
     app.manage(SettingsStore::in_memory());
@@ -251,7 +251,7 @@ fn settings_round_trip_over_ipc() {
 #[test]
 fn library_commands_round_trip_over_ipc() {
     let app = mock_builder()
-        .invoke_handler(ymusic_commands!())
+        .invoke_handler(ymusic_invoke_handler!(tauri::test::MockRuntime))
         .build(tauri::generate_context!())
         .expect("mock app");
 

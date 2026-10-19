@@ -3,6 +3,7 @@
 How the parts that are built work, and why they are built that way. Plans for what is not built yet live in [PLAN.md](../PLAN.md).
 
 - [Architecture](architecture.md): the Tauri shell, platform integration, libraries and the monorepo layout.
+- [The window](window.md): size, position and maximized state across restarts.
 - [Playback](playback.md): libmpv, stream leases and volume.
 - [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution, PO tokens, reporting plays, search history, resume, and the queue across restarts.
 - [Search](search.md): YouTube Music's results, chips and why one request covers All.

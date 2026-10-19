@@ -1,7 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { defaultSettings, fullVolume, playerSavedVolume, settingsGet } from "@ymusic/ipc";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App.tsx";
+import { queryClient } from "./query.ts";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
 
@@ -29,8 +31,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     {/* One provider for the whole app, so tooltips share a hover timer: once
         one is open, moving along a row of transport buttons shows the next
         immediately instead of waiting out the delay again. */}
-    <TooltipProvider delay={400}>
-      <App settings={settings} volume={volume} />
-    </TooltipProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider delay={400}>
+        <App settings={settings} volume={volume} />
+      </TooltipProvider>
+    </QueryClientProvider>
   </React.StrictMode>,
 );

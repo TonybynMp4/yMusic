@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 import type { SearchFilter, SearchResults } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { queryClient } from "./query.ts";
 
 export interface YouTubeSearchState {
   /** The results for `filter`, or null before the first arrive. */
@@ -36,14 +38,16 @@ interface Page {
   more: string | null;
 }
 
-interface Loaded {
-  results: SearchResults | null;
-  more: string | null;
-  loadingMore: boolean;
-  /** The filter `results` answer, so a chip never shows another chip's rows. */
-  filter: SearchFilter | null;
-  loading: boolean;
-  error: string | null;
+type Pages = InfiniteData<Page, string | null>;
+
+function searchKey(signedIn: boolean, query: string, filter: SearchFilter | null) {
+  return ["search", signedIn, query, filter ?? "all"] as const;
+}
+
+/** Every page of a chip so far, as one answer. */
+function combined(data: Pages): SearchResults {
+  const [first, ...rest] = data.pages;
+  return rest.reduce((results, page) => appended(results, page.results), first!.results);
 }
 
 /**
@@ -52,8 +56,10 @@ interface Loaded {
  * failure so the next search starts clean.
  *
  * One request per query, unfiltered, and one more for each chip opened, then
- * one per further page of that chip. The answers are kept until the query
- * changes, so going back to a chip already seen costs nothing.
+ * one per further page of that chip: a chip is an infinite query whose page
+ * parameter is the engine's handle. The answers are kept until the query
+ * changes, so going back to a chip already seen costs nothing. A page that
+ * fails to load ends the chip there, keeping what arrived.
  *
  * Searches made while typing go out without the account, even with
  * `onAccount`: YouTube records every signed-in search, so each pause in typing
@@ -65,16 +71,7 @@ export function useYouTubeSearch(
   enabled: boolean,
   onAccount: boolean,
 ): YouTubeSearchState {
-  const [loaded, setLoaded] = useState<Loaded>({
-    results: null,
-    more: null,
-    loadingMore: false,
-    filter: null,
-    loading: false,
-    error: null,
-  });
   const [filter, setFilter] = useState<SearchFilter | null>(null);
-  const [filters, setFilters] = useState<SearchFilter[]>([]);
   // A new query starts on everything, as in YouTube Music.
   const [filterQuery, setFilterQuery] = useState(query);
   if (filterQuery !== query) {
@@ -84,141 +81,123 @@ export function useYouTubeSearch(
   const [submitted, setSubmitted] = useState<string | null>(null);
   // Only the query as submitted searches with the account. Typing away and
   // back to the same text is typing again, so it no longer counts.
-  if (submitted !== null && query.trim() !== submitted) setSubmitted(null);
+  const trimmed = query.trim();
+  if (submitted !== null && trimmed !== submitted) setSubmitted(null);
   const recorded = useRef<string | null>(null);
-  const cache = useRef(new Map<string, Page>());
-  // The cache key of what is on screen, so a page that arrives after the
-  // query or chip changed is kept for later but not shown.
-  const shown = useRef<string | null>(null);
 
+  // The text searched, which trails what is typed. Longer than the library's
+  // 150ms: this one leaves the machine, and a request per keystroke is both
+  // slow and a good way to get rate limited. A chip is one click and a
+  // submitted query is a key press, so they go at once, as does an answer
+  // already here.
+  const signedInFor = (text: string) => onAccount && text === submitted;
+  const [settled, setSettled] = useState(trimmed);
+  const now =
+    trimmed === "" ||
+    filter !== null ||
+    signedInFor(trimmed) ||
+    queryClient.getQueryData(searchKey(signedInFor(trimmed), trimmed, filter)) !== undefined;
+  if (now && settled !== trimmed) setSettled(trimmed);
+  const asked = now ? trimmed : settled;
   useEffect(() => {
-    if (!enabled) return;
-    const trimmed = query.trim();
-    if (trimmed.length === 0) {
-      shown.current = null;
-      setLoaded({ ...EMPTY, filter: null });
-      setFilters([]);
-      return;
-    }
-    const signedIn = onAccount && trimmed === submitted;
-    const prefix = `${signedIn}|${trimmed}|`;
-    for (const key of cache.current.keys()) {
-      if (!key.startsWith(prefix)) cache.current.delete(key);
-    }
-    const key = prefix + (filter ?? "all");
-    shown.current = key;
-    const show = ({ results, more }: Page) => {
-      setLoaded({ ...EMPTY, results, more, filter });
-      if (filter === null) setFilters(results.filters);
-    };
-    const cached = cache.current.get(key);
-    if (cached) {
-      show(cached);
-      return;
-    }
+    if (asked === trimmed) return;
+    const timer = setTimeout(() => setSettled(trimmed), 350);
+    return () => clearTimeout(timer);
+  }, [asked, trimmed]);
 
-    let cancelled = false;
-    setLoaded((s) => ({ ...s, loading: true, more: null, loadingMore: false }));
-    // Longer than the library's 150ms: this one leaves the machine, and a
-    // request per keystroke is both slow and a good way to get rate limited.
-    // A chip is one click and a submitted query is a key press, so they go at once.
-    const timer = setTimeout(
-      () => {
-        void (async () => {
-          try {
-            const page = await engine.search(trimmed, { signedOut: !signedIn, filter });
-            cache.current.set(key, page);
-            if (!cancelled) show(page);
-          } catch (error) {
-            if (!cancelled) {
-              setLoaded({ ...EMPTY, filter, error: describe(error) });
-            }
-          }
-        })();
-      },
-      filter === null && !signedIn ? 350 : 0,
-    );
+  const signedIn = signedInFor(asked);
+  const filterKey = filter ?? "all";
+  const search = useInfiniteQuery({
+    queryKey: searchKey(signedIn, asked, filter),
+    queryFn: ({ pageParam }): Promise<Page> =>
+      pageParam === null
+        ? engine.search(asked, { signedOut: !signedIn, filter })
+        : engine.searchMore(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.more,
+    select: combined,
+    enabled: enabled && asked !== "",
+    // Dropped below when the query changes, not by time.
+    gcTime: Infinity,
+    // A chip whose next page failed keeps what it has rather than refetching.
+    refetchOnMount: false,
+    // The last answer for this chip stays up while the next query's loads; a
+    // chip never shows another chip's rows.
+    placeholderData: (previous, previousQuery) =>
+      asked !== "" && previousQuery?.queryKey[3] === filterKey ? previous : undefined,
+  });
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, enabled, onAccount, submitted, filter]);
+  // Only the current query's answers are kept.
+  useEffect(() => {
+    if (asked === "") return;
+    queryClient.removeQueries({
+      queryKey: ["search"],
+      predicate: ({ queryKey }) => queryKey[1] !== signedIn || queryKey[2] !== asked,
+    });
+  }, [asked, signedIn]);
 
   const submit = useCallback(
     (next: string) => {
-      const trimmed = next.trim();
-      if (!onAccount || trimmed.length === 0) return;
-      recorded.current = trimmed;
-      setSubmitted(trimmed);
+      const text = next.trim();
+      if (!onAccount || text.length === 0) return;
+      recorded.current = text;
+      setSubmitted(text);
     },
     [onAccount],
   );
 
   const record = useCallback(
     (next: string) => {
-      const trimmed = next.trim();
+      const text = next.trim();
       // Playing a second result from the same search records nothing new.
-      if (!onAccount || trimmed.length === 0 || trimmed === recorded.current) return;
-      recorded.current = trimmed;
+      if (!onAccount || text.length === 0 || text === recorded.current) return;
+      recorded.current = text;
       engine
-        .search(trimmed, { signedOut: false })
+        .search(text, { signedOut: false })
         .catch((error: unknown) => console.error("could not record a search", error));
     },
     [onAccount],
   );
 
+  const results = asked === "" ? null : (search.data ?? null);
+  const hasMore = filter !== null && search.hasNextPage && !search.isFetchNextPageError;
   // YouTube Music loads a chip's next rows as the list's end scrolls into view.
-  const { more, loadingMore } = loaded;
+  const { fetchNextPage, isFetchingNextPage } = search;
   const loadMore = useCallback(() => {
-    const key = shown.current;
-    if (more === null || loadingMore || key === null) return;
-    setLoaded((s) => ({ ...s, loadingMore: true }));
-    void (async () => {
-      let next: Page | null = null;
-      try {
-        const page = await engine.searchMore(more);
-        const before = cache.current.get(key);
-        const results = before ? appended(before.results, page.results) : page.results;
-        next = { results, more: page.more };
-        cache.current.set(key, next);
-      } catch (error) {
-        // What arrived stays; the chip just ends there, so the cache must
-        // not offer the handle again either.
-        console.error("could not load more search results", error);
-        const before = cache.current.get(key);
-        if (before) cache.current.set(key, { ...before, more: null });
-      }
-      if (shown.current !== key) return;
-      setLoaded((s) =>
-        next ? { ...s, ...next, loadingMore: false } : { ...s, more: null, loadingMore: false },
-      );
-    })();
-  }, [more, loadingMore]);
+    if (!hasMore || isFetchingNextPage) return;
+    void fetchNextPage().then(
+      ({ isFetchNextPageError, error }) =>
+        isFetchNextPageError && console.error("could not load more search results", error),
+    );
+  }, [hasMore, isFetchingNextPage, fetchNextPage]);
 
-  const current = loaded.filter === filter;
+  // The chips come from the unfiltered answer, kept while one is selected.
+  const unfiltered =
+    filter === null
+      ? results
+      : combinedOrNull(queryClient.getQueryData<Pages>(searchKey(signedIn, asked, null)));
   return {
-    results: current ? loaded.results : null,
-    loading: loaded.loading || !current,
-    error: current ? loaded.error : null,
+    results,
+    loading:
+      asked !== trimmed ||
+      search.isPlaceholderData ||
+      (search.isFetching && !isFetchingNextPage),
+    error:
+      search.isError && search.data === undefined ? describe(search.error) : null,
     filter,
     setFilter,
-    filters,
-    hasMore: current && filter !== null && more !== null,
-    loadingMore: current && loadingMore,
+    filters: unfiltered?.filters ?? [],
+    hasMore,
+    loadingMore: isFetchingNextPage,
     loadMore,
     submit,
     record,
   };
 }
 
-const EMPTY: Omit<Loaded, "filter"> = {
-  results: null,
-  more: null,
-  loadingMore: false,
-  loading: false,
-  error: null,
-};
+function combinedOrNull(data: Pages | undefined): SearchResults | null {
+  return data ? combined(data) : null;
+}
 
 /** `next` page's rows after `results`', shelf by shelf. */
 function appended(results: SearchResults, next: SearchResults): SearchResults {

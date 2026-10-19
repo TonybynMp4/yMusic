@@ -1,10 +1,20 @@
 # Browse pages and long lists
 
-Album, artist and playlist pages load through `useBrowse.ts`, which keeps every page opened this run, so going back is instant and a long playlist keeps loading while you look at something else. A page that failed to open is forgotten once you leave it, so opening it again retries.
+Album, artist and playlist pages load through `useBrowse.ts`, which keeps the pages opened this run, so going back is instant and a long playlist keeps loading while you look at something else. A page that failed to open is fetched again the next time it is opened.
+
+## The cache
+
+Pages live in the app's TanStack Query client (`query.ts`), one query per page under `["browse", kind, id]`, and each query calls the engine worker. The queue and the menus read the same queries from outside React (`browseState`, `followPlaylist`, `settledPage`), so a page is fetched once whoever asks for it.
+
+- **Fresh for the run.** A page fetched this run is not fetched again unless something marks it stale: saving to a playlist, editing one, or Refresh (`refreshPage`). A stale page keeps showing while its new copy loads, and only a page on screen or followed by the queue refetches at once; any other waits for the next look.
+- **Ten pages.** The cache keeps the 10 most recently opened pages (`capQueries` in `query.ts`, see [Memory](memory.md#the-browse-page-cache)). Query's own garbage collection is by time, so it is off for pages (`gcTime: Infinity`) and the cap counts instead.
+- **A seam for a persister.** Data stamped before this run started counts as stale, so a page a persister restores shows at once and is fetched again in the background. That is how the SQLite page cache in [the plan](../PLAN.md) would plug in: restore into the client, and the rest already works.
 
 ## Long playlists
 
 YouTube serves a playlist a hundred rows at a time, each page a round trip, so a liked-songs list of two thousand songs takes twenty requests. The engine returns the first page with a handle for the next (a youtubei.js continuation is a closure, so it stays in the worker), and the page shows as soon as the first hundred rows arrive.
+
+A playlist is one query whose fetch streams: it writes the rows gathered so far into the cache as it goes, and settles when the last page lands or a page fails. `useInfiniteQuery` would render once per page, and its refetch rebuilds every page from the start, dropping edits made meanwhile and blanking the rows already shown. Search, which pages only when you scroll, does use it.
 
 - **The first page** is tried twice, half a second apart, before the page shows an error. A long playlist's first request is the slow one, and one that timed out often works straight after.
 - **The rest** arrives in the background. Rows are gathered and shown at most every 250 ms, and at once when the last page lands, rather than once per page: each showing re-renders the page and updates a queue playing the playlist.

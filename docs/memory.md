@@ -28,7 +28,7 @@ The web process did not measurably change. It ends near 330 MB or near 480 to 57
 
 ### The browse page cache
 
-`useBrowse.ts` keeps the 10 most recently opened pages and drops the oldest past that. A page on screen, followed by the queue, or still loading is never dropped. Going back to a dropped page fetches it again, and `App.tsx` reapplies the saved scroll offset as the page grows back, until it reaches the offset or you scroll.
+`useBrowse.ts` keeps the 10 most recently opened pages in the Query client and drops the least recently opened past that (`capQueries` in `query.ts`). A page on screen, followed by the queue, or still loading is never dropped. Going back to a dropped page fetches it again, and `App.tsx` reapplies the saved scroll offset as the page grows back, until it reaches the offset or you scroll.
 
 The cache was smaller than it looked. Parsed in Node, the scenario's 30 artist, album and playlist pages come to 1.3 MB as JSON and its two thousand-row playlists to 1 MB, so the 20 pages the cap drops held one to three megabytes, and each page opened past ten adds roughly 50 to 150 KB. That is too small to show against the run-to-run spread (`docs/memory/browse-lru/`): the core ends within noise of the build before and the web process's peak does not move. The cap is there so an evening of browsing cannot grow without end, not for a saving the scenario can see.
 
@@ -48,7 +48,7 @@ The scenario cannot see either change (`docs/memory/fallback-resident/`). Every 
 
 ### Small maps
 
-Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved YouTube song so going back to it skips a request, and now drops the expired ones each time it stores a new lease; a lease lasts a few hours, so a long session no longer keeps one per song it ever played. A local file's lease never expires, so it is not kept at all: pruning would never drop it, and resolving the file again only reads the disk. `useSongYear.ts` caches each song's release year for the session and now keeps the latest 500.
+Two maps in the page only grew. `usePlayer.ts` keeps a stream lease per resolved YouTube song so going back to it skips a request, and now drops the expired ones each time it stores a new lease; a lease lasts a few hours, so a long session no longer keeps one per song it ever played. A local file's lease never expires, so it is not kept at all: pruning would never drop it, and resolving the file again only reads the disk. `useSongYear.ts` caches each song's release year for the session and now keeps the latest 500, skipping lookups still on screen.
 
 Each entry is a few hundred bytes, so the scenario cannot see the change (`docs/memory/small-maps/`): every web and total number ends within noise of the build before. Signed in, the core reads 6 MB higher, but this change does not touch the core, and the before runs were so close together (121 MB each) that any difference clears the noise line. This is about a session that runs for days, not a saving an 11 minute run shows.
 

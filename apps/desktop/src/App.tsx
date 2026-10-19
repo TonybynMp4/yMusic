@@ -27,6 +27,7 @@ import { useAccount } from "./useAccount.ts";
 import { forgetPage, viewKey, type View } from "./useBrowse.ts";
 import { tracksIn, useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
+import { useMediaQuery } from "./useMediaQuery.ts";
 import { forgetSaved } from "./useSavedLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
@@ -55,6 +56,11 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   /** Scroll offsets by history depth, so Back lands where you left. */
   const scrolls = useRef<number[]>([]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
+  // Below 768 px the sidebar starts collapsed whatever was saved, as YouTube
+  // Music's guide does. Expanding it there lasts until the window widens.
+  const narrow = useMediaQuery("(max-width: 767px)");
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  if (!narrow && narrowExpanded) setNarrowExpanded(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
@@ -87,11 +93,13 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
 
-  const toggleSidebar = () =>
+  const toggleSidebar = () => {
+    if (narrow) return setNarrowExpanded((e) => !e);
     setCollapsed((c) => {
       localStorage.setItem(SIDEBAR_KEY, c ? "0" : "1");
       return !c;
     });
+  };
   const go = (next: View | null) => {
     setExpanded(false);
     setHistory((entries) => {
@@ -270,7 +278,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
           {/* Outside the area the expanded player covers, so the library stays
               reachable with the player open. */}
           <Sidebar
-            collapsed={collapsed}
+            collapsed={narrow ? !narrowExpanded : collapsed}
             onToggleCollapsed={toggleSidebar}
             current={expanded ? "player" : view ? viewKey(view) : null}
             onSearch={showSearch}
@@ -295,7 +303,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                 search and settings stay reachable with the player open. */}
             <div className="flex items-center gap-3 px-4 py-3">
               {(depth > 0 || expanded) && (
-                <IconButton label="Back" size="icon" onClick={back}>
+                <IconButton label="Back" size="icon" onClick={back} className="shrink-0">
                   <IconArrowLeft size={18} stroke={1.75} />
                 </IconButton>
               )}

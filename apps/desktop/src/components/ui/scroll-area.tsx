@@ -18,7 +18,7 @@ function ScrollArea({
   ...props
 }: React.ComponentProps<"div"> & {
   /** The element that actually scrolls, for virtualized lists and scroll restoration. */
-  viewportRef?: React.Ref<HTMLDivElement>
+  viewportRef?: ((element: HTMLDivElement | null) => void) | undefined
 }) {
   const viewport = React.useRef<HTMLDivElement | null>(null)
   const track = React.useRef<HTMLDivElement>(null)
@@ -26,8 +26,7 @@ function ScrollArea({
   const setViewport = React.useCallback(
     (element: HTMLDivElement | null) => {
       viewport.current = element
-      if (typeof viewportRef === "function") return viewportRef(element)
-      if (viewportRef) viewportRef.current = element
+      viewportRef?.(element)
     },
     [viewportRef],
   )

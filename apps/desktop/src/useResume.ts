@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { queueLoad } from "@ymusic/ipc";
 import type { QueueFrom } from "@ymusic/ipc";
 import { isSharedQueue, type ServerQueue } from "@ymusic/youtube/host";
@@ -35,8 +35,7 @@ export function useResume(
   const { cue, restore } = player;
   const empty = player.queue.cursor === null;
   /** Read when the answer arrives, since the user may have started something meanwhile. */
-  const stillEmpty = useRef(empty);
-  stillEmpty.current = empty;
+  const stillEmpty = useEffectEvent(() => empty);
 
   useEffect(() => {
     if (!accountReady || launched.current) return;
@@ -54,7 +53,7 @@ export function useResume(
           return null;
         });
       }
-      if (!stillEmpty.current) return;
+      if (!stillEmpty()) return;
       const local = saved.queue;
       const ours =
         local?.shared != null &&
@@ -68,12 +67,12 @@ export function useResume(
 
   useEffect(() => {
     if (!launched.current || account === null || asked.current === account) return;
-    if (!stillEmpty.current) return;
+    if (!stillEmpty()) return;
     asked.current = account;
     void engine
       .serverQueue()
       .then((queue) => {
-        if (queue && stillEmpty.current) {
+        if (queue && stillEmpty()) {
           cue(queue.tracks, queue.index, queue.playlistId, fromOf(queue));
         }
       })

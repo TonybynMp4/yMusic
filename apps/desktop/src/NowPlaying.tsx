@@ -1,4 +1,4 @@
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -104,7 +104,9 @@ export function NowPlaying(props: Props) {
    */
   const unmuted = useRef(props.unmutedVolume);
   const draggingVolume = useRef(false);
-  if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
+  useEffect(() => {
+    if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
+  }, [volume, props.volume]);
   // Shared by the inline slider and the vertical one in the narrow popup.
   const volumeSlider = {
     min: 0,

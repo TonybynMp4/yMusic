@@ -96,6 +96,7 @@ export function useYouTubeSearch(
     const trimmed = query.trim();
     if (trimmed.length === 0) {
       shown.current = null;
+      // oxlint-disable-next-line react/set-state-in-effect -- the page cache is a ref, so a cached page and the loading state are only known here
       setLoaded({ ...EMPTY, filter: null });
       setFilters([]);
       return;

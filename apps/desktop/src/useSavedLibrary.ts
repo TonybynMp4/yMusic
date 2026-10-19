@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { BrowseCard, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -170,14 +170,11 @@ export function useSaved(
   // Read for the re-render: after `forgetSaved`, `entryFor` makes a new entry.
   useSyncExternalStore(subscribeForgotten, () => generation);
   const entry = account === null || kind === null ? null : entryFor(account, kind, sort);
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      if (entry === null) return () => {};
-      entry.listeners.add(listener);
-      return () => void entry.listeners.delete(listener);
-    },
-    [entry],
-  );
+  const subscribe = (listener: () => void) => {
+    if (entry === null) return () => {};
+    entry.listeners.add(listener);
+    return () => void entry.listeners.delete(listener);
+  };
   const state = useSyncExternalStore(subscribe, () => entry?.state ?? idle);
   // A failure is forgotten once its chip is left, so opening it again retries.
   useEffect(

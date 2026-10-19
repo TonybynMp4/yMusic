@@ -97,7 +97,6 @@ async function find(state, target) {
 }
 
 async function start(flags) {
-  if (readState()) fail("already running, run `stop` first");
   if (await portOpen(driverPort)) fail(`port ${driverPort} is taken, is another tauri-driver running?`);
   if (!existsSync("/usr/bin/WebKitWebDriver"))
     fail("WebKitWebDriver is missing: sudo apt install webkitgtk-webdriver");
@@ -250,9 +249,10 @@ try {
 async function run() {
   switch (command) {
     case "start":
+      if (readState()) fail("already running, run `stop` first");
       // A failed start stops whatever it got running, and the key file with it.
       await start(flags).catch(async (error) => {
-        if (readState() && !error.message.startsWith("already running")) await stop();
+        if (readState()) await stop();
         throw error;
       });
       break;

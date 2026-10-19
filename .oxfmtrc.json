@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "**/dist/**",
+    "**/src-tauri/**",
+    "**/*.tsbuildinfo",
+    // Recorded InnerTube responses and generated bench reports.
+    "**/fixtures/**",
+    "docs/memory/**",
+    // Formatted for TypeScript, JSON, CSS and Markdown only.
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.html"
+  ]
+}

@@ -18,11 +18,14 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint --deny-warnings",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "test": "turbo run test",
     "tauri": "pnpm --filter @ymusic/desktop tauri",
     "app": "pnpm --filter @ymusic/desktop tauri dev"
   },
   "devDependencies": {
+    "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",
     "turbo": "^2.11.8",
     "typescript": "^7.0.2"

@@ -17,7 +17,7 @@ There is no JS side. The plugin restores the window from Rust as it is built, so
 
 ### No flash at the default size
 
-The window starts hidden (`"visible": false` in `tauri.conf.json`). Tauri initialises plugins before it builds the windows from the config, and the plugin restores each window as it is built, so by the time `setup` runs the hidden window already has its saved size and position. `setup` shows it once mpv has started. If mpv fails, the window stays hidden behind the error dialog, as before.
+The window starts hidden (`"visible": false` in `tauri.conf.json`). Tauri initialises plugins before it builds the windows from the config, and the plugin restores each window as it is built, so by the time `setup` runs the hidden window already has its saved size and position. `setup` shows it as its last step, once mpv has started and all the state the page can call into is in place. If mpv fails, the window stays hidden behind the error dialog, as before.
 
 The window-state plugin is registered after single-instance, so a second launch still hands over to the running window before anything else happens. The single-instance callback and the tray both go through `tray::show_window`, which un-minimizes, shows and focuses the window and leaves its size alone.
 

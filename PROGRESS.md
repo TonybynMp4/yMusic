@@ -146,6 +146,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Search history, local or the account's
 - [ ] Playback errors shown in a better place than red text over the player bar (prototype the options first)
 - [ ] Song and video switch
+- [ ] Window position restored after the tray and restarts (Wayland needs xdg-session-management, see PLAN.md)
 - [ ] Home and Explore pages
 - [x] Saved albums and artists in the library
 - [ ] Local playlists

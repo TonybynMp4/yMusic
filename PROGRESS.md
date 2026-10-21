@@ -153,6 +153,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
 - [ ] Canvas from Spotify, as a plugin
+- [ ] AI music filter, as a plugin
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots
 - [ ] Plugin backends on Deno over tRPC
 - [ ] Flatpak

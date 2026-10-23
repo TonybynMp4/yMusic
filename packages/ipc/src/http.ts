@@ -60,10 +60,7 @@ export function youtubeHeaders(input: RequestInfo | URL, init?: RequestInit): He
  * Node tests and probe scripts on exactly the same code path. Node sends no
  * `Origin` at all, which is why this gap was invisible until the app ran.
  */
-export async function appFetch(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
+export async function appFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   if (!isTauri) return globalThis.fetch(input, init);
   const request = input instanceof Request ? input : null;
   let body = new Uint8Array();

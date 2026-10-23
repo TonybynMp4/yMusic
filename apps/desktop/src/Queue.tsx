@@ -1,9 +1,4 @@
-import {
-  IconArrowDown,
-  IconArrowUp,
-  IconGripVertical,
-  IconX,
-} from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconGripVertical, IconX } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
 import type { QueueFrom } from "@ymusic/ipc";
 import {

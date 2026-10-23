@@ -34,7 +34,11 @@ describe("searchHistoryFrom", () => {
           searchSuggestionsSectionRenderer: {
             contents: [
               { searchSuggestionRenderer: {} } as never,
-              { historySuggestionRenderer: { suggestion: { runs: [{ text: "bo" }, { text: "ards" }] } } },
+              {
+                historySuggestionRenderer: {
+                  suggestion: { runs: [{ text: "bo" }, { text: "ards" }] },
+                },
+              },
             ],
           },
         },

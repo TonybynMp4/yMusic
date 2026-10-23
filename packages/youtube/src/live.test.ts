@@ -34,26 +34,36 @@ live("search against the real InnerTube", () => {
     expect(withArt.length).toBeGreaterThan(tracks.length / 2);
   });
 
-  it("sorts an unfiltered search into kinds and offers its chips", { timeout: 30_000 }, async () => {
-    const youtube = await createYouTube({ fetch: globalThis.fetch });
-    const { results } = await searchMusic(youtube, "daft punk");
-    // The rows come mixed, one per section; if YouTube regroups them into
-    // shelves again, or youtubei.js renames a kind, this is where it shows.
-    // Which kinds make it in varies: some answers for this query hold only
-    // albums and songs, so videos and playlists are left to the fixtures.
-    const kinds = results.shelves.map((shelf) => shelf.filter);
-    expect(kinds).toEqual(expect.arrayContaining(["songs", "albums"]));
-    expect(results.filters).toEqual(expect.arrayContaining(["songs", "videos", "albums", "artists"]));
-    expect(results.top).not.toBeNull();
-  });
+  it(
+    "sorts an unfiltered search into kinds and offers its chips",
+    { timeout: 30_000 },
+    async () => {
+      const youtube = await createYouTube({ fetch: globalThis.fetch });
+      const { results } = await searchMusic(youtube, "daft punk");
+      // The rows come mixed, one per section; if YouTube regroups them into
+      // shelves again, or youtubei.js renames a kind, this is where it shows.
+      // Which kinds make it in varies: some answers for this query hold only
+      // albums and songs, so videos and playlists are left to the fixtures.
+      const kinds = results.shelves.map((shelf) => shelf.filter);
+      expect(kinds).toEqual(expect.arrayContaining(["songs", "albums"]));
+      expect(results.filters).toEqual(
+        expect.arrayContaining(["songs", "videos", "albums", "artists"]),
+      );
+      expect(results.top).not.toBeNull();
+    },
+  );
 
-  it("finds YouTube Music's own playlists apart from the community's", { timeout: 30_000 }, async () => {
-    const youtube = await createYouTube({ fetch: globalThis.fetch });
-    const { results: featured } = await searchMusic(youtube, "daft punk", "featured-playlists");
-    const [shelf] = featured.shelves;
-    expect(shelf?.filter).toBe("featured-playlists");
-    expect(shelf?.kind === "cards" && shelf.cards.length).toBeGreaterThan(0);
-  });
+  it(
+    "finds YouTube Music's own playlists apart from the community's",
+    { timeout: 30_000 },
+    async () => {
+      const youtube = await createYouTube({ fetch: globalThis.fetch });
+      const { results: featured } = await searchMusic(youtube, "daft punk", "featured-playlists");
+      const [shelf] = featured.shelves;
+      expect(shelf?.filter).toBe("featured-playlists");
+      expect(shelf?.kind === "cards" && shelf.cards.length).toBeGreaterThan(0);
+    },
+  );
 
   it("loads a chip's next page", { timeout: 30_000 }, async () => {
     const youtube = await createYouTube({ fetch: globalThis.fetch });
@@ -235,21 +245,26 @@ live("browse pages against the real InnerTube", () => {
 });
 
 live("playback reporting against the real InnerTube", () => {
-  it("gets the tracking URLs history and watch time go to", { timeout: 60_000 }, async (context) => {
-    const [youtube, player, signatureTimestamp] = await Promise.all([
-      createYouTube({ fetch: globalThis.fetch }),
-      createPlayer({ fetch: globalThis.fetch }),
-      fetchSignatureTimestamp(globalThis.fetch),
-    ]);
-    const tracking = await getPlaybackTracking(
-      youtube,
-      "lYBUbBu4W08" as VideoId,
-      signatureTimestamp,
-    );
-    // No tracking comes back from a bot check either. Resolving the same video
-    // tells that apart from YouTube having moved the URLs.
-    if (!tracking) await unlessBotChecked(context, resolveStream(player, "lYBUbBu4W08" as VideoId));
-    expect(tracking?.playbackUrl).toMatch(/\/api\/stats\/playback\?/);
-    expect(tracking?.watchtimeUrl).toMatch(/\/api\/stats\/watchtime\?/);
-  });
+  it(
+    "gets the tracking URLs history and watch time go to",
+    { timeout: 60_000 },
+    async (context) => {
+      const [youtube, player, signatureTimestamp] = await Promise.all([
+        createYouTube({ fetch: globalThis.fetch }),
+        createPlayer({ fetch: globalThis.fetch }),
+        fetchSignatureTimestamp(globalThis.fetch),
+      ]);
+      const tracking = await getPlaybackTracking(
+        youtube,
+        "lYBUbBu4W08" as VideoId,
+        signatureTimestamp,
+      );
+      // No tracking comes back from a bot check either. Resolving the same video
+      // tells that apart from YouTube having moved the URLs.
+      if (!tracking)
+        await unlessBotChecked(context, resolveStream(player, "lYBUbBu4W08" as VideoId));
+      expect(tracking?.playbackUrl).toMatch(/\/api\/stats\/playback\?/);
+      expect(tracking?.watchtimeUrl).toMatch(/\/api\/stats\/watchtime\?/);
+    },
+  );
 });

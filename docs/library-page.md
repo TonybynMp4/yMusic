@@ -4,11 +4,11 @@
 
 ## Chips
 
-- *Playlists*: the account's playlists (`FEmusic_liked_playlists`), with a "New playlist" tile in front. In YouTube's default order this is the sidebar's list, which stands in while the page loads its own.
-- *Songs*: the account's saved songs (`FEmusic_liked_videos`), always a list, with Shuffle all. The first page shows at once and the rest arrives a page at a time, through the same continuation handles as a long playlist.
-- *Albums*: the saved albums (`FEmusic_liked_albums`).
-- *Artists*: the artists of the songs in the library (`FEmusic_library_corpus_track_artists`). YouTube Music opens these on a library-only page (`MPLAUC…`); the app strips the prefix and opens the artist's own page.
-- *Local files*: "All local files", then each folder, with its cover image, song count and total length.
+- _Playlists_: the account's playlists (`FEmusic_liked_playlists`), with a "New playlist" tile in front. In YouTube's default order this is the sidebar's list, which stands in while the page loads its own.
+- _Songs_: the account's saved songs (`FEmusic_liked_videos`), always a list, with Shuffle all. The first page shows at once and the rest arrives a page at a time, through the same continuation handles as a long playlist.
+- _Albums_: the saved albums (`FEmusic_liked_albums`).
+- _Artists_: the artists of the songs in the library (`FEmusic_library_corpus_track_artists`). YouTube Music opens these on a library-only page (`MPLAUC…`); the app strips the prefix and opens the artist's own page.
+- _Local files_: "All local files", then each folder, with its cover image, song count and total length.
 
 Signed out, only Local files is left, and the chip row is hidden. The chip chosen last comes back when signing in again.
 
@@ -20,9 +20,8 @@ The account's lists take the sorts YouTube offers for each, in its own words, as
 
 Local files sort by Recently added, Recently played or A to Z:
 
-- *Recently added*: a folder counts as added when its newest file was first scanned (`added_at` in SQLite).
-- *Recently played*: the device's own record (`recent.ts`). When a local file starts playing, the app notes "All local files" and its folders. Anything that has not played here follows, in added order. The record keeps the 5000 most recent entries.
-- *A to Z*: by title, ignoring case and accents, with numbers in numeric order.
+- _Recently added_: a folder counts as added when its newest file was first scanned (`added_at` in SQLite).
+- _Recently played_: the device's own record (`recent.ts`). When a local file starts playing, the app notes "All local files" and its folders. Anything that has not played here follows, in added order. The record keeps the 5000 most recent entries.
+- _A to Z_: by title, ignoring case and accents, with numbers in numeric order.
 
 The layout is a grid or a list, for every chip but Songs, which is always a list. The chip, the sorts and the layout are saved in `localStorage`.
-

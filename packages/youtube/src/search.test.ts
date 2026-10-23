@@ -131,7 +131,9 @@ const shelfOf = (results: SearchResults, filter: string) =>
 const titles = (results: SearchResults, filter: string) => {
   const shelf = shelfOf(results, filter);
   if (!shelf) return [];
-  return shelf.kind === "tracks" ? shelf.tracks.map((t) => t.title) : shelf.cards.map((c) => c.title);
+  return shelf.kind === "tracks"
+    ? shelf.tracks.map((t) => t.title)
+    : shelf.cards.map((c) => c.title);
 };
 
 describe("resultsFrom, unfiltered", () => {
@@ -157,7 +159,11 @@ describe("resultsFrom, unfiltered", () => {
       "videos",
       "community-playlists",
     ]);
-    expect(titles(boc, "albums")).toEqual(["Inferno", "Music Has The Right To Children", "Geogaddi"]);
+    expect(titles(boc, "albums")).toEqual([
+      "Inferno",
+      "Music Has The Right To Children",
+      "Geogaddi",
+    ]);
     expect(titles(daft, "featured-playlists")).toEqual([
       "Presenting Daft Punk",
       "Indie Sleaze",
@@ -291,7 +297,10 @@ describe("resultsFrom, malformed", () => {
     const results = resultsFrom({
       contents: [
         { type: "ItemSection", contents: [{ type: "Message" }] },
-        { type: "MusicShelf", contents: [{ type: "MusicResponsiveListItem", item_type: "song", id: "a", title: "A" }] },
+        {
+          type: "MusicShelf",
+          contents: [{ type: "MusicResponsiveListItem", item_type: "song", id: "a", title: "A" }],
+        },
       ],
     });
     expect(titles(results, "songs")).toEqual(["A"]);

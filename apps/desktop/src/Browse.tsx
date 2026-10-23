@@ -496,10 +496,14 @@ export function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route
             "size-40 transition-opacity group-hover:opacity-80",
             round ? "rounded-full" : "rounded-md",
           )}
-          fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
+          fallback={
+            round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />
+          }
         />
         <span className={cn("min-w-0", round && "text-center")}>
-          <span className="line-clamp-2 text-sm group-focus-visible/open:underline">{card.title}</span>
+          <span className="line-clamp-2 text-sm group-focus-visible/open:underline">
+            {card.title}
+          </span>
           {card.subtitle && (
             <span className="block truncate text-xs text-muted-foreground">{card.subtitle}</span>
           )}

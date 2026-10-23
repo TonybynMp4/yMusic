@@ -90,7 +90,9 @@ interface RawQueueResponse {
 }
 
 function textOf(raw: RawRuns | null | undefined): string | null {
-  const text = (raw?.runs ?? []).map((run) => (typeof run.text === "string" ? run.text : "")).join("");
+  const text = (raw?.runs ?? [])
+    .map((run) => (typeof run.text === "string" ? run.text : ""))
+    .join("");
   return text === "" ? null : text;
 }
 
@@ -99,9 +101,9 @@ function textOf(raw: RawRuns | null | undefined): string | null {
  * drops. Exported for tests.
  */
 export function queueOriginFrom(raw: unknown): Pick<ServerQueue, "title" | "device"> {
-  const queue = (raw as RawQueueResponse | null)?.contents?.singleColumnMusicWatchNextResultsRenderer
-    ?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content
-    ?.musicQueueRenderer;
+  const queue = (raw as RawQueueResponse | null)?.contents
+    ?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer
+    ?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer;
   const restoration = queue?.musicQueueConfig?.musicQueueRestorationInfo;
   const byline =
     restoration?.onQueueRestoredCommand?.miniplayerAnnouncementCommand?.miniPlayerBylineRenderer

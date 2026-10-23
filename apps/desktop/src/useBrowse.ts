@@ -5,7 +5,9 @@ import { engine } from "./engine.ts";
 
 /** A browse page, by what opens it. The app's navigation stack holds these. */
 export type Route =
-  { kind: "album"; id: string } | { kind: "artist"; id: string } | { kind: "playlist"; id: string };
+  | { kind: "album"; id: string }
+  | { kind: "artist"; id: string }
+  | { kind: "playlist"; id: string };
 
 /**
  * Anything the main area can show besides search: a YouTube Music page, local

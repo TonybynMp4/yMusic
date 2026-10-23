@@ -16,7 +16,7 @@ export interface UseFrameSourceOptions {
 export const useFrameSource = <T>(
   source: FrameSource<T> | null | undefined,
   onFrame: (frame: T) => void,
-  { enabled = true }: UseFrameSourceOptions = {}
+  { enabled = true }: UseFrameSourceOptions = {},
 ): void => {
   const handleFrame = useEffectEvent(onFrame);
 

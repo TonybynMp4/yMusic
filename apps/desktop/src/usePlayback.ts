@@ -64,7 +64,9 @@ export function usePlayback() {
         setState((previous) => {
           switch (event.type) {
             case "status":
-              return previous.status === event.status ? previous : { ...previous, status: event.status };
+              return previous.status === event.status
+                ? previous
+                : { ...previous, status: event.status };
             case "position": {
               // Unchanged state is returned as is, so React skips the render.
               const durationMs = event.durationMs ?? previous.durationMs;

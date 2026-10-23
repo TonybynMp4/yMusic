@@ -77,7 +77,7 @@ export const useClipHold = ({
       update(true);
       scheduleRelease();
     },
-    [scheduleRelease, thresholdDb, update]
+    [scheduleRelease, thresholdDb, update],
   );
 
   const reset = useCallback(() => {

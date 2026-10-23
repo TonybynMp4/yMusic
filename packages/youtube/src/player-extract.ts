@@ -8,7 +8,12 @@ export const LIBRARY_VERSION: string = packageInfo.version;
 
 /** Analyses the player script's source, which is what costs the memory. */
 export async function extractPlayerScript(playerId: string, source: string): Promise<PlayerScript> {
-  const player = await Player.create(undefined, async () => new Response(source), undefined, playerId);
+  const player = await Player.create(
+    undefined,
+    async () => new Response(source),
+    undefined,
+    playerId,
+  );
   if (!player.data) throw new Error("youtubei.js extracted nothing from the player script");
   return { playerId, signatureTimestamp: player.signature_timestamp, data: player.data };
 }

@@ -41,7 +41,9 @@ export function useMediaSession(player: Player) {
           case "seekBy": {
             const target = current.position.get() + event.offsetMs;
             const duration = current.playback.durationMs;
-            return current.seek(Math.max(0, duration === null ? target : Math.min(target, duration)));
+            return current.seek(
+              Math.max(0, duration === null ? target : Math.min(target, duration)),
+            );
           }
           case "setPosition":
             return current.seek(event.positionMs);

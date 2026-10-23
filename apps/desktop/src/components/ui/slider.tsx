@@ -1,5 +1,5 @@
-import { Slider as SliderPrimitive } from "@base-ui/react/slider"
-import { cn } from "@/lib/utils"
+import { Slider as SliderPrimitive } from "@base-ui/react/slider";
+import { cn } from "@/lib/utils";
 
 function Slider({
   className,
@@ -10,12 +10,8 @@ function Slider({
   ...props
 }: SliderPrimitive.Root.Props) {
   // One thumb per value. A plain number is one value, not a range.
-  const current = value ?? defaultValue
-  const _values = Array.isArray(current)
-    ? current
-    : current !== undefined
-      ? [current]
-      : [min, max]
+  const current = value ?? defaultValue;
+  const _values = Array.isArray(current) ? current : current !== undefined ? [current] : [min, max];
 
   return (
     <SliderPrimitive.Root
@@ -30,7 +26,10 @@ function Slider({
     >
       {/* The track is 4px and the thumb 12px, too thin to hit reliably, so the
           control reaches 8px either side of the line without taking up layout. */}
-      <SliderPrimitive.Control data-slot="slider-control" className="relative flex w-full touch-none items-center select-none before:absolute data-disabled:opacity-50 data-horizontal:before:inset-x-0 data-horizontal:before:-inset-y-2 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-vertical:before:inset-y-0 data-vertical:before:-inset-x-2">
+      <SliderPrimitive.Control
+        data-slot="slider-control"
+        className="relative flex w-full touch-none items-center select-none before:absolute data-disabled:opacity-50 data-horizontal:before:inset-x-0 data-horizontal:before:-inset-y-2 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-vertical:before:inset-y-0 data-vertical:before:-inset-x-2"
+      >
         <SliderPrimitive.Track
           data-slot="slider-track"
           className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
@@ -49,7 +48,7 @@ function Slider({
         ))}
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>
-  )
+  );
 }
 
-export { Slider }
+export { Slider };

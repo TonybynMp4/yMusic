@@ -131,7 +131,9 @@ const EXTRACT_TIMEOUT_MS = 60_000;
 function workerFailure(worker: ExtractorWorker, done: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     const fail = (event: Event) =>
-      reject(new Error(`the extractor worker failed: ${(event as ErrorEvent).message ?? event.type}`));
+      reject(
+        new Error(`the extractor worker failed: ${(event as ErrorEvent).message ?? event.type}`),
+      );
     worker.addEventListener("error", fail);
     worker.addEventListener("messageerror", fail);
     const timer = setTimeout(

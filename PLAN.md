@@ -37,17 +37,18 @@ Sign release assets with the updater's minisign key so the download is verified 
 ## Next
 
 - **Player tabs.** The full player's side panel gets YouTube Music's tabs (Up next, Lyrics, Related, Comments) and one of the app's own, Details, which comes first and is open by default. Up next is the queue as it is today. Each tab loads when first opened, and stays loaded for the song.
-  - *Details* is a deliberate exception to following YouTube Music: YouTube Music has no such tab, and this one takes after the page Spotify scrolls to under its player. It is built from what YouTube has: the song's title, artists, album and year; the album's art, type, year and track count, which opens the album; each artist's picture, subscriber count and the start of their description, which opens the artist; and the song's credits when YouTube has them (the same data as the planned credits dialog). For a local song it shows the tags, the file's path, codec and bitrate.
-  - *Lyrics* are YouTube's own, from the `MPLY` browse id the `/next` response names, with timings when YouTube has them so the current line follows playback. A song with none says so. Timings need research: the web client (`WEB_REMIX`) seems to return plain text only, and ytmusicapi switches to the Android music client for timed lyrics, so that one call may need a different client from the rest of the engine. Other providers stay a plugin idea.
-  - *Related* is YouTube Music's tab: the shelves from the related browse id in `/next`, as cards that play or open like anywhere else.
-  - *Comments* are the comments on the song's video, which YouTube Music shows for songs with one. Read only at first: top comments, with replies collapsed. Hidden for local songs and songs without a video.
+  - _Details_ is a deliberate exception to following YouTube Music: YouTube Music has no such tab, and this one takes after the page Spotify scrolls to under its player. It is built from what YouTube has: the song's title, artists, album and year; the album's art, type, year and track count, which opens the album; each artist's picture, subscriber count and the start of their description, which opens the artist; and the song's credits when YouTube has them (the same data as the planned credits dialog). For a local song it shows the tags, the file's path, codec and bitrate.
+  - _Lyrics_ are YouTube's own, from the `MPLY` browse id the `/next` response names, with timings when YouTube has them so the current line follows playback. A song with none says so. Timings need research: the web client (`WEB_REMIX`) seems to return plain text only, and ytmusicapi switches to the Android music client for timed lyrics, so that one call may need a different client from the rest of the engine. Other providers stay a plugin idea.
+  - _Related_ is YouTube Music's tab: the shelves from the related browse id in `/next`, as cards that play or open like anywhere else.
+  - _Comments_ are the comments on the song's video, which YouTube Music shows for songs with one. Read only at first: top comments, with replies collapsed. Hidden for local songs and songs without a video.
 - **Playback errors.** Today a failed song puts one line of red text above the player bar: the raw message from Rust or mpv, cut off at the bar's width, kept until the next song loads. It says nothing about what to do next and it pushes the bar's layout up. Before choosing a replacement, build each option below as a throwaway prototype on the same set of failures (a stream that won't resolve, a 403 mpv can't recover from, a missing local file, no network) and pick one from seeing them side by side.
-  - *Snackbar.* YouTube Music's own pattern: a short message at the bottom of the window, over the content and above the player bar, with one action (Retry, or Skip when the queue moves on by itself). It goes after a few seconds.
-  - *Inline in the player bar.* The song's byline turns into an icon and a short message ("Couldn't play this song") while the song is stuck, with Retry and Skip beside it. Nothing moves, and the error stays exactly as long as it's true.
-  - *On the artwork.* An alert icon over the art in the player bar and the full player, with a popover for the message, Retry, Skip and the details. The quietest option, and the one easiest to miss.
-  - *Marked in the queue.* The failed row gets an icon and its menu a Retry, and the queue skips to the next song. Pairs with any of the others rather than replacing them.
+  - _Snackbar._ YouTube Music's own pattern: a short message at the bottom of the window, over the content and above the player bar, with one action (Retry, or Skip when the queue moves on by itself). It goes after a few seconds.
+  - _Inline in the player bar._ The song's byline turns into an icon and a short message ("Couldn't play this song") while the song is stuck, with Retry and Skip beside it. Nothing moves, and the error stays exactly as long as it's true.
+  - _On the artwork._ An alert icon over the art in the player bar and the full player, with a popover for the message, Retry, Skip and the details. The quietest option, and the one easiest to miss.
+  - _Marked in the queue._ The failed row gets an icon and its menu a Retry, and the queue skips to the next song. Pairs with any of the others rather than replacing them.
 
   Whichever wins, each failure gets plain copy and its own action, and the raw message moves to a details view and the log, where it is still there for bug reports. Whether a failure skips on its own is part of the choice: a missing file should, a lost network shouldn't.
+
 - **React performance pass.** Once the open memory and playlist PRs are merged, profile a release build: what re-renders during playback, while scrolling browse pages, search results, the sidebar and the queue, and while a menu or dialog opens. Fix what the profile shows, measuring before and after. `docs/react-performance.md` lists how to measure, the common causes, and what is known but not yet looked at.
 
 ## Later
@@ -55,11 +56,12 @@ Sign release assets with the updater's minisign key so the download is verified 
 - **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.
 - **Downloads.** The premium stream saved to disk from Rust, with resumable range requests. XDG directories on Linux, known folders on Windows.
 - **Linking local files to YouTube tracks.** One `links` table mapping a `local:` id to a `yt:` id, so a downloaded track plays from disk while artist pages, radio and plugin panels still point at YouTube. The grade of each link is stored with it:
-  - *Exact, from tags.* yt-dlp's `--embed-metadata` writes the source URL into `PURL`, and ripped libraries often carry `MusicBrainzRecordingId`. The scanner reads neither yet.
-  - *Matched.* Title, artist and album normalised, with duration as the tiebreaker. Below a confidence floor, leave it unlinked.
-  - *Manual.* A user correction outranks any later rescan.
+  - _Exact, from tags._ yt-dlp's `--embed-metadata` writes the source URL into `PURL`, and ripped libraries often carry `MusicBrainzRecordingId`. The scanner reads neither yet.
+  - _Matched._ Title, artist and album normalised, with duration as the tiebreaker. Below a confidence floor, leave it unlinked.
+  - _Manual._ A user correction outranks any later rescan.
 
   Identification is its own background pass, separate from the fast filesystem scan, because it is network-bound and rate-limited. A library with no links still works fully.
+
 - **More interactions.**
   - Pin albums, playlists and artists to a quick-access row on the home page.
   - A button to dismiss the whole queue.

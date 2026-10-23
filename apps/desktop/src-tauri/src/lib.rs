@@ -35,6 +35,7 @@ macro_rules! ymusic_commands {
             $crate::commands::player_subscribe,
             $crate::commands::player_load,
             $crate::commands::player_queue_next,
+            $crate::commands::player_log_failure,
             $crate::commands::player_play,
             $crate::commands::player_pause,
             $crate::commands::player_seek,

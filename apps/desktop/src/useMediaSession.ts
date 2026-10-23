@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { mediaSetTrack, mediaSetVolume, subscribeMediaKeys, toMediaTrack } from "@ymusic/ipc";
+import type { MediaKeyEvent } from "@ymusic/ipc";
 
 import type { usePlayer } from "./usePlayer.ts";
 
@@ -15,42 +16,35 @@ function logMediaFailure(error: unknown): void {
  * here: Rust reports those straight from mpv, which sees every seek.
  */
 export function useMediaSession(player: Player) {
-  // The subscription is made once, so it reads the player through a ref: the
-  // callbacks close over playback state and are rebuilt every render.
-  const latest = useRef(player);
-  latest.current = player;
-
-  useEffect(
-    () =>
-      subscribeMediaKeys((event) => {
-        const current = latest.current;
-        switch (event.type) {
-          case "play":
-            return current.play();
-          case "pause":
-          // MPRIS "stop" usually comes from a widget with no pause button;
-          // throwing the queue away in response would be a surprise.
-          case "stop":
-            return current.pause();
-          case "toggle":
-            return current.toggle();
-          case "next":
-            return current.next();
-          case "previous":
-            return current.previous();
-          case "seekBy": {
-            const target = current.position.get() + event.offsetMs;
-            const duration = current.playback.durationMs;
-            return current.seek(Math.max(0, duration === null ? target : Math.min(target, duration)));
-          }
-          case "setPosition":
-            return current.seek(event.positionMs);
-          case "setVolume":
-            return current.setVolume(event.volume);
-        }
-      }),
-    [],
-  );
+  // The subscription is made once, so it reads the player through an effect
+  // event: the callbacks close over playback state and change every render.
+  const onMediaKey = useEffectEvent((event: MediaKeyEvent) => {
+    switch (event.type) {
+      case "play":
+        return player.play();
+      case "pause":
+      // MPRIS "stop" usually comes from a widget with no pause button;
+      // throwing the queue away in response would be a surprise.
+      case "stop":
+        return player.pause();
+      case "toggle":
+        return player.toggle();
+      case "next":
+        return player.next();
+      case "previous":
+        return player.previous();
+      case "seekBy": {
+        const target = player.position.get() + event.offsetMs;
+        const duration = player.playback.durationMs;
+        return player.seek(Math.max(0, duration === null ? target : Math.min(target, duration)));
+      }
+      case "setPosition":
+        return player.seek(event.positionMs);
+      case "setVolume":
+        return player.setVolume(event.volume);
+    }
+  });
+  useEffect(() => subscribeMediaKeys((event) => onMediaKey(event)), []);
 
   const { track } = player;
   const durationMs = player.playback.durationMs;

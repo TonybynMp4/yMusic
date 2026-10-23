@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { SearchHistory } from "@ymusic/ipc";
 
 import { engine } from "./engine.ts";
@@ -43,14 +43,12 @@ export function useSearchHistory(
   const [local, setLocal] = useState<string[]>(readLocal);
   const [account, setAccount] = useState<{ query: string; feedbackToken: string | null }[]>([]);
 
+  // Dropped when the account's list stops applying, so signing in as
+  // someone else never shows the last account's searches.
+  if (where !== "youtube" && account.length > 0) setAccount([]);
+
   useEffect(() => {
-    // Dropped when the account's list stops applying, so signing in as
-    // someone else never shows the last account's searches.
-    if (where !== "youtube") {
-      setAccount([]);
-      return;
-    }
-    if (!open) return;
+    if (where !== "youtube" || !open) return;
     let cancelled = false;
     engine.searchHistory().then(
       (entries) => {
@@ -66,25 +64,22 @@ export function useSearchHistory(
     };
   }, [where, open]);
 
-  const saveLocal = useCallback((update: (queries: string[]) => string[]) => {
+  const saveLocal = (update: (queries: string[]) => string[]) => {
     setLocal((queries) => {
       const next = update(queries);
       localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
       return next;
     });
-  }, []);
+  };
 
-  const record = useCallback(
-    (query: string) => {
-      const trimmed = query.trim();
-      if (where !== "device" || trimmed.length === 0) return;
-      const key = trimmed.toLowerCase();
-      saveLocal((queries) =>
-        [trimmed, ...queries.filter((q) => q.toLowerCase() !== key)].slice(0, LOCAL_LIMIT),
-      );
-    },
-    [where, saveLocal],
-  );
+  const record = (query: string) => {
+    const trimmed = query.trim();
+    if (where !== "device" || trimmed.length === 0) return;
+    const key = trimmed.toLowerCase();
+    saveLocal((queries) =>
+      [trimmed, ...queries.filter((q) => q.toLowerCase() !== key)].slice(0, LOCAL_LIMIT),
+    );
+  };
 
   let recent: RecentSearch[] = [];
   if (where === "device") {

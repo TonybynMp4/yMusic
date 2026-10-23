@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import {
   currentTrack,
   emptyQueue,
@@ -116,18 +116,16 @@ export function usePlayer(
   const cameUp = useRef(false);
   const ratings = useRatings(account);
   /** The current track, for answers that arrive after it may have changed. */
-  const currentId = useRef(trackId);
-  currentId.current = trackId;
+  const currentId = useEffectEvent(() => trackId);
   /** Tracks skipped in a row, so a queue of only disliked songs stops after one pass. */
   const skipped = useRef(0);
   /**
-   * Whether to pass over a track rather than play it. Read through a ref so
-   * the load effect does not rerun, and cancel its load, when a rating or the
+   * Whether to pass over a track rather than play it. An effect event, so the
+   * load effect does not rerun, and cancel its load, when a rating or the
    * setting changes. A track is played anyway when skipping would not move to
    * a different one, as on the last track or under repeat-one.
    */
-  const skips = useRef<(id: TrackId) => boolean>(() => false);
-  skips.current = (id) => {
+  const skips = useEffectEvent((id: TrackId): boolean => {
     const videoId = videoIdFromTrackId(id);
     if (
       !settings.skipDisliked ||
@@ -140,7 +138,7 @@ export function usePlayer(
     }
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
-  };
+  });
   /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
   const playlistOf = useCallback((id: TrackId) => {
     const from = source.current;
@@ -222,7 +220,7 @@ export function usePlayer(
       return;
     }
     if (loadedId.current === trackId) return;
-    if (skips.current(trackId)) {
+    if (skips(trackId)) {
       skipped.current++;
       dispatch({ type: "next", reason: "user" });
       return;
@@ -363,7 +361,7 @@ export function usePlayer(
         if (event.type !== "advanced") return;
         // The user picked another song while mpv was finishing this one. Its
         // load replaces what mpv started, so the queue stays on it.
-        if (inMpv.current !== currentId.current) return;
+        if (inMpv.current !== currentId()) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
         setStreaming(leases.current.get(event.trackId) ?? null);
@@ -375,138 +373,126 @@ export function usePlayer(
     [engine],
   );
 
-  const stopFollowing = useCallback(() => {
+  const stopFollowing = () => {
     unfollow.current();
     unfollow.current = () => {};
     setFilling(false);
-  }, []);
+  };
 
   /** Clearing or replacing the queue also stops it growing from its old source. */
-  const send = useCallback(
-    (action: QueueAction) => {
-      if (action.type === "setQueue" || action.type === "clear") {
-        stopFollowing();
-        setPlayingFrom(null);
-      }
-      if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
-      dispatch(action);
-    },
-    [stopFollowing],
-  );
+  const send = (action: QueueAction) => {
+    if (action.type === "setQueue" || action.type === "clear") {
+      stopFollowing();
+      setPlayingFrom(null);
+    }
+    if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
+    dispatch(action);
+  };
 
-  const playTrack = useCallback(
-    (tracks: Track[], id: TrackId, from?: PlayFrom) => {
-      if (from?.kind === "radio") {
-        const seed = tracks.find((t) => t.id === id);
-        const videoId = seed ? videoIdFromTrackId(seed.id) : null;
-        if (!seed || videoId === null) return;
-        send({ type: "setQueue", tracks: [seed], startIndex: 0 });
-        source.current = null;
-        let stopped = false;
-        unfollow.current = () => {
-          stopped = true;
-        };
-        setFilling(true);
-        void youtube
-          .radio(videoId)
-          .then((radio) => {
-            if (!stopped) dispatch({ type: "extend", tracks: radio });
-          })
-          .catch((error: unknown) => console.error("could not start the song radio", error))
-          .finally(() => {
-            if (!stopped) setFilling(false);
-          });
-        return;
-      }
-
-      send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
-      if (from?.kind === "playlist" || from?.kind === "list") {
-        setPlayingFrom({ title: from.title, device: null });
-      }
-      if (from?.kind !== "playlist") {
-        source.current = null;
-        return;
-      }
-      const ids = new Set(tracks.map((t) => t.id));
-      source.current = { playlistId: from.id, ids };
-      // Whatever the page had when it was clicked is queued already; each
-      // later page is added as it arrives, shuffled in if shuffle is on.
-      let known = tracks.length;
-      let done = false;
-      let stop = () => {};
-      const follow = (all: readonly Track[], loading: boolean) => {
-        if (done) return;
-        if (all.length > known) {
-          const added = all.slice(known);
-          for (const t of added) ids.add(t.id);
-          dispatch({ type: "extend", tracks: added });
-          known = all.length;
-        }
-        setFilling(loading);
-        if (!loading) {
-          done = true;
-          stop();
-        }
-      };
-      stop = followPlaylist(from.id, follow);
-      // The first call is synchronous, before `stop` was assigned.
-      if (done) stop();
+  const playTrack = (tracks: Track[], id: TrackId, from?: PlayFrom) => {
+    if (from?.kind === "radio") {
+      const seed = tracks.find((t) => t.id === id);
+      const videoId = seed ? videoIdFromTrackId(seed.id) : null;
+      if (!seed || videoId === null) return;
+      send({ type: "setQueue", tracks: [seed], startIndex: 0 });
+      source.current = null;
+      let stopped = false;
       unfollow.current = () => {
+        stopped = true;
+      };
+      setFilling(true);
+      void youtube
+        .radio(videoId)
+        .then((radio) => {
+          if (!stopped) dispatch({ type: "extend", tracks: radio });
+        })
+        .catch((error: unknown) => console.error("could not start the song radio", error))
+        .finally(() => {
+          if (!stopped) setFilling(false);
+        });
+      return;
+    }
+
+    send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+    if (from?.kind === "playlist" || from?.kind === "list") {
+      setPlayingFrom({ title: from.title, device: null });
+    }
+    if (from?.kind !== "playlist") {
+      source.current = null;
+      return;
+    }
+    const ids = new Set(tracks.map((t) => t.id));
+    source.current = { playlistId: from.id, ids };
+    // Whatever the page had when it was clicked is queued already; each
+    // later page is added as it arrives, shuffled in if shuffle is on.
+    let known = tracks.length;
+    let done = false;
+    let stop = () => {};
+    const follow = (all: readonly Track[], loading: boolean) => {
+      if (done) return;
+      if (all.length > known) {
+        const added = all.slice(known);
+        for (const t of added) ids.add(t.id);
+        dispatch({ type: "extend", tracks: added });
+        known = all.length;
+      }
+      setFilling(loading);
+      if (!loading) {
         done = true;
         stop();
-      };
-    },
-    [send],
-  );
+      }
+    };
+    stop = followPlaylist(from.id, follow);
+    // The first call is synchronous, before `stop` was assigned.
+    if (done) stop();
+    unfollow.current = () => {
+      done = true;
+      stop();
+    };
+  };
 
   /**
    * Queues `tracks` at `index` without playing, for a queue resumed from
    * another device. `playlistId` is the playlist it plays, if any, and
    * `queueFrom` what it is named and where it was left.
    */
-  const cue = useCallback(
-    (tracks: Track[], index: number, playlistId: string | null, queueFrom: QueueFrom | null) => {
-      const first = tracks[index];
-      if (!first) return;
-      send({ type: "setQueue", tracks, startIndex: index });
-      cued.current = first.id;
-      source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
-      setPlayingFrom(queueFrom);
-    },
-    [send],
-  );
+  const cue = (tracks: Track[], index: number, playlistId: string | null, queueFrom: QueueFrom | null) => {
+    const first = tracks[index];
+    if (!first) return;
+    send({ type: "setQueue", tracks, startIndex: index });
+    cued.current = first.id;
+    source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
+    setPlayingFrom(queueFrom);
+  };
 
   /**
    * Puts back a queue saved by an earlier run, paused on its song, at
    * `at` when that is the same song. False when the saved queue does
    * not hold together, so the caller can fall back to something else.
    */
-  const restore = useCallback(
-    (saved: SavedQueue, at: QueuePosition | null) => {
-      const restored = restoredQueue(saved);
-      const first = restored && currentTrack(restored);
-      if (!first) return false;
-      stopFollowing();
-      cameUp.current = false;
-      dispatch({ type: "restore", queue: saved });
-      cued.current = first.id;
-      resumeAt.current =
-        at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
-      source.current = saved.source
-        ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
-        : null;
-      setShared(saved.shared);
-      setPlayingFrom(saved.from);
-      return true;
-    },
-    [stopFollowing],
-  );
+  const restore = (saved: SavedQueue, at: QueuePosition | null) => {
+    const restored = restoredQueue(saved);
+    const first = restored && currentTrack(restored);
+    if (!first) return false;
+    stopFollowing();
+    cameUp.current = false;
+    dispatch({ type: "restore", queue: saved });
+    cued.current = first.id;
+    resumeAt.current =
+      at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
+    source.current = saved.source
+      ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
+      : null;
+    setShared(saved.shared);
+    setPlayingFrom(saved.from);
+    return true;
+  };
 
   /** The YouTube playlist the queue was started from and the songs it gave, for saving. */
-  const savedSource = useCallback((): SavedQueue["source"] => {
+  const savedSource = (): SavedQueue["source"] => {
     const from = source.current;
     return from ? { playlistId: from.playlistId, ids: [...from.ids] } : null;
-  }, []);
+  };
 
   // Once a YouTube song is playing, make it the account's queue, so YouTube
   // Music on other devices offers to resume it. Only once playing: a queue
@@ -530,7 +516,7 @@ export function usePlayer(
         learn(videoId, rating, asked);
         // Disliked elsewhere since it was last seen here: it started, so skip
         // it now, unless the user has already moved on to another track.
-        if (currentId.current === trackId && skips.current(trackId)) {
+        if (currentId() === trackId && skips(trackId)) {
           skipped.current++;
           dispatch({ type: "next", reason: "user" });
         }
@@ -576,40 +562,40 @@ export function usePlayer(
     askedSeed.current = null;
     dispatch({ type: "setSuggestions", tracks: [] });
   }, [autoplay]);
-  const setAutoplay = useCallback((on: boolean) => update({ autoplay: on }), [update]);
+  const setAutoplay = (on: boolean) => update({ autoplay: on });
 
-  const play = useCallback(() => {
+  const play = () => {
     wantsPaused.current = false;
     void engine.play().catch(logPlaybackFailure);
-  }, [engine]);
-  const pause = useCallback(() => {
+  };
+  const pause = () => {
     wantsPaused.current = true;
     void engine.pause().catch(logPlaybackFailure);
-  }, [engine]);
+  };
 
-  const toggle = useCallback(() => {
+  const toggle = () => {
     if (state.status === "playing") pause();
     else play();
-  }, [play, pause, state.status]);
+  };
 
-  const next = useCallback(() => {
+  const next = () => {
     cameUp.current = true;
     dispatch({ type: "next", reason: "user" });
-  }, []);
+  };
 
   /**
    * Restarting rather than going back is what every other player does once you
    * are a few seconds into a track, and it is what the hardware previous key
    * is usually meant to do.
    */
-  const previous = useCallback(() => {
+  const previous = () => {
     if (position.get() > 3000) {
       void engine.seek(0);
       return;
     }
     cameUp.current = false;
     dispatch({ type: "previous" });
-  }, [engine, position]);
+  };
 
   const videoId = trackId === null ? null : videoIdFromTrackId(trackId);
   const sendRating = ratings.rate;
@@ -617,41 +603,26 @@ export function usePlayer(
    * Rates a song. Disliking the one playing also skips it, as YouTube Music
    * does; any other song is only rated.
    */
-  const rate = useCallback(
-    (song: VideoId, value: Rating) => {
-      if (song === videoId && value === "dislike") next();
-      return sendRating(song, value);
-    },
-    [videoId, next, sendRating],
-  );
+  const rate = (song: VideoId, value: Rating) => {
+    if (song === videoId && value === "dislike") next();
+    return sendRating(song, value);
+  };
 
   // The core only sends the new position once mpv lands the seek, so until
   // then the bar would fall back to where the song was.
-  const seek = useCallback(
-    (positionMs: number) => {
-      position.set(Math.max(0, Math.round(positionMs)));
-      void engine.seek(positionMs);
-    },
-    [engine, position],
-  );
-  const setVolume = useCallback(
-    (fraction: number) => {
-      const clamped = Math.min(1, Math.max(0, fraction));
-      setVolumeState(clamped);
-      void engine.setVolume(clamped).catch(logPlaybackFailure);
-    },
-    [engine],
-  );
+  const seek = (positionMs: number) => {
+    position.set(Math.max(0, Math.round(positionMs)));
+    void engine.seek(positionMs);
+  };
+  const setVolume = (fraction: number) => {
+    const clamped = Math.min(1, Math.max(0, fraction));
+    setVolumeState(clamped);
+    void engine.setVolume(clamped).catch(logPlaybackFailure);
+  };
   /** The track mpv has, which `position` belongs to once it is not null. */
-  const loadedTrack = useCallback(() => inMpv.current, []);
-  const setRepeat = useCallback(
-    (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }),
-    [],
-  );
-  const setShuffle = useCallback(
-    (shuffle: boolean) => dispatch({ type: "setShuffle", shuffle }),
-    [],
-  );
+  const loadedTrack = () => inMpv.current;
+  const setRepeat = (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat });
+  const setShuffle = (shuffle: boolean) => dispatch({ type: "setShuffle", shuffle });
 
   return {
     queue,
@@ -661,7 +632,7 @@ export function usePlayer(
     setAutoplay,
     track,
     /** The playing song's stream, once mpv has it. */
-    lease: streaming?.trackId === track?.id ? streaming : null,
+    lease: streaming !== null && streaming.trackId === trackId ? streaming : null,
     playback: state,
     position,
     loadedTrack,

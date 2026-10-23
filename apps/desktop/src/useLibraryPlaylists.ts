@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -21,6 +21,14 @@ export interface LibraryPlaylistsState {
 
 export const LIKED_MUSIC = "LM";
 
+interface Listed {
+  account: string;
+  /** The `generation` fetched, so a newer request shows as loading. */
+  generation: number;
+  playlists: BrowseCard[];
+  error: string | null;
+}
+
 /** How many times the list is fetched again while a new playlist is missing from it. */
 const LIST_RETRIES = 5;
 
@@ -30,11 +38,6 @@ const LIST_RETRIES = 5;
  */
 export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylistsState {
   const [generation, setGeneration] = useState(0);
-  const [state, setState] = useState<Omit<LibraryPlaylistsState, "reload" | "created" | "deleted">>({
-    playlists: [],
-    loading: false,
-    error: null,
-  });
   // Kept with the account that created them, so switching accounts drops them.
   const [pending, setPending] = useState<{ account: string | null; cards: BrowseCard[] }>({
     account: null,
@@ -44,22 +47,17 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     account: null,
     ids: [],
   });
-  // Whose list `state.playlists` is.
-  const listed = useRef<string | null>(null);
+  /** The last list fetched, and which fetch it answered. */
+  const [listed, setListed] = useState<Listed | null>(null);
+  // Dropped on sign-out, so signing back in to the same account loads again.
+  if (accountKey === null && listed !== null) setListed(null);
   useEffect(() => {
-    if (accountKey === null) {
-      setState({ playlists: [], loading: false, error: null });
-      return;
-    }
+    if (accountKey === null) return;
     let cancelled = false;
-    // Another account's list never stays up while this one's loads.
-    const same = listed.current === accountKey;
-    setState((s) => ({ ...s, playlists: same ? s.playlists : [], loading: true }));
     engine.libraryPlaylists().then(
       (playlists) => {
         if (cancelled) return;
-        listed.current = accountKey;
-        setState({ playlists, loading: false, error: null });
+        setListed({ account: accountKey, generation, playlists, error: null });
         setPending(({ account, cards }) => ({
           account,
           cards: cards.filter((card) => !playlists.some((p) => p.id === card.id)),
@@ -69,24 +67,27 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
       // playlist, say) does not blank the sidebar.
       (error: unknown) =>
         !cancelled &&
-        setState((s) => ({
-          ...s,
-          loading: false,
+        setListed((last) => ({
+          account: accountKey,
+          generation,
+          playlists: last?.account === accountKey ? last.playlists : [],
           error: error instanceof Error ? error.message : String(error),
         })),
     );
     return () => {
       cancelled = true;
     };
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- generation reloads the list after a change
   }, [accountKey, generation]);
+  // Another account's list never stays up while this one's loads.
+  const mine = listed?.account === accountKey ? listed : null;
+  const loading = accountKey !== null && mine?.generation !== generation;
   // A new playlist reaches YouTube's library list a while after it exists, so
   // the list is fetched again, further apart each time, until it has it. Its
   // entry then swaps the placeholder for YouTube's, with its art.
   const retries = useRef(0);
   const waiting = pending.account === accountKey && pending.cards.length > 0;
   useEffect(() => {
-    if (!waiting || state.loading || retries.current >= LIST_RETRIES) return;
+    if (!waiting || loading || retries.current >= LIST_RETRIES) return;
     const timer = setTimeout(
       () => {
         retries.current += 1;
@@ -95,43 +96,37 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
       (retries.current + 1) * 2000,
     );
     return () => clearTimeout(timer);
-  }, [waiting, state.loading]);
-  const reload = useCallback(() => setGeneration((g) => g + 1), []);
-  const created = useCallback(
-    (card: BrowseCard) => {
-      retries.current = 0;
-      setPending(({ account, cards }) => ({
-        account: accountKey,
-        cards: [card, ...(account === accountKey ? cards.filter((c) => c.id !== card.id) : [])],
-      }));
-      setGeneration((g) => g + 1);
-    },
-    [accountKey],
-  );
-  const deleted = useCallback(
-    (id: string) => {
-      setGone(({ account, ids }) => ({
-        account: accountKey,
-        ids: [id, ...(account === accountKey ? ids : [])],
-      }));
-      setPending(({ account, cards }) => ({
-        account,
-        cards: cards.filter((card) => card.id !== id),
-      }));
-      setGeneration((g) => g + 1);
-    },
-    [accountKey],
-  );
+  }, [waiting, loading]);
+  const reload = () => setGeneration((g) => g + 1);
+  const created = (card: BrowseCard) => {
+    retries.current = 0;
+    setPending(({ account, cards }) => ({
+      account: accountKey,
+      cards: [card, ...(account === accountKey ? cards.filter((c) => c.id !== card.id) : [])],
+    }));
+    setGeneration((g) => g + 1);
+  };
+  const deleted = (id: string) => {
+    setGone(({ account, ids }) => ({
+      account: accountKey,
+      ids: [id, ...(account === accountKey ? ids : [])],
+    }));
+    setPending(({ account, cards }) => ({
+      account,
+      cards: cards.filter((card) => card.id !== id),
+    }));
+    setGeneration((g) => g + 1);
+  };
   // New playlists go where YouTube Music puts them: first, after Liked Music.
   const playlists = useMemo(() => {
     const hidden = gone.account === accountKey ? gone.ids : [];
-    const kept = state.playlists.filter((p) => !hidden.includes(p.id));
+    const kept = (mine?.playlists ?? []).filter((p) => !hidden.includes(p.id));
     if (pending.account !== accountKey) return kept;
     const shown = pending.cards.filter((card) => !kept.some((p) => p.id === card.id));
     if (shown.length === 0) return kept;
     const liked = kept.filter((p) => p.id === LIKED_MUSIC);
     const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
     return [...liked, ...shown, ...rest];
-  }, [pending, gone, accountKey, state.playlists]);
-  return { ...state, playlists, reload, created, deleted };
+  }, [pending, gone, accountKey, mine?.playlists]);
+  return { playlists, loading, error: mine?.error ?? null, reload, created, deleted };
 }

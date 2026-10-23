@@ -1,12 +1,23 @@
+import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 const host = process.env["TAURI_DEV_HOST"];
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // React Compiler memoizes components and hooks at build time. See
+  // docs/react-performance.md for opting one out.
+  plugins: [
+    react(),
+    // Only the app's own source: the workspace packages hold no components.
+    babel({
+      include: /[\\/]apps[\\/]desktop[\\/]src[\\/].*\.[jt]sx?$/,
+      presets: [reactCompilerPreset()],
+    }),
+    tailwindcss(),
+  ],
   // `@/` is what shadcn components import each other by; without it every
   // added component needs hand-editing before it resolves.
   resolve: {

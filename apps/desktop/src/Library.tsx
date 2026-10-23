@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   IconArrowsShuffle,
   IconDeviceDesktop,
@@ -142,15 +142,13 @@ export function LibraryView(props: {
   // A list reloading in a new order keeps its menu up meanwhile.
   const [menus, setMenus] = useState<Partial<Record<AccountChip, SortMenu>>>({});
   const menu = saved?.status === "ready" ? saved : chip === "local" ? undefined : menus[chip];
-  useEffect(() => {
-    if (chip === "local" || saved?.status !== "ready") return;
+  if (chip !== "local" && saved?.status === "ready") {
     const { sorts, sort } = saved;
-    setMenus((m) =>
-      m[chip]?.sort === sort && m[chip]?.sorts.join("\n") === sorts.join("\n")
-        ? m
-        : { ...m, [chip]: { sorts, sort } },
-    );
-  }, [chip, saved]);
+    const kept = menus[chip];
+    if (kept?.sort !== sort || kept.sorts.join("\n") !== sorts.join("\n")) {
+      setMenus((m) => ({ ...m, [chip]: { sorts, sort } }));
+    }
+  }
 
   let body: ReactNode;
   switch (chip) {

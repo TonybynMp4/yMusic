@@ -285,5 +285,9 @@ fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {
         log::error!("no app data directory, the session will not persist: {err}");
         std::env::temp_dir().join("ymusic")
     });
+    #[cfg(debug_assertions)]
+    if let Some(key) = std::env::var_os("YMUSIC_ACCOUNT_KEY_FILE") {
+        return Account::open(dir.join("account.bin"), account::KeyFile(key.into()));
+    }
     Account::open(dir.join("account.bin"), OsKeyring)
 }

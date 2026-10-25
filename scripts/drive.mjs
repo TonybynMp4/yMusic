@@ -56,7 +56,13 @@ function ensureWork() {
 function readState() {
   if (!existsSync(statePath)) return null;
   const state = JSON.parse(readFileSync(statePath, "utf8"));
-  if (state.port) base = `http://127.0.0.1:${state.port}`;
+  // Both end up in request URLs, so only a local port and a plain session id.
+  if (state.session !== undefined && !/^[\w-]+$/.test(state.session)) fail(`bad session id in ${statePath}`);
+  if (state.port !== undefined) {
+    const port = Number(state.port);
+    if (!Number.isInteger(port) || port < 1024 || port > 65535) fail(`bad port in ${statePath}`);
+    base = `http://127.0.0.1:${port}`;
+  }
   return state;
 }
 

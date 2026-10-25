@@ -23,58 +23,105 @@ use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use volume::VolumeStore;
 
-/// The app's command surface, in one place so tests mount exactly what ships.
-/// A command that is implemented but never registered here is invisible to the
-/// frontend, which is the failure this exists to make impossible.
+/// The commands the frontend's types are generated from, for runtime `$r`, in
+/// one place so tests mount exactly what ships and the bindings name exactly
+/// what is registered. A macro because `collect_commands!` cannot name an
+/// outer generic. `http_fetch` is not here: it takes and returns raw bytes,
+/// which specta has no type for, so `ymusic_invoke_handler!` routes it by name.
 #[macro_export]
-macro_rules! ymusic_commands {
-    () => {
-        tauri::generate_handler![
-            $crate::commands::platform_summary,
-            $crate::commands::http_fetch,
-            $crate::commands::player_subscribe,
-            $crate::commands::player_load,
-            $crate::commands::player_queue_next,
-            $crate::commands::player_play,
-            $crate::commands::player_pause,
-            $crate::commands::player_seek,
-            $crate::commands::player_position,
-            $crate::commands::player_set_volume,
-            $crate::commands::player_saved_volume,
-            $crate::commands::player_stop,
-            $crate::commands::player_audio_devices,
-            $crate::commands::player_stats,
-            $crate::commands::media_subscribe,
-            $crate::commands::media_set_track,
-            $crate::commands::media_set_volume,
-            $crate::commands::library_folders,
-            $crate::commands::library_folder_cover,
-            $crate::commands::library_add_folder,
-            $crate::commands::library_remove_folder,
-            $crate::commands::library_scan,
-            $crate::commands::library_tracks,
-            $crate::commands::library_search,
-            $crate::commands::library_resolve,
-            $crate::commands::library_open_folder,
-            $crate::commands::library_reveal,
-            $crate::commands::account_cookie,
-            $crate::commands::account_sign_in,
-            $crate::commands::account_browsers,
-            $crate::commands::account_import,
-            $crate::commands::account_refresh,
-            $crate::commands::account_rotate,
-            $crate::commands::account_sign_out,
-            $crate::commands::settings_get,
-            $crate::commands::settings_set,
-            $crate::commands::queue_load,
-            $crate::commands::queue_save,
-            $crate::commands::queue_save_position,
-            $crate::commands::update_check,
-            $crate::commands::open_logs_folder,
-            $crate::commands::cache_size,
-            $crate::commands::cache_clear
-        ]
-    };
+macro_rules! ymusic_specta {
+    ($r:ty) => {{
+        use $crate::commands::*;
+        tauri_specta::Builder::<$r>::new()
+            .commands(tauri_specta::collect_commands![
+                platform_summary::<$r>,
+                player_subscribe,
+                player_load,
+                player_queue_next,
+                player_play,
+                player_pause,
+                player_seek,
+                player_position,
+                player_set_volume,
+                player_saved_volume,
+                player_stop,
+                player_audio_devices,
+                player_stats,
+                media_subscribe,
+                media_set_track,
+                media_set_volume,
+                library_folders,
+                library_folder_cover,
+                library_add_folder,
+                library_remove_folder,
+                library_scan,
+                library_tracks,
+                library_search,
+                library_resolve,
+                library_open_folder,
+                library_reveal,
+                account_cookie,
+                account_sign_in::<$r>,
+                account_browsers,
+                account_import,
+                account_refresh,
+                account_rotate,
+                account_sign_out,
+                settings_get,
+                settings_set::<$r>,
+                queue_load,
+                queue_save,
+                queue_save_position,
+                update_check::<$r>,
+                open_logs_folder::<$r>,
+                cache_size,
+                cache_clear::<$r>,
+            ])
+            .constant("defaultSettings", $crate::settings::Settings::default())
+            // Commands reject with their error string, as a plain `invoke` does.
+            .error_handling(tauri_specta::ErrorHandlingMode::Throw)
+            // The 64-bit integers that cross are milliseconds, byte counts and
+            // itags, all far below 2^53, so `number` holds them exactly.
+            .dangerously_cast_bigints_to_number()
+    }};
+}
+
+/// Every command the frontend can call, for runtime `$r`: the specta ones and
+/// `http_fetch`.
+#[macro_export]
+macro_rules! ymusic_invoke_handler {
+    ($r:ty) => {{
+        let typed = $crate::ymusic_specta!($r).invoke_handler();
+        let raw =
+            $crate::handler_for::<$r, _>(tauri::generate_handler![$crate::commands::http_fetch]);
+        move |invoke: tauri::ipc::Invoke<$r>| match invoke.message.command() {
+            "http_fetch" => raw(invoke),
+            _ => typed(invoke),
+        }
+    }};
+}
+
+/// Gives `generate_handler!`'s closure its runtime, which it cannot infer.
+#[doc(hidden)]
+pub fn handler_for<R: tauri::Runtime, F: Fn(tauri::ipc::Invoke<R>) -> bool>(handler: F) -> F {
+    handler
+}
+
+/// Where the generated bindings live, beside the wrappers that use them.
+pub const BINDINGS_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../packages/ipc/src/bindings.ts"
+);
+
+/// Writes the TypeScript bindings for every command and the types they carry.
+pub fn export_bindings(path: &std::path::Path) -> Result<(), String> {
+    ymusic_specta!(tauri::Wry)
+        .export(
+            specta_typescript::Typescript::default()
+                .header("// Run `pnpm bindings` after changing a command or a type it carries."),
+            path,
+        )
+        .map_err(|error| error.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -188,7 +235,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(ymusic_commands!())
+        .invoke_handler(ymusic_invoke_handler!(tauri::Wry))
         .build(tauri::generate_context!())
         .expect("error while building ymusic")
         .run(|app, event| {

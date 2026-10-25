@@ -12,7 +12,7 @@ pub mod window;
 ///
 /// Set at build time via `YMUSIC_INSTALL_FLAVOR`; `Unknown` is the honest default
 /// for a `cargo run`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specta::Type)]
 #[serde(rename_all = "kebab-case")]
 pub enum InstallFlavor {
     Deb,

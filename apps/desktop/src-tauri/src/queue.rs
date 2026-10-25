@@ -17,17 +17,24 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuePosition {
     pub track_id: String,
     pub position_ms: u64,
 }
 
+/// The frontend's queue, which Rust stores as it comes and never reads. The
+/// frontend parses it on the way back (`packages/ipc/src/queue.ts`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(transparent)]
+pub struct QueueJson(#[specta(type = specta_typescript::Unknown)] pub serde_json::Value);
+
 /// Both files, as read at launch.
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedQueue {
+    #[specta(type = Option<specta_typescript::Unknown>)]
     pub queue: Option<serde_json::Value>,
     pub position: Option<QueuePosition>,
 }

@@ -23,11 +23,14 @@ use serde::{Deserialize, Serialize};
 /// How long mpv's volume has to stay put before it is saved.
 pub const SETTLE: Duration = Duration::from_millis(500);
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedVolume {
+    // Clamped to 0..1 on every way in, so never NaN, which serde writes as null.
+    #[specta(type = specta_typescript::Number)]
     pub volume: f64,
     /// The last settled volume above zero.
+    #[specta(type = specta_typescript::Number)]
     pub unmuted: f64,
 }
 

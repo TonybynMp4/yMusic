@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { QueuePosition, SavedQueue } from "./queue.ts";
+import { SavedQueue } from "./queue.ts";
 
 const song = {
   id: "yt:dQw4w9WgXcQ",
@@ -39,13 +39,5 @@ describe("the saved queue", () => {
   it("is refused when it is not a queue", () => {
     expect(SavedQueue.safeParse({ ...saved, cursor: null }).success).toBe(false);
     expect(SavedQueue.safeParse({ ...saved, items: [{ id: "nope" }] }).success).toBe(false);
-  });
-
-  it("matches the position Rust saves", () => {
-    // `queue::QueuePosition` in Rust, as `queue-position.json` holds it.
-    expect(QueuePosition.parse({ trackId: "yt:dQw4w9WgXcQ", positionMs: 61_500 })).toEqual({
-      trackId: "yt:dQw4w9WgXcQ",
-      positionMs: 61_500,
-    });
   });
 });

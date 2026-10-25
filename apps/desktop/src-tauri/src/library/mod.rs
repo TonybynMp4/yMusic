@@ -33,10 +33,67 @@ pub enum LibraryError {
 
 pub type Result<T> = std::result::Result<T, LibraryError>;
 
+/// The codec a file holds, the local half of `AudioCodec` in `@ymusic/core`.
+/// Stored in SQLite by its serde name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioCodec {
+    Opus,
+    Aac,
+    Mp3,
+    Flac,
+    Alac,
+    Vorbis,
+    Pcm,
+    Unknown,
+}
+
+impl AudioCodec {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Opus => "opus",
+            Self::Aac => "aac",
+            Self::Mp3 => "mp3",
+            Self::Flac => "flac",
+            Self::Alac => "alac",
+            Self::Vorbis => "vorbis",
+            Self::Pcm => "pcm",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn from_name(name: &str) -> Self {
+        [
+            Self::Opus,
+            Self::Aac,
+            Self::Mp3,
+            Self::Flac,
+            Self::Alac,
+            Self::Vorbis,
+            Self::Pcm,
+        ]
+        .into_iter()
+        .find(|codec| codec.as_str() == name)
+        .unwrap_or(Self::Unknown)
+    }
+}
+
+impl rusqlite::types::ToSql for AudioCodec {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(self.as_str().into())
+    }
+}
+
+impl rusqlite::types::FromSql for AudioCodec {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        value.as_str().map(Self::from_name)
+    }
+}
+
 /// Mirrors `Thumbnail` in `@ymusic/core`. Cover art is extracted to the cache
 /// directory during a scan; the frontend converts `path` with Tauri's
 /// `convertFileSrc` because a bare `file://` will not load in the webview.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverArt {
     pub path: String,
@@ -45,7 +102,7 @@ pub struct CoverArt {
 }
 
 /// Mirrors `Track` in `@ymusic/core`, in its local-file flavour.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalTrack {
     /// Namespaced as `local:<hash>` so it can share a queue with `yt:` ids.
@@ -59,7 +116,7 @@ pub struct LocalTrack {
     pub disc_number: Option<u32>,
     pub year: Option<u32>,
     pub duration_ms: Option<i64>,
-    pub codec: String,
+    pub codec: AudioCodec,
     pub bitrate: Option<u32>,
     pub cover_art: Option<CoverArt>,
     /// When the file was first scanned, in seconds since the Unix epoch.
@@ -67,13 +124,13 @@ pub struct LocalTrack {
 }
 
 /// Mirrors `StreamLease` in `@ymusic/core`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalLease {
     pub track_id: String,
     pub url: String,
     pub itag: Option<i64>,
-    pub codec: String,
+    pub codec: AudioCodec,
     pub bitrate: Option<u32>,
     pub is_premium_format: bool,
     pub loudness_db: Option<f64>,

@@ -3,7 +3,7 @@ import { TrackId } from "@ymusic/core";
 import { describe, expect, it } from "vitest";
 
 import { localPathFromArtUrl } from "./library.ts";
-import { MediaKeyEvent, toMediaTrack } from "./media.ts";
+import { toMediaTrack } from "./media.ts";
 
 const base: Track = {
   id: TrackId.parse("yt:dQw4w9WgXcQ"),
@@ -63,18 +63,5 @@ describe("localPathFromArtUrl", () => {
 
   it("leaves other URLs alone", () => {
     expect(localPathFromArtUrl("https://i.ytimg.com/large.jpg")).toBeNull();
-  });
-});
-
-describe("MediaKeyEvent", () => {
-  // The shapes Rust's `MediaKeyEvent` serialises to; a rename on either side
-  // fails here instead of as a media key that silently does nothing.
-  it.each([
-    { type: "toggle" },
-    { type: "seekBy", offsetMs: -10_000 },
-    { type: "setPosition", positionMs: 42_000 },
-    { type: "setVolume", volume: 0.5 },
-  ])("parses %o", (event) => {
-    expect(MediaKeyEvent.safeParse(event).success).toBe(true);
   });
 });

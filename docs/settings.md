@@ -11,7 +11,7 @@ Two commands:
 - `settings_get` returns everything.
 - `settings_set` takes a partial patch. An unknown key or a wrong type is rejected and nothing changes. It saves, then applies whatever Rust owns (mpv options and the tray), and returns the full result.
 
-`main.tsx` reads the settings before the first render, with a top-level `await`, so nothing renders with defaults and then flips. `useSettings` updates optimistically and re-reads from Rust if a save fails. Outside Tauri the defaults from the zod schema in `packages/ipc/src/settings.ts` are used and nothing is saved. That schema mirrors the Rust struct, defaults included.
+`main.tsx` reads the settings before the first render, with a top-level `await`, so nothing renders with defaults and then flips. `useSettings` updates optimistically and re-reads from Rust if a save fails. Outside Tauri the app uses `defaultSettings`, which the generated bindings export from `Settings::default()`, and saves nothing.
 
 Rust applies the mpv settings itself at startup, right after `Player::new()`, so the frontend never has to replay them.
 

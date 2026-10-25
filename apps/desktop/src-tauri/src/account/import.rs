@@ -22,7 +22,7 @@ use super::sign_in::cookie_header;
 
 /// A browser profile with a cookie store. The id is what the frontend sends
 /// back to import it; the path behind it never leaves Rust.
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Browser {
     pub id: String,

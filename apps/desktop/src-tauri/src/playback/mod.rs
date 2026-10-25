@@ -57,7 +57,7 @@ const OBSERVE_DURATION: u64 = 2;
 const OBSERVE_PAUSE: u64 = 3;
 const OBSERVE_VOLUME: u64 = 4;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadRequest {
     /// The track this stream belongs to, echoed back on `ended` and `error` so
@@ -79,7 +79,7 @@ pub struct LoadRequest {
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct AudioDevice {
     pub name: String,
     pub description: String,
@@ -691,7 +691,7 @@ pub fn limiter_reduction(peak_db: f64, gain_db: f64, output_peak_db: f64) -> f64
 
 /// Stats for nerds, for the song playing. Each is None when mpv or the meters
 /// have nothing to say yet.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioStats {
     pub codec: Option<String>,

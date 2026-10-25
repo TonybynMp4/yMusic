@@ -30,6 +30,6 @@ export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "ended"
 export type PlaybackEvent =
   | { type: "status"; status: PlaybackStatus }
   | { type: "position"; positionMs: number; durationMs: number | null }
-  | { type: "ended"; trackId: TrackId }
+  | { type: "ended"; trackId: TrackId | null }
   | { type: "advanced"; trackId: TrackId }
   | { type: "error"; trackId: TrackId | null; message: string };

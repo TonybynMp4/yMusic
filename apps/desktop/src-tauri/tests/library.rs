@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ymusic_lib::library::Library;
+use ymusic_lib::library::{AudioCodec, Library};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/library")
@@ -59,7 +59,7 @@ fn scans_a_folder_and_reads_tags() {
     assert_eq!(first.album.as_deref(), Some("Drift"));
     assert_eq!(first.track_number, Some(1));
     assert_eq!(first.year, Some(2021));
-    assert_eq!(first.codec, "flac");
+    assert_eq!(first.codec, AudioCodec::Flac);
     assert!(
         first.id.starts_with("local:"),
         "ids are namespaced: {}",

@@ -18,13 +18,13 @@ import { engine } from "./engine.ts";
  * exist at all.
  */
 /**
- * `fallback` skips YouTube's usual client for the PO-token one, for a stream
- * that resolved but that mpv could not play. It and `quality` mean nothing for
- * local files, which have one format: the file.
+ * `refused` is the player client of a stream that resolved but that mpv could
+ * not play, which YouTube then skips. It and `quality` mean nothing for local
+ * files, which have one format: the file.
  */
 export async function resolveTrack(
   id: TrackId,
-  options: { fallback?: boolean; quality?: AudioQuality } = {},
+  options: { refused?: string | null; quality?: AudioQuality } = {},
 ): Promise<StreamLease> {
   switch (sourceOf(id)) {
     case "local":

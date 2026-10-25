@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type PointerEvent, useRef, useState } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -14,10 +14,12 @@ import {
 } from "@tabler/icons-react";
 import { decibelsForVolume, type RepeatMode, type Track } from "@ymusic/core";
 
+import { FromDevice } from "@/components/FromDevice";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { DegradedBadge } from "./DegradedBadge.tsx";
 import { InteractionArea } from "./Interactions.tsx";
 import { RatingButtons, type RatingProps } from "./Rating.tsx";
 import { Artwork, Byline, TitleLink } from "./TrackList.tsx";
@@ -38,15 +40,21 @@ interface Props {
   onSeek: (positionMs: number) => void;
   /** A slider position in 0..1, not an amplitude. See `@ymusic/core`. */
   volume: number;
+  /** The saved level to unmute to, for a launch that starts muted. */
+  unmutedVolume: number;
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
   onShuffle: (shuffle: boolean) => void;
   expanded: boolean;
   onToggleExpanded: () => void;
+  /** The device the queue was picked up from, in the account's words. */
+  device: string | null;
   /** Null when the song can't be rated: a local file, or signed out. */
   rating: RatingProps | null;
   /** Opens the album or an artist from the song's title and byline. */
   onOpen: (route: Route) => void;
+  /** Why the song plays below its account's best, or null. */
+  degraded: string | null;
 }
 
 /**
@@ -57,7 +65,7 @@ interface Props {
 function onControl(target: EventTarget): boolean {
   return (
     target instanceof Element &&
-    target.closest("button, input, a, [data-slot=slider-control]") !== null
+    target.closest("button, [role=button], input, a, [data-slot=slider-control]") !== null
   );
 }
 
@@ -94,9 +102,29 @@ export function NowPlaying(props: Props) {
    * zero. It is held while the slider is dragged, so a drag down to zero
    * restores the level from before the drag, not the last step on the way.
    */
-  const unmuted = useRef(1);
+  const unmuted = useRef(props.unmutedVolume);
   const draggingVolume = useRef(false);
   if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
+  // Shared by the inline slider and the vertical one in the narrow popup.
+  const volumeSlider = {
+    min: 0,
+    max: 100,
+    value: volume,
+    // The position is sent as a fraction; the perceptual curve is applied
+    // downstream, by mpv, and pinned by tests on both sides.
+    onValueChange: (value: number | readonly number[]) => props.onVolume((value as number) / 100),
+    onPointerDownCapture: (event: PointerEvent) => {
+      draggingVolume.current = event.button === 0;
+    },
+    // A press that leaves the value unchanged commits nothing.
+    onPointerUpCapture: () => {
+      draggingVolume.current = false;
+    },
+    onValueCommitted: (value: number | readonly number[]) => {
+      draggingVolume.current = false;
+      if ((value as number) > 0) unmuted.current = (value as number) / 100;
+    },
+  };
 
   return (
     // As in YouTube Music: a click on the bar, anywhere but its controls,
@@ -119,12 +147,18 @@ export function NowPlaying(props: Props) {
           {playback.error}
         </p>
       )}
+      {/* No side shrinks past its own controls, so nothing overlaps; only the
+          title gives way. Below 768 px the song side takes the spare room, the
+          controls keep their own width and the volume slider moves into a
+          popup over its button. Below 640 px the rating is hidden, and below
+          520 px the song side is the cover alone, which still opens the player. */}
       <div className="flex items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex flex-1 items-center gap-3">
           <IconButton
             label={props.expanded ? "Collapse player" : "Expand player"}
             onClick={props.onToggleExpanded}
             disabled={!track}
+            className={cn(track && "max-[520px]:hidden")}
           >
             <IconChevronUp
               size={18}
@@ -135,22 +169,29 @@ export function NowPlaying(props: Props) {
           {track ? (
             <>
               <Artwork track={track} size={48} />
-              <span className="min-w-0">
-                <TitleLink track={track} onOpen={props.onOpen} className="text-sm" />
+              {/* A grid so the title can shrink to nothing without counting
+                  towards the side's minimum width. The device icon does count,
+                  or it would overflow onto the controls. */}
+              <span
+                className={cn(
+                  "grid grid-cols-[minmax(0,max-content)] max-[520px]:hidden",
+                  props.device && "min-w-5",
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <TitleLink track={track} onOpen={props.onOpen} className="min-w-0 text-sm" />
+                  <DegradedBadge reason={props.degraded} />
+                  {props.device && <FromDevice device={props.device} />}
+                </span>
                 <Byline track={track} onOpen={props.onOpen} year={year} />
               </span>
-              {props.rating && (
-                <span className="flex shrink-0 items-center">
-                  <RatingButtons {...props.rating} />
-                </span>
-              )}
             </>
           ) : (
             <span className="text-sm text-muted-foreground">Nothing playing</span>
           )}
         </div>
 
-        <div className="flex flex-[2] flex-col items-center gap-1">
+        <div className="flex flex-[2] flex-col items-center gap-1 max-md:flex-[0_1_18rem]">
           <div className="flex items-center gap-1">
             <IconButton
               label={shuffle ? "Shuffle on" : "Shuffle off"}
@@ -220,38 +261,33 @@ export function NowPlaying(props: Props) {
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-end gap-2">
-          <IconButton
-            label={volume === 0 ? "Unmute" : "Mute"}
-            onClick={() => props.onVolume(volume === 0 ? unmuted.current : 0)}
-          >
-            <VolumeIcon volume={volume} />
-          </IconButton>
-          <Tooltip>
-            <TooltipTrigger
-              render={
+        <div className="flex flex-1 items-center justify-end gap-2 max-md:flex-none">
+          {props.rating && (
+            <span className="flex items-center max-sm:hidden">
+              <RatingButtons {...props.rating} />
+            </span>
+          )}
+          {/* The padding lets the pointer cross from the button to the popup. */}
+          <div className="group relative">
+            <IconButton
+              label={volume === 0 ? "Unmute" : "Mute"}
+              onClick={() => props.onVolume(volume === 0 ? unmuted.current : 0)}
+            >
+              <VolumeIcon volume={volume} />
+            </IconButton>
+            <div className="absolute bottom-full left-1/2 hidden -translate-x-1/2 pb-2 max-md:group-focus-within:block max-md:group-hover:block">
+              <div className="rounded-md border bg-popover px-2 py-3 shadow-md">
                 <Slider
-                  min={0}
-                  max={100}
-                  value={volume}
-                  // The position is sent as a fraction; the perceptual curve is
-                  // applied downstream, by mpv, and pinned by tests on both sides.
-                  onValueChange={(value) => props.onVolume((value as number) / 100)}
-                  onPointerDownCapture={(event) => {
-                    draggingVolume.current = event.button === 0;
-                  }}
-                  // A press that leaves the value unchanged commits nothing.
-                  onPointerUpCapture={() => {
-                    draggingVolume.current = false;
-                  }}
-                  onValueCommitted={(value) => {
-                    draggingVolume.current = false;
-                    if ((value as number) > 0) unmuted.current = (value as number) / 100;
-                  }}
-                  className="w-24"
+                  {...volumeSlider}
+                  orientation="vertical"
+                  aria-label="Volume"
+                  className="h-20 [&_[data-slot=slider-control]]:min-h-20!"
                 />
-              }
-            />
+              </div>
+            </div>
+          </div>
+          <Tooltip>
+            <TooltipTrigger render={<Slider {...volumeSlider} className="w-24 max-md:hidden" />} />
             <TooltipContent>
               {`Volume ${volume}% (${
                 decibels === Number.NEGATIVE_INFINITY ? "muted" : `${decibels.toFixed(1)} dB`

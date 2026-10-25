@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { albumFrom, artistFrom, libraryFrom, playlistFrom, targetsFrom, toCard } from "./browse.ts";
+import {
+  albumFrom,
+  artistFrom,
+  cardsOf,
+  countsFrom,
+  itemIdOf,
+  libraryFrom,
+  playlistFrom,
+  sortMenu,
+  targetsFrom,
+  toCard,
+} from "./browse.ts";
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
@@ -168,6 +179,51 @@ describe("libraryFrom", () => {
   });
 });
 
+describe("cardsOf", () => {
+  it("keeps saved albums from a grid of cards", () => {
+    const cards = cardsOf(
+      [
+        {
+          item_type: "album",
+          title: text("Inferno"),
+          subtitle: text("Album • Boards of Canada • 2002"),
+          thumbnail: [
+            { url: "https://lh3.googleusercontent.com/a=w226-h226", width: 226, height: 226 },
+          ],
+          endpoint: { payload: { browseId: "MPREb_inf" } },
+        },
+        { item_type: "playlist", title: text("Mix"), endpoint: { payload: { browseId: "VLPLx" } } },
+      ],
+      "album",
+    );
+    expect(cards).toMatchObject([{ kind: "album", id: "MPREb_inf", title: "Inferno" }]);
+    expect(cards[0]!.thumbnails.length).toBeGreaterThan(0);
+  });
+
+  it("opens a library artist's row on the artist's own page", () => {
+    const cards = cardsOf(
+      [
+        {
+          item_type: "library_artist",
+          name: "Boards of Canada",
+          subtitle: text("42 songs"),
+          thumbnail: {
+            contents: [
+              { url: "https://lh3.googleusercontent.com/b=w120-h120", width: 120, height: 120 },
+            ],
+          },
+          endpoint: { payload: { browseId: "MPLAUCboc" } },
+        },
+      ],
+      "artist",
+    );
+    expect(cards).toMatchObject([
+      { kind: "artist", id: "UCboc", title: "Boards of Canada", subtitle: "42 songs" },
+    ]);
+    expect(cards[0]!.thumbnails.length).toBeGreaterThan(0);
+  });
+});
+
 describe("playlistFrom", () => {
   it("keeps the rows that are songs", () => {
     const playlist = playlistFrom("PLx", { title: text("Mix"), subtitle: text("Playlist") }, [
@@ -186,6 +242,82 @@ describe("playlistFrom", () => {
 
   it("reads 'N/A', youtubei.js's empty text, as missing", () => {
     expect(playlistFrom("PLx", { subtitle: text("N/A") }, []).subtitle).toBeNull();
+  });
+
+  // Your own playlist, as the header and edit form come back from YouTube Music.
+  const own = {
+    title: text("Road trip"),
+    subtitle: text("Playlist • 2024"),
+    second_subtitle: text("2 tracks • 7 minutes"),
+    strapline_text_one: text("Tony", [{ text: "Tony", endpoint: { payload: { browseId: "UCme" } } }]),
+    description: { description: text("Songs for the car") },
+  };
+  const removable = (setVideoId: string, videoId: string) => ({
+    menu: {
+      items: [
+        { endpoint: { payload: { videoId } } },
+        {
+          endpoint: {
+            payload: {
+              actions: [{ action: "ACTION_REMOVE_VIDEO", setVideoId, removedVideoId: videoId }],
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  it("reads the owner, description, count and length off the header", () => {
+    const playlist = playlistFrom("PLx", own, [], { privacy: "PRIVATE" });
+    expect(playlist).toMatchObject({
+      subtitle: "Playlist • 2024",
+      owner: { name: "Tony", channelId: "UCme" },
+      description: "Songs for the car",
+      privacy: "PRIVATE",
+      trackCount: 2,
+      length: "7 minutes",
+      editable: true,
+    });
+  });
+
+  it("is editable only with the edit form", () => {
+    const playlist = playlistFrom("PLx", own, []);
+    expect(playlist.editable).toBe(false);
+    expect(playlist.privacy).toBeNull();
+  });
+
+  it("keeps each row's id within the playlist, in step with the songs", () => {
+    const playlist = playlistFrom("PLx", own, [
+      { id: "aaa", title: "One", ...removable("S1", "aaa") },
+      { title: "broken", ...removable("S2", "bbb") },
+      { id: "ccc", title: "Three" },
+    ]);
+    expect(playlist.tracks.map((t) => t.title)).toEqual(["One", "Three"]);
+    expect(playlist.itemIds).toEqual(["S1", null]);
+  });
+});
+
+describe("itemIdOf", () => {
+  it("is null without a remove item", () => {
+    expect(itemIdOf({})).toBeNull();
+    expect(itemIdOf({ menu: { items: [{ endpoint: { payload: { actions: [] } } }] } })).toBeNull();
+  });
+});
+
+describe("countsFrom", () => {
+  it("reads the count and length, past the views", () => {
+    expect(countsFrom("1.2K views • 1,204 tracks • 7+ hours")).toEqual({
+      tracks: 1204,
+      length: "7+ hours",
+    });
+    expect(countsFrom("1 song • 1 hour, 5 minutes")).toEqual({
+      tracks: 1,
+      length: "1 hour, 5 minutes",
+    });
+  });
+
+  it("is empty without the line", () => {
+    expect(countsFrom(null)).toEqual({ tracks: null, length: null });
   });
 });
 
@@ -215,5 +347,43 @@ describe("targetsFrom", () => {
         { title: text("no id") },
       ]),
     ).toEqual([{ id: "PLa", title: "Road trip" }]);
+  });
+});
+
+describe("sortMenu", () => {
+  const option = (title: string, continuation?: string) => ({
+    title,
+    endpoint: continuation
+      ? {
+          payload: {
+            commands: [
+              {
+                browseSectionListReloadEndpoint: {
+                  continuation: { reloadContinuationData: { continuation } },
+                },
+              },
+            ],
+          },
+        }
+      : undefined,
+  });
+
+  it("lists YouTube's sorts, the one in use, and each one's reload", () => {
+    const menu = sortMenu({
+      title: "Recently played",
+      menu: { options: [option("Recently added", "a"), {}, option("Recently played", "p")] },
+    });
+    expect(menu).toEqual({
+      sorts: ["Recently added", "Recently played"],
+      applied: "Recently played",
+      options: [
+        { title: "Recently added", reload: "a" },
+        { title: "Recently played", reload: "p" },
+      ],
+    });
+  });
+
+  it("is empty for a list without a sort menu", () => {
+    expect(sortMenu(undefined)).toEqual({ sorts: [], applied: null, options: [] });
   });
 });

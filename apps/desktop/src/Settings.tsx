@@ -11,6 +11,7 @@ import {
   platformSummary,
   type PlatformSummary,
   playerAudioDevices,
+  type SearchHistory,
   type StableVolume,
 } from "@ymusic/ipc";
 import {
@@ -37,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { AccountState } from "./useAccount.ts";
+import { searchHistoryIn } from "./useSearchHistory.ts";
 import type { Library } from "./useLibrary.ts";
 import { clearBrowseCache } from "./useBrowse.ts";
 import { clearSongYears } from "./useSongYear.ts";
@@ -63,6 +65,8 @@ export function SettingsView({
   const version = platform?.appVersion ?? null;
   // Assumed there until the summary says otherwise.
   const hasTray = platform?.hasTray ?? true;
+  const signedIn = account.account !== null;
+  const searchHistory = searchHistoryIn(settings.searchHistory, signedIn);
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-3 pt-2 pb-8">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -190,12 +194,15 @@ export function SettingsView({
           }
         />
         <Row
-          label="Pause search history"
-          description="Searches are sent without your account, so they stay out of your YouTube search history. Results are not personalised while this is on."
+          label="Search history"
+          description={SEARCH_HISTORY_DETAIL[searchHistory]}
           control={
-            <Switch
-              checked={settings.pauseSearchHistory}
-              onCheckedChange={(pauseSearchHistory) => update({ pauseSearchHistory })}
+            <Choice
+              value={searchHistory}
+              options={SEARCH_HISTORY.map((option) =>
+                option.value === "youtube" && !signedIn ? { ...option, disabled: true } : option,
+              )}
+              onChange={(choice) => update({ searchHistory: choice })}
             />
           }
         />
@@ -289,6 +296,20 @@ const QUALITIES: { value: AudioQuality; label: string }[] = [
   { value: "normal", label: "Normal" },
   { value: "low", label: "Low" },
 ];
+
+const SEARCH_HISTORY: { value: SearchHistory; label: string }[] = [
+  { value: "youtube", label: "YouTube" },
+  { value: "device", label: "On this device" },
+  { value: "off", label: "Off" },
+];
+
+const SEARCH_HISTORY_DETAIL: Record<SearchHistory, string> = {
+  youtube:
+    "A search goes into your YouTube search history when you press Enter or play or open a result, and recent ones come from there. Results are personalised once you press Enter.",
+  device:
+    "Recent searches are kept on this device. Searches are sent without your account, so they stay out of your YouTube search history and results are not personalised.",
+  off: "Searches are not remembered anywhere. They are sent without your account, so results are not personalised.",
+};
 
 const STABLE_VOLUME: { value: StableVolume; label: string }[] = [
   { value: "off", label: "Off" },
@@ -474,7 +495,7 @@ function deviceOptions(devices: AudioDevice[] | null, saved: string) {
 /** A setting with a few named values. */
 function Choice<T extends string>(props: {
   value: T;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; disabled?: boolean }[];
   onChange: (value: T) => void;
   className?: string;
 }) {
@@ -489,7 +510,7 @@ function Choice<T extends string>(props: {
       </SelectTrigger>
       <SelectContent>
         {props.options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
+          <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
             {option.label}
           </SelectItem>
         ))}

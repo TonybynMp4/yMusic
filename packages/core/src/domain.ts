@@ -99,14 +99,36 @@ export const AlbumPage = z.object({
 });
 export type AlbumPage = z.infer<typeof AlbumPage>;
 
+/** Who can see a playlist, in YouTube's own words. */
+export const PlaylistPrivacy = z.enum(["PUBLIC", "UNLISTED", "PRIVATE"]);
+export type PlaylistPrivacy = z.infer<typeof PlaylistPrivacy>;
+
 export const PlaylistPage = z.object({
   id: z.string().min(1),
   title: z.string(),
+  /** YouTube's summary line under the title: "Playlist • 2024". */
   subtitle: z.string().nullable(),
   thumbnails: z.array(Thumbnail),
   tracks: z.array(Track),
+  /**
+   * Each row's own id within the playlist (YouTube's `setVideoId`), in step
+   * with `tracks`. Removing or moving a row names it by this, since the same
+   * song can be in a playlist twice. Null where YouTube gave none.
+   */
+  itemIds: z.array(z.string().nullable()).default([]),
   /** Whether it is in the library. Null for your own playlists, which cannot be saved. */
   saved: z.boolean().nullable().default(null),
+  /** Who made it. `channelId` is null when the name links nowhere. */
+  owner: Artist.nullable().default(null),
+  description: z.string().nullable().default(null),
+  /** Known only for your own playlists: YouTube says it on the edit form alone. */
+  privacy: PlaylistPrivacy.nullable().default(null),
+  /** How many songs YouTube says it holds, before every row has loaded. */
+  trackCount: z.number().int().nonnegative().nullable().default(null),
+  /** Its total length as YouTube writes it ("1 hour, 5 minutes"), for the same reason. */
+  length: z.string().nullable().default(null),
+  /** Yours to rename, reorder and delete. */
+  editable: z.boolean().default(false),
 });
 export type PlaylistPage = z.infer<typeof PlaylistPage>;
 
@@ -129,6 +151,57 @@ export const ArtistPage = z.object({
   shelves: z.array(z.object({ title: z.string(), cards: z.array(BrowseCard) })),
 });
 export type ArtistPage = z.infer<typeof ArtistPage>;
+
+/**
+ * What a YouTube Music search can be narrowed to, as its chips do, in the
+ * chips' order on YouTube Music. The app shows them in this order too.
+ */
+export const SearchFilter = z.enum([
+  "songs",
+  "videos",
+  "albums",
+  "featured-playlists",
+  "community-playlists",
+  "artists",
+]);
+export type SearchFilter = z.infer<typeof SearchFilter>;
+
+/** One kind of result. Songs and videos play, the rest open a page. */
+export const SearchShelf = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("tracks"),
+    filter: z.enum(["songs", "videos"]),
+    tracks: z.array(Track),
+  }),
+  z.object({
+    kind: z.literal("cards"),
+    filter: z.enum(["albums", "featured-playlists", "community-playlists", "artists"]),
+    cards: z.array(BrowseCard),
+  }),
+]);
+export type SearchShelf = z.infer<typeof SearchShelf>;
+
+export const SearchResults = z.object({
+  /**
+   * YouTube Music's top result card: an artist, album, playlist, song or
+   * video, with the songs the card lists under it. Only an unfiltered search
+   * has one.
+   */
+  top: z
+    .object({
+      item: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("track"), track: Track }),
+        z.object({ kind: z.literal("card"), card: BrowseCard }),
+      ]),
+      tracks: z.array(Track),
+    })
+    .nullable(),
+  /** In the order YouTube ranked their best result. */
+  shelves: z.array(SearchShelf),
+  /** The chips YouTube offered for this query. Empty for a filtered search. */
+  filters: z.array(SearchFilter),
+});
+export type SearchResults = z.infer<typeof SearchResults>;
 
 export const AudioCodec = z.enum([
   "opus",
@@ -167,7 +240,7 @@ export const StreamLease = z.object({
   codec: AudioCodec,
   /** Null when the container does not report one. */
   bitrate: z.number().int().positive().nullable(),
-  /** Set when the audio is the Premium-only format. Logged to verify Premium. */
+  /** Set when the audio is a Premium format (itag 774 or 141). */
   isPremiumFormat: z.boolean(),
   /**
    * How far the track sits above YouTube's reference level, in dB, or below it
@@ -178,6 +251,13 @@ export const StreamLease = z.object({
   headers: z.record(z.string(), z.string()),
   /** Null means the lease never expires, as for a file on disk. */
   expiresAt: z.number().int().positive().nullable(),
+  /** The InnerTube client that resolved it, such as `WEB_REMIX`. Null for local files. */
+  playerClient: z.string().nullable(),
+  /**
+   * Why the song plays below the best its account gets at the chosen quality,
+   * for the player to show. Null when it does not.
+   */
+  degraded: z.string().nullable(),
 });
 export type StreamLease = z.infer<typeof StreamLease>;
 

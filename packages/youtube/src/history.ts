@@ -1,6 +1,8 @@
 import type { VideoId } from "@ymusic/core";
 import type { Innertube } from "youtubei.js";
 
+import type { FetchLike } from "./client.ts";
+
 /**
  * Where YouTube Music's web player reports a song as it plays: once when it
  * starts, which puts it in the account's history, and then every so often
@@ -45,13 +47,45 @@ export async function getPlaybackTracking(
   youtube: Innertube,
   videoId: VideoId,
   signatureTimestamp: number,
+  playlistId: string | null = null,
 ): Promise<PlaybackTracking | null> {
   const response = await youtube.actions.execute("/player", {
     videoId,
+    ...(playlistId ? { playlistId } : {}),
     client: "YTMUSIC",
     playbackContext: { contentPlaybackContext: { signatureTimestamp } },
   });
   return trackingFrom(response.data as RawPlayer);
+}
+
+/**
+ * The signature timestamp of YouTube's current player script, which
+ * `getPlaybackTracking` has to send. Read from the script's text with a
+ * pattern, as yt-dlp does, rather than by having youtubei.js interpret the
+ * whole script, which costs far more memory than one number is worth.
+ */
+export async function fetchSignatureTimestamp(fetch: FetchLike): Promise<number> {
+  const api = await fetch("https://www.youtube.com/iframe_api");
+  if (!api.ok) throw new Error(`could not find the player script: ${api.status}`);
+  const id = playerIdFrom(await api.text());
+  if (id === null) throw new Error("could not find the player script's id");
+  const script = await fetch(
+    `https://www.youtube.com/s/player/${id}/player_es6.vflset/en_US/base.js`,
+  );
+  if (!script.ok) throw new Error(`could not fetch the player script: ${script.status}`);
+  const timestamp = signatureTimestampFrom(await script.text());
+  if (timestamp === null) throw new Error("the player script has no signature timestamp");
+  return timestamp;
+}
+
+/** The player script's id, from `iframe_api`, where its path is written `player\/<id>\/`. */
+export function playerIdFrom(iframeApi: string): string | null {
+  return /player\\\/([\w-]+)\\\//.exec(iframeApi)?.[1] ?? null;
+}
+
+export function signatureTimestampFrom(script: string): number | null {
+  const match = /(?:signatureTimestamp|sts)\s*:\s*(\d{5})/.exec(script);
+  return match ? Number(match[1]) : null;
 }
 
 export function trackingFrom(data: RawPlayer): PlaybackTracking | null {
@@ -78,6 +112,12 @@ export interface Play {
   cpn: string;
   /** When the play started, for the elapsed time each report carries. */
   startedAt: number;
+  /**
+   * The playlist the song plays from, bare (no `VL`). The account takes a
+   * report without one as the song playing on its own, and makes its queue
+   * that song alone.
+   */
+  playlistId: string | null;
 }
 
 /** The "this song started" report. */
@@ -107,6 +147,7 @@ function statsUrl(play: Play, base: string, params: Record<string, string>): str
   url.searchParams.set("c", play.client.name);
   url.searchParams.set("cver", play.client.version);
   url.searchParams.set("cpn", play.cpn);
+  if (play.playlistId) url.searchParams.set("list", play.playlistId);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.toString();
 }

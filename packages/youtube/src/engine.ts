@@ -4,15 +4,19 @@ import type {
   ArtistPage,
   BrowseCard,
   PlaylistPage,
+  SearchFilter,
+  SearchResults,
   StreamLease,
+  Thumbnail,
   Track,
   VideoId,
 } from "@ymusic/core";
-import { Constants, type Innertube } from "youtubei.js";
+import { ClientType, Constants, type Innertube } from "youtubei.js";
 
 import {
   createFallbackPlayer,
   createPlayer,
+  createSignedInPlayer,
   createVisitor,
   createYouTube,
   type FetchLike,
@@ -21,14 +25,33 @@ import {
   createPlaylist,
   getAlbum,
   getArtist,
+  getLibraryCards,
   getLibraryPlaylists,
   getPlaylistTargets,
+  openLibrarySongs,
   openPlaylist,
+  playlistIdFromBrowseId,
+  type LibraryCards,
+  type LibraryKind,
   type NewPlaylist,
   type PlaylistMore,
   type PlaylistTarget,
 } from "./browse.ts";
 import {
+  coverAction,
+  coverOf,
+  deletePlaylist,
+  detailsActions,
+  editPlaylist,
+  moveAction,
+  removeActions,
+  removeCoverAction,
+  uploadCover,
+  type PlaylistDetails,
+  type PlaylistItem,
+} from "./edit.ts";
+import {
+  fetchSignatureTimestamp,
   getPlaybackTracking,
   newCpn,
   playbackPing,
@@ -36,11 +59,19 @@ import {
   type Play,
   type WatchReport,
 } from "./history.ts";
+import { inProcessPlayerScript, LIBRARY_VERSION } from "./player-extract.ts";
+import { currentPlayerId, type PlayerScript, type PlayerScriptSource } from "./player-script.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
+import { FREE_BEST_ITAG, isSubscriber, PREMIUM_ITAGS } from "./premium.ts";
 import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
-import { searchSongs } from "./search.ts";
+import { searchMusic, type SearchMore } from "./search.ts";
+import {
+  getSearchHistory,
+  removeSearchHistory,
+  type SearchHistoryEntry,
+} from "./search-history.ts";
 import { watchSession } from "./session.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
 
@@ -50,19 +81,25 @@ import { NotPlayableError, resolveStream } from "./stream.ts";
  */
 const FALLBACK_SESSION_MS = 6 * 60 * 60 * 1000;
 
-/** Playlists that can be left half loaded and still resumed. */
+/** Playlists and searches that can be left half loaded and still resumed. */
 const MAX_CONTINUATIONS = 16;
 
 /** Plays still being reported on. Two is typical: the one ending and the next. */
 const MAX_PLAYS = 4;
 
+/** YouTube ships a new player script every few days; this is well inside that. */
+const SIGNATURE_TIMESTAMP_MS = 12 * 60 * 60 * 1000;
+
+/** A page fetcher held for the UI, which cannot hold the closure itself. */
+type Continuation = PlaylistMore | SearchMore;
+
 export interface ResolveOptions {
   /**
-   * Skip straight to the PO-token client. For when a lease the usual client
-   * issued resolved fine but then failed to play: a 403 on the stream shows
-   * up only in mpv, never here.
+   * The player client of a lease that resolved fine but then failed to play
+   * (a 403 on the stream shows up only in mpv, never here). Resolving starts
+   * on the client after it.
    */
-  fallback?: boolean;
+  refused?: string | null;
   quality?: AudioQuality;
 }
 
@@ -87,10 +124,16 @@ export class YouTubeEngine {
   #browse: Promise<Innertube> | null = null;
   #anonymous: Promise<Innertube> | null = null;
   #player: Promise<Innertube> | null = null;
+  #signedInPlayer: Promise<Innertube> | null = null;
+  readonly #playerScriptSource: PlayerScriptSource;
+  #playerScript: Promise<PlayerScript> | null = null;
+  /** Whether the account has Premium, null when the page did not say. */
+  #premium: Promise<boolean | null> | null = null;
   readonly #minter: PoTokenMinter | null;
   readonly #onSessionExpired: () => void;
   #fallback: { youtube: Promise<Innertube>; expiresAt: number } | null = null;
-  readonly #continuations = new Map<string, PlaylistMore>();
+  #signatureTimestamp: { value: Promise<number>; expiresAt: number } | null = null;
+  readonly #continuations = new Map<string, Continuation>();
   readonly #plays = new Map<string, Play>();
   #handles = 0;
   /** The cookie the signed-in browsing client sends, which `renewCookie` updates. */
@@ -99,25 +142,34 @@ export class YouTubeEngine {
   /**
    * Without `botguard` there is no fallback, and resolving uses `VISIONOS` only.
    * `onSessionExpired` is called once when YouTube stops accepting the cookie;
-   * the engine is signed out by then.
+   * the engine is signed out by then. `playerScript` analyses YouTube's player
+   * script somewhere other than here, as doing it here keeps about 200 MB
+   * resident for good; without it the engine does it in place.
    */
-  constructor(fetch: FetchLike, botguard?: BotGuardVm, onSessionExpired: () => void = () => {}) {
+  constructor(
+    fetch: FetchLike,
+    botguard?: BotGuardVm,
+    onSessionExpired: () => void = () => {},
+    playerScript?: PlayerScriptSource,
+  ) {
     this.#fetch = fetch;
+    this.#playerScriptSource = playerScript ?? inProcessPlayerScript(fetch);
     this.#minter = botguard ? new PoTokenMinter(fetch, botguard) : null;
     this.#onSessionExpired = onSessionExpired;
   }
 
   /**
-   * Signs the browsing client in or out. Only that client: the player client
-   * impersonates VISIONOS, and a web session's cookie on a non-web client is
-   * exactly the mismatch YouTube flags, so playback stays anonymous. It
-   * needs no account for anything the app plays today.
+   * Signs the browsing client and the `WEB_REMIX` player client in or out.
+   * The other player clients stay anonymous: a web session's cookie on a
+   * non-web client is exactly the mismatch YouTube flags.
    */
   setCookie(cookie: string | null): void {
     if (cookie === this.#cookie) return;
     this.#cookie = cookie;
     this.#browse = null;
     this.#sending = null;
+    this.#signedInPlayer = null;
+    this.#premium = null;
   }
 
   /**
@@ -147,15 +199,32 @@ export class YouTubeEngine {
 
   /**
    * `signedOut` searches without the account, which keeps the query out of its
-   * YouTube search history. It is how "pause search history" works: YouTube's
-   * own pause is an account setting the app cannot reach.
+   * YouTube search history. It is how search history on this device, or off,
+   * works: YouTube's own pause is an account setting the app cannot reach.
    */
   async search(
     query: string,
-    { signedOut = false }: { signedOut?: boolean } = {},
-  ): Promise<Track[]> {
+    { signedOut = false, filter = null }: { signedOut?: boolean; filter?: SearchFilter | null } = {},
+  ): Promise<{ results: SearchResults; more: string | null }> {
     const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
-    return searchSongs(youtube, query);
+    const { results, more } = await searchMusic(youtube, query, filter);
+    return { results, more: this.#hold(more) };
+  }
+
+  /** The next page of a chip's results, from the handle `search` or this returned. */
+  async searchMore(handle: string): Promise<{ results: SearchResults; more: string | null }> {
+    const { results, more } = await this.#fetchMore<SearchMore>(handle, "search");
+    return { results, more: this.#hold(more) };
+  }
+
+  /** The account's recent searches, newest first. Empty when signed out. */
+  async searchHistory(): Promise<SearchHistoryEntry[]> {
+    if (this.#cookie === null) return [];
+    return getSearchHistory(await this.#browseClient());
+  }
+
+  async removeSearchHistory(feedbackToken: string): Promise<void> {
+    await removeSearchHistory(await this.#signedIn(), feedbackToken);
   }
 
   /** Songs YouTube Music would play after `videoId`, for autoplay and song radio. */
@@ -204,19 +273,57 @@ export class YouTubeEngine {
     await (await this.#signedIn()).playlist.addVideos(playlistId, videoIds);
   }
 
+  /** Renames one of your playlists, or changes its description or who can see it. */
+  async editPlaylist(playlistId: string, details: PlaylistDetails): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, detailsActions(details));
+  }
+
+  /**
+   * Makes `image` (a square JPEG, at least 360 pixels a side) the playlist's
+   * cover. Answers with the cover as YouTube now serves it.
+   */
+  async setPlaylistCover(
+    playlistId: string,
+    image: Uint8Array<ArrayBuffer>,
+  ): Promise<Thumbnail[]> {
+    const youtube = await this.#signedIn();
+    const blobId = await uploadCover(youtube, image);
+    return coverOf(await editPlaylist(youtube, playlistId, [coverAction(blobId)]));
+  }
+
+  /** Drops a custom cover. Answers with the one YouTube serves instead. */
+  async removePlaylistCover(playlistId: string): Promise<Thumbnail[]> {
+    return coverOf(
+      await editPlaylist(await this.#signedIn(), playlistId, [removeCoverAction()]),
+    );
+  }
+
+  async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, removeActions(items));
+  }
+
+  /** Moves the row `itemId` to just before `beforeItemId`, or to the end when that is null. */
+  async moveInPlaylist(playlistId: string, itemId: string, beforeItemId: string | null): Promise<void> {
+    await editPlaylist(await this.#signedIn(), playlistId, [moveAction(itemId, beforeItemId)]);
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    await deletePlaylist(await this.#signedIn(), playlistId);
+  }
+
   /**
    * Tells YouTube a song started playing, which adds it to the account's
    * history. Returns a handle for the watch-time reports that follow, or null
    * when signed out or YouTube gave nothing to report to.
    */
-  async played(videoId: VideoId): Promise<string | null> {
+  async played(videoId: VideoId, playlistId: string | null = null): Promise<string | null> {
     if (this.#cookie === null) return null;
-    const player = (await this.#playerClient()).session.player;
-    if (!player) throw new Error("the player script is not loaded");
+    const list = playlistId ? playlistIdFromBrowseId(playlistId) : null;
     const tracking = await getPlaybackTracking(
       await this.#browseClient(),
       videoId,
-      player.signature_timestamp,
+      await this.#currentSignatureTimestamp(),
+      list,
     );
     if (tracking === null) return null;
     const play: Play = {
@@ -224,6 +331,7 @@ export class YouTubeEngine {
       client: { name: Constants.CLIENTS.YTMUSIC.NAME, version: Constants.CLIENTS.YTMUSIC.VERSION },
       cpn: newCpn(),
       startedAt: Date.now(),
+      playlistId: list,
     };
     await this.#stats(playbackPing(play, Date.now()));
     const handle = String(++this.#handles);
@@ -297,20 +405,20 @@ export class YouTubeEngine {
     return { page, more: this.#hold(more) };
   }
 
-  async playlistMore(handle: string): Promise<{ tracks: Track[]; more: string | null }> {
-    const next = this.#continuations.get(handle);
-    if (!next) throw new Error("this playlist page has expired; reopen the playlist");
-    this.#continuations.delete(handle);
-    const { tracks, more } = await next();
-    return { tracks, more: this.#hold(more) };
+  async playlistMore(
+    handle: string,
+  ): Promise<{ tracks: Track[]; itemIds: (string | null)[]; more: string | null }> {
+    const { tracks, itemIds, more } = await this.#fetchMore<PlaylistMore>(handle, "playlist");
+    return { tracks, itemIds, more: this.#hold(more) };
   }
 
   /**
    * A continuation is a youtubei.js closure and cannot cross the worker
    * boundary, so it stays here under a handle. Only the newest few are kept:
-   * one abandoned per playlist left half loaded is not worth holding forever.
+   * one abandoned per playlist or search left half loaded is not worth
+   * holding forever.
    */
-  #hold(more: PlaylistMore | null): string | null {
+  #hold(more: Continuation | null): string | null {
     if (more === null) return null;
     const handle = String(++this.#handles);
     this.#continuations.set(handle, more);
@@ -321,6 +429,18 @@ export class YouTubeEngine {
     return handle;
   }
 
+  /** Fetches a held page. Dropped only once fetched, so a page that failed can be asked for again. */
+  async #fetchMore<C extends Continuation>(
+    handle: string,
+    what: "playlist" | "search",
+  ): Promise<Awaited<ReturnType<C>>> {
+    const next = this.#continuations.get(handle) as C | undefined;
+    if (!next) throw new Error(`this ${what} page has expired; open it again`);
+    const page = (await next()) as Awaited<ReturnType<C>>;
+    this.#continuations.delete(handle);
+    return page;
+  }
+
   /** The signed-in account's playlists, Liked Music first. Empty when signed out. */
   async libraryPlaylists(): Promise<BrowseCard[]> {
     if (this.#cookie === null) return [];
@@ -328,33 +448,120 @@ export class YouTubeEngine {
   }
 
   /**
-   * `VISIONOS` first: it needs no token and no evaluator, so it is fast and has
-   * the fewest moving parts. Anything that goes wrong there, short of YouTube
-   * saying the video is gone, is retried on the PO-token client.
+   * The account's playlists, saved albums or library artists, in `sort`, one
+   * of the orders YouTube offers for the list, or its default. Empty when
+   * signed out.
+   */
+  async libraryCards(kind: LibraryKind, sort?: string): Promise<LibraryCards> {
+    if (this.#cookie === null) return { cards: [], sorts: [], sort: null };
+    return getLibraryCards(await this.#browseClient(), kind, sort);
+  }
+
+  /**
+   * The songs saved to the library, in `sort`, the first page of them; `more`,
+   * when set, is a handle for `playlistMore` to fetch the next. Empty when
+   * signed out.
+   */
+  async librarySongs(
+    sort?: string,
+  ): Promise<{ tracks: Track[]; more: string | null; sorts: string[]; sort: string | null }> {
+    if (this.#cookie === null) return { tracks: [], more: null, sorts: [], sort: null };
+    const songs = await openLibrarySongs(await this.#browseClient(), sort);
+    return { ...songs, more: this.#hold(songs.more) };
+  }
+
+  /**
+   * Signed in, `WEB_REMIX` first: it is the only client that serves Premium's
+   * formats as plain URLs, and the one YouTube Music's own site plays through.
+   * Then `VISIONOS`, which needs no token and no evaluator, so it is fast and
+   * has the fewest moving parts. Then the PO-token client. Anything that goes
+   * wrong on one, short of YouTube saying the video is gone, is retried on the
+   * next.
    */
   async resolve(videoId: VideoId, options: ResolveOptions = {}): Promise<StreamLease> {
     const quality = options.quality ?? "high";
-    if (options.fallback) return this.#resolveWithToken(videoId, quality);
-    try {
-      return await resolveStream(await this.#playerClient(), videoId, { quality });
-    } catch (error) {
-      if (this.#minter === null || isGone(error)) throw error;
+    const clients = this.#playerClients();
+    // A client not in the list (one from before signing in, say) skips the first.
+    const tries =
+      options.refused == null
+        ? clients
+        : clients.slice(clients.findIndex((c) => c.name === options.refused) + 1 || 1);
+    if (tries.length === 0) throw new Error(`no player client left after ${options.refused}`);
+    const errors: unknown[] = [];
+    for (const { name, resolve } of tries) {
       try {
-        return await this.#resolveWithToken(videoId, quality);
-      } catch (fallbackError) {
-        throw new AggregateError(
-          [error, fallbackError],
-          `could not resolve a stream: ${describe(error)}; fallback: ${describe(fallbackError)}`,
-        );
+        const lease = await this.#judge(await resolve(videoId, quality), quality);
+        console.info(`resolved ${videoId} as itag ${lease.itag} through ${lease.playerClient}`);
+        return lease;
+      } catch (error) {
+        if (isGone(error)) throw error;
+        console.warn(`${name} could not resolve ${videoId}: ${describe(error)}`);
+        errors.push(error);
       }
     }
+    if (errors.length === 1) throw errors[0];
+    throw new AggregateError(
+      errors,
+      `could not resolve a stream: ${errors.map(describe).join("; then ")}`,
+    );
   }
 
-  async #resolveWithToken(videoId: VideoId, quality: AudioQuality): Promise<StreamLease> {
+  #playerClients(): PlayerClient[] {
+    const clients: PlayerClient[] = [];
+    if (this.#cookie !== null) {
+      clients.push({
+        name: ClientType.MUSIC,
+        resolve: async (videoId, quality) =>
+          resolveStream(await this.#signedInPlayerClient(), videoId, { quality, music: true }),
+      });
+    }
+    clients.push({
+      name: ClientType.VISIONOS,
+      resolve: async (videoId, quality) =>
+        resolveStream(await this.#playerClient(), videoId, { quality }),
+    });
     const minter = this.#minter;
-    if (minter === null) throw new Error("no BotGuard to mint a PO token with");
-    const youtube = await this.#fallbackClient(minter);
-    return resolveStream(youtube, videoId, { quality, poToken: await minter.mint(videoId) });
+    if (minter !== null) {
+      clients.push({
+        name: ClientType.TV_SIMPLY,
+        resolve: async (videoId, quality) =>
+          resolveStream(await this.#fallbackClient(minter), videoId, {
+            quality,
+            poToken: await minter.mint(videoId),
+          }),
+      });
+    }
+    return clients;
+  }
+
+  /**
+   * Marks a lease degraded when a signed-in account on "high" got less than
+   * its best because `WEB_REMIX` did not serve it: anything but a Premium
+   * format for a Premium account, anything below Opus 251 for a free one.
+   * "normal" and "low" pick the same formats on every client, so a fallback
+   * there sounds the same and is not worth mentioning.
+   */
+  async #judge(lease: StreamLease, quality: AudioQuality): Promise<StreamLease> {
+    if (lease.isPremiumFormat) this.#premium = Promise.resolve(true);
+    if (this.#cookie === null || quality !== "high" || lease.playerClient === ClientType.MUSIC) {
+      return lease;
+    }
+    const premium = await this.#isPremium();
+    const best = premium ? PREMIUM_ITAGS : [...PREMIUM_ITAGS, FREE_BEST_ITAG];
+    if (lease.itag !== null && best.includes(lease.itag)) return lease;
+    return { ...lease, degraded: degradedReason(lease, premium === true) };
+  }
+
+  /** Asked once per sign-in, and only when a fallback needs judging. */
+  #isPremium(): Promise<boolean | null> {
+    const cookie = this.#cookie;
+    if (cookie === null) return Promise.resolve(null);
+    this.#premium ??= isSubscriber(this.#fetch, cookie).catch((error: unknown) => {
+      console.warn(`could not tell whether the account has Premium: ${describe(error)}`);
+      this.#premium = null;
+      return null;
+    });
+    return this.#premium;
   }
 
   /**
@@ -404,15 +611,63 @@ export class YouTubeEngine {
   }
 
   /**
-   * Also created once, and more importantly so: it downloads and interprets
-   * YouTube's player JavaScript, the slowest step on the whole path. Held as a
-   * promise so two tracks resolving together share one creation.
+   * YouTube's player script, analysed, which every player client deciphers
+   * with. Fetched once for the engine's life, as the clients were before: the
+   * slowest step on the whole path. Held as a promise so two tracks resolving
+   * together share one.
    */
+  #analysedPlayerScript(): Promise<PlayerScript> {
+    this.#playerScript ??= retryable(
+      (async () =>
+        this.#playerScriptSource(await currentPlayerId(this.#fetch), LIBRARY_VERSION))(),
+      () => {
+        this.#playerScript = null;
+      },
+    );
+    return this.#playerScript;
+  }
+
+  /** Also created once, held as a promise for the same reason. */
   #playerClient(): Promise<Innertube> {
     this.#player ??= retryable(createPlayer({ fetch: this.#fetch }), () => {
       this.#player = null;
     });
     return this.#player;
+  }
+
+  #currentSignatureTimestamp(): Promise<number> {
+    if (this.#signatureTimestamp === null || this.#signatureTimestamp.expiresAt <= Date.now()) {
+      this.#signatureTimestamp = {
+        value: retryable(fetchSignatureTimestamp(this.#fetch), () => {
+          this.#signatureTimestamp = null;
+        }),
+        expiresAt: Date.now() + SIGNATURE_TIMESTAMP_MS,
+      };
+    }
+    return this.#signatureTimestamp.value;
+  }
+
+  /**
+   * The signed-in `WEB_REMIX` client, created once per sign-in. Each request
+   * carries the session as it is now, as the browsing client's do, so a
+   * rotation reaches it too.
+   */
+  #signedInPlayerClient(): Promise<Innertube> {
+    const cookie = this.#cookie;
+    if (cookie === null) return Promise.reject(new Error("sign in to YouTube Music first"));
+    const fetch: FetchLike = (input, init) => {
+      const headers = new Headers(init?.headers);
+      if (headers.has("cookie") && this.#cookie !== null) headers.set("cookie", this.#cookie);
+      return this.#fetch(input, { ...init, headers });
+    };
+    this.#signedInPlayer ??= retryable(
+      (async () =>
+        createSignedInPlayer({ fetch, cookie, script: await this.#analysedPlayerScript() }))(),
+      () => {
+        this.#signedInPlayer = null;
+      },
+    );
+    return this.#signedInPlayer;
   }
 
   #fallbackClient(minter: PoTokenMinter): Promise<Innertube> {
@@ -423,6 +678,7 @@ export class YouTubeEngine {
           fetch: this.#fetch,
           visitorData,
           sessionToken: await minter.mint(visitorData),
+          script: await this.#analysedPlayerScript(),
         });
       })();
       this.#fallback = {
@@ -434,6 +690,23 @@ export class YouTubeEngine {
     }
     return this.#fallback.youtube;
   }
+}
+
+interface PlayerClient {
+  name: string;
+  resolve: (videoId: VideoId, quality: AudioQuality) => Promise<StreamLease>;
+}
+
+const CODEC_NAMES: Partial<Record<StreamLease["codec"], string>> = { opus: "Opus", aac: "AAC" };
+
+/** The tooltip for a degraded song, in the listener's terms. */
+export function degradedReason(lease: StreamLease, premium: boolean): string {
+  const codec = CODEC_NAMES[lease.codec] ?? lease.codec;
+  const playing = lease.bitrate
+    ? `${Math.round(lease.bitrate / 1000)} kbps ${codec}`
+    : `${codec} (itag ${lease.itag})`;
+  const best = premium ? "Premium's 256 kbps" : "160 kbps Opus";
+  return `Playing at ${playing} instead of ${best}. YouTube Music's web player would not play this song, so it came through another client.`;
 }
 
 /** YouTube's "this video does not exist": no client will do better. */

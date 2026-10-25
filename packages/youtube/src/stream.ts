@@ -8,6 +8,8 @@ import {
 } from "@ymusic/core";
 import type { Innertube } from "youtubei.js";
 
+import { PREMIUM_ITAGS } from "./premium.ts";
+
 /**
  * A format as the player endpoint describes it.
  *
@@ -69,9 +71,14 @@ async function basicInfo(
   youtube: Innertube,
   videoId: VideoId,
   poToken: string | undefined,
+  music: boolean,
 ): Promise<PlayerResponse> {
   try {
-    const options = poToken ? { po_token: poToken } : undefined;
+    const options = {
+      ...(poToken ? { po_token: poToken } : {}),
+      // Sends `/player` to music.youtube.com as `WEB_REMIX`, as the site does.
+      ...(music ? { client: "YTMUSIC" as const } : {}),
+    };
     return (await youtube.getBasicInfo(videoId, options)) as unknown as PlayerResponse;
   } catch (error) {
     const playability = playabilityOf(error);
@@ -91,6 +98,10 @@ async function basicInfo(
  * DRC formats are skipped. They are the same audio with dynamic range
  * compression already applied, which is a mastering decision the listener did
  * not ask us to make.
+ *
+ * "high" takes a Premium format whenever one is offered, Opus before AAC,
+ * whatever the bitrates say: the two report about the same, and either is the
+ * best there is.
  */
 export function bestAudioFormat(
   formats: readonly RawFormat[],
@@ -98,6 +109,12 @@ export function bestAudioFormat(
 ): RawFormat | null {
   const audio = formats.filter((f) => f.has_audio === true && f.has_video !== true && !f.is_drc);
   if (audio.length === 0) return null;
+  if (quality === "high") {
+    for (const itag of PREMIUM_ITAGS) {
+      const premium = audio.find((f) => f.itag === itag);
+      if (premium) return premium;
+    }
+  }
   const score = QUALITY_SCORE[quality];
   return audio.reduce((best, f) => (score(f.bitrate ?? 0) > score(best.bitrate ?? 0) ? f : best));
 }
@@ -145,6 +162,7 @@ export function leaseFrom(
   trackId: TrackId,
   format: RawFormat,
   url: string,
+  playerClient: string | null = null,
 ): StreamLease {
   return {
     trackId,
@@ -152,29 +170,36 @@ export function leaseFrom(
     itag: format.itag ?? null,
     codec: codecFromMimeType(format.mime_type),
     bitrate: format.bitrate && format.bitrate > 0 ? format.bitrate : null,
-    isPremiumFormat: false,
+    isPremiumFormat: format.itag !== undefined && PREMIUM_ITAGS.includes(format.itag),
     loudnessDb: format.loudness_db ?? null,
     // Empty, and measured to be correct: these URLs serve any client that asks
     // for them, so there is nothing for mpv to replay. See `resolveStream`.
     headers: {},
     expiresAt: expiryFromUrl(url),
+    playerClient,
+    degraded: null,
   };
 }
 
 /**
  * A video id to a lease mpv can open.
  *
- * Needs a client built by `createPlayer` or `createFallbackPlayer`, not the
- * search client. See there for why the distinction is load-bearing.
- * `poToken` is the content-bound token the fallback client's player request
- * carries.
+ * Needs a client built by `createPlayer`, `createFallbackPlayer` or
+ * `createSignedInPlayer`, not the search client. See there for why the
+ * distinction is load-bearing. `poToken` is the content-bound token the
+ * fallback client's player request carries. `music` is for the signed-in
+ * client, whose requests go to music.youtube.com.
  */
 export async function resolveStream(
   youtube: Innertube,
   videoId: VideoId,
-  { quality = "high", poToken }: { quality?: AudioQuality; poToken?: string } = {},
+  {
+    quality = "high",
+    poToken,
+    music = false,
+  }: { quality?: AudioQuality; poToken?: string; music?: boolean } = {},
 ): Promise<StreamLease> {
-  const info = await basicInfo(youtube, videoId, poToken);
+  const info = await basicInfo(youtube, videoId, poToken, music);
 
   const status = info.playability_status?.status ?? "UNKNOWN";
   if (status !== "OK") {
@@ -184,6 +209,24 @@ export async function resolveStream(
   const format = bestAudioFormat(info.streaming_data?.adaptive_formats ?? [], quality);
   if (format === null) throw new NotPlayableError("NO_AUDIO_FORMAT", null);
 
-  const url = await format.decipher(youtube.session.player);
-  return leaseFrom(trackIdForVideo(videoId), format, url);
+  const url = await streamUrl(format, youtube.session.player);
+  const client = youtube.session.context.client.clientName;
+  return leaseFrom(trackIdForVideo(videoId), format, url, client);
+}
+
+/**
+ * The format's URL, deciphered when the client loaded the player script.
+ *
+ * `createPlayer` skips the script because `VISIONOS` URLs come plain. Without
+ * it youtubei.js hands back whatever URL the format carries, so a ciphered
+ * format would come out empty and one needing `n` would only fail once mpv
+ * asked for it. This throws instead, as a plain error, so the engine falls
+ * back to the PO-token client rather than calling the song gone.
+ */
+export async function streamUrl(format: RawFormat, player: unknown): Promise<string> {
+  const url = await format.decipher(player);
+  if (player == null && (url === "" || new URL(url).searchParams.has("n"))) {
+    throw new Error("this client's stream URL needs the player script to decipher it");
+  }
+  return url;
 }

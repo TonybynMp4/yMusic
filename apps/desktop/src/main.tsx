@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { defaultSettings, settingsGet } from "@ymusic/ipc";
+import { defaultSettings, fullVolume, playerSavedVolume, settingsGet } from "@ymusic/ipc";
 import { App } from "./App.tsx";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
@@ -12,11 +12,17 @@ window.addEventListener("contextmenu", (event) => {
 });
 
 // Read before the first render, so every part of the app starts on the saved
-// settings. It is a local file read, well under a frame.
-const settings = await settingsGet().catch((error: unknown) => {
-  console.error("could not read settings", error);
-  return defaultSettings;
-});
+// settings and volume. Each is a local file read, well under a frame.
+const [settings, volume] = await Promise.all([
+  settingsGet().catch((error: unknown) => {
+    console.error("could not read settings", error);
+    return defaultSettings;
+  }),
+  playerSavedVolume().catch((error: unknown) => {
+    console.error("could not read the saved volume", error);
+    return fullVolume;
+  }),
+]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -24,7 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         one is open, moving along a row of transport buttons shows the next
         immediately instead of waiting out the delay again. */}
     <TooltipProvider delay={400}>
-      <App settings={settings} />
+      <App settings={settings} volume={volume} />
     </TooltipProvider>
   </React.StrictMode>,
 );

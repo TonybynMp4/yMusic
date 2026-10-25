@@ -8,8 +8,10 @@ use crate::account::{import, rotate, sign_in, Account, Session};
 use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
-use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player};
+use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player, Position};
+use crate::queue::{QueueJson, QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsPatch, SettingsStore};
+use crate::volume::{SavedVolume, VolumeStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 
 /// What the app knows about where it is running. The frontend shows some of it
@@ -94,8 +96,21 @@ pub fn player_seek(player: State<'_, Player>, position_ms: u64) -> Result<(), St
 
 #[tauri::command]
 #[specta::specta]
+pub fn player_position(player: State<'_, Player>) -> Option<Position> {
+    player.progress()
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn player_set_volume(player: State<'_, Player>, volume: f64) -> Result<(), String> {
     player.set_volume(volume)
+}
+
+/// The volume the last run left off at, which the player bar starts from.
+#[tauri::command]
+#[specta::specta]
+pub fn player_saved_volume(store: State<'_, VolumeStore>) -> SavedVolume {
+    store.get()
 }
 
 #[tauri::command]
@@ -374,6 +389,29 @@ pub fn settings_set<R: Runtime>(
     }
     crate::tray::sync(&app, next.close_to_tray);
     Ok(next)
+}
+
+/// The queue saved by the last run, and the playing song's position in it.
+#[tauri::command]
+#[specta::specta]
+pub fn queue_load(store: State<'_, QueueStore>) -> SavedQueue {
+    store.load()
+}
+
+/// Replaces the saved queue. Null clears it.
+#[tauri::command]
+#[specta::specta]
+pub async fn queue_save(store: State<'_, QueueStore>, queue: QueueJson) -> Result<(), String> {
+    store.save_queue(&queue.0)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn queue_save_position(
+    store: State<'_, QueueStore>,
+    position: QueuePosition,
+) -> Result<(), String> {
+    store.save_position(&position)
 }
 
 /// A release newer than this build, if there is one. Prereleases count when

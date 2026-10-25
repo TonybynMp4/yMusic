@@ -153,12 +153,77 @@
     font-family: var(--font-sans);
   }
 
+  /* The search box has its own clear button, a Tabler icon like the rest. */
+  input[type="search"]::-webkit-search-cancel-button {
+    display: none;
+  }
+
   input,
   textarea,
   [contenteditable] {
     user-select: text;
     -webkit-user-select: text;
     cursor: text;
+  }
+}
+
+/* Long text YouTube hands us (artist descriptions, the Details tab, plain
+   lyrics), from Kibo UI's typography, sized for a side panel rather than a
+   docs page. `:where` keeps it below any utility class on the same element. */
+@layer components {
+  .typography {
+    max-width: 65ch;
+    font-size: var(--text-sm);
+    line-height: 1.7;
+    color: var(--foreground);
+  }
+  .typography :where(h2, h3, h4) {
+    margin-top: calc(var(--spacing) * 6);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    color: var(--foreground);
+  }
+  .typography :where(h2) {
+    font-size: var(--text-lg);
+    line-height: var(--text-lg--line-height);
+  }
+  .typography :where(h3, h4) {
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+  }
+  .typography :where(p, ul, ol, blockquote):where(:not(:first-child)) {
+    margin-top: calc(var(--spacing) * 3);
+  }
+  /* After the spacing above, so it wins at the same specificity. */
+  .typography :where(h2, h3, h4):where(:first-child),
+  .typography :where(h2, h3, h4) + :where(p, ul, ol) {
+    margin-top: 0;
+  }
+  .typography :where(ul, ol) {
+    padding-left: calc(var(--spacing) * 5);
+  }
+  .typography :where(ul) {
+    list-style: disc;
+  }
+  .typography :where(ol) {
+    list-style: decimal;
+  }
+  .typography :where(li + li) {
+    margin-top: calc(var(--spacing) * 1);
+  }
+  .typography :where(a) {
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .typography :where(blockquote) {
+    border-left: 2px solid var(--border);
+    padding-left: calc(var(--spacing) * 4);
+    font-style: italic;
+  }
+  .typography :where(.muted, small) {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
   }
 }
 
@@ -190,4 +255,14 @@
   --channel-mute-foreground: var(--channel-mute);
   --channel-solo-foreground: var(--channel-solo);
   --channel-monitor-foreground: var(--channel-monitor);
+}
+
+/* For `ScrollArea`, which draws its own thumb. */
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

@@ -1,4 +1,7 @@
-import { ClientType, Innertube, Platform } from "youtubei.js";
+import { ClientType, Innertube, Platform, type SessionOptions } from "youtubei.js";
+
+import { playerFrom } from "./player-extract.ts";
+import type { PlayerScript } from "./player-script.ts";
 
 export type FetchLike = typeof fetch;
 
@@ -25,8 +28,7 @@ export interface YouTubeOptions {
  *
  * `retrieve_player: false` skips downloading and interpreting YouTube's player
  * JavaScript. Search does not need it, and it is the slowest and most brittle
- * part of startup, so nothing that only reads metadata should pay for it. Stream
- * resolution will need a client that does.
+ * part of startup, so nothing that only reads metadata should pay for it.
  */
 export async function createYouTube(options: YouTubeOptions): Promise<Innertube> {
   return Innertube.create({
@@ -61,12 +63,15 @@ export async function createYouTube(options: YouTubeOptions): Promise<Innertube>
  * mpv actually makes, which is why it is here and why swapping it for a
  * plausible-looking alternative will quietly break playback rather than fail.
  *
- * `retrieve_player: true` unlike the search client: the signature has to be
- * deciphered before a URL is playable.
+ * `retrieve_player: false`, like the search client. `VISIONOS` URLs carry no
+ * cipher and no `n` to transform, so youtubei.js hands them over unchanged
+ * either way, and interpreting the player script costs the engine worker
+ * about 200 MB it keeps (docs/memory.md). The play reports need one number
+ * from that script; `fetchSignatureTimestamp` reads it without interpreting.
  */
 export async function createPlayer(options: YouTubeOptions): Promise<Innertube> {
   return Innertube.create({
-    retrieve_player: true,
+    retrieve_player: false,
     client_type: ClientType.VISIONOS,
     fetch: options.fetch,
   });
@@ -83,16 +88,54 @@ export async function createPlayer(options: YouTubeOptions): Promise<Innertube> 
  * `visitorData`; youtubei.js appends it to every deciphered URL.
  */
 export async function createFallbackPlayer(
-  options: YouTubeOptions & { visitorData: string; sessionToken: string },
+  options: YouTubeOptions & { visitorData: string; sessionToken: string; script: PlayerScript },
+): Promise<Innertube> {
+  return withPlayer(
+    {
+      client_type: ClientType.TV_SIMPLY,
+      visitor_data: options.visitorData,
+      po_token: options.sessionToken,
+      fetch: options.fetch,
+    },
+    options.script,
+    options.sessionToken,
+  );
+}
+
+/**
+ * The player client for a signed-in account: `WEB_REMIX`, music.youtube.com's
+ * own, with the session cookie. It is the only client that hands out Premium's
+ * formats (itags 774 and 141) as URLs mpv can open. Its formats are ciphered,
+ * signature and `n` both, so it needs the player script and the evaluator, the
+ * same as `TV_SIMPLY`. The URLs it deciphers need no cookie and no PO token.
+ *
+ * Only for a web cookie: the cookie is what makes this the web client YouTube
+ * expects it to be, and the reason the other player clients stay anonymous.
+ */
+export async function createSignedInPlayer(
+  options: YouTubeOptions & { cookie: string; script: PlayerScript },
+): Promise<Innertube> {
+  return withPlayer(
+    { client_type: ClientType.MUSIC, cookie: options.cookie, fetch: options.fetch },
+    options.script,
+  );
+}
+
+/**
+ * A client given the analysed player script rather than left to fetch and
+ * parse its own (`retrieve_player: true`), which is what the memory goes on.
+ * Each client gets its own `Player`, as only `TV_SIMPLY`'s carries a PO token,
+ * but they share the script.
+ */
+async function withPlayer(
+  options: SessionOptions,
+  script: PlayerScript,
+  poToken?: string,
 ): Promise<Innertube> {
   installEvaluator();
-  return Innertube.create({
-    retrieve_player: true,
-    client_type: ClientType.TV_SIMPLY,
-    visitor_data: options.visitorData,
-    po_token: options.sessionToken,
-    fetch: options.fetch,
-  });
+  const youtube = await Innertube.create({ ...options, retrieve_player: false });
+  youtube.session.player = playerFrom(script, poToken);
+  return youtube;
 }
 
 /** A fresh anonymous visitor id, for binding a session token to. */
@@ -109,12 +152,40 @@ export async function createVisitor(options: YouTubeOptions): Promise<string> {
  * them with `new Function`, which is why it only belongs in the engine worker:
  * worker scripts carry no CSP in the app, the page does, and the page's
  * forbids eval. Everything evaluated here is YouTube's own player code.
+ *
+ * youtubei.js appends a `process(n, sp, sig)` to the script before handing it
+ * over, which returns `{ n, sig }`; this only has to call it.
  */
 function installEvaluator(): void {
-  Platform.shim.eval = (data, env) => {
-    const calls: string[] = [];
-    if (env.n) calls.push(`n: exportedVars.nFunction(${JSON.stringify(env.n)})`);
-    if (env.sig) calls.push(`sig: exportedVars.sigFunction(${JSON.stringify(env.sig)})`);
-    return new Function(`${data.output}\nreturn { ${calls.join(", ")} }`)() as never;
+  Platform.shim.eval = playerEvaluator();
+}
+
+/** The evaluator `installEvaluator` installs, separate so tests can run it. */
+export function playerEvaluator(): typeof Platform.shim.eval {
+  // youtubei.js hands over the extracted player code with a call appended
+  // that has this URL's `n` and signature written into it, so the source is
+  // new every time and the engine compiled all of it again for each URL.
+  // This compiles the part before the call once per player script and passes
+  // the values in instead. Only the latest script is kept, since YouTube
+  // swaps them. That one stays in the worker by design until the next script
+  // replaces it, even through hours with no fallback song.
+  let compiled: { source: string; process: Processor } | null = null;
+  return (data, env) => {
+    const at = data.output.lastIndexOf(PROCESSOR_CALL);
+    if (at === -1) return new Function(data.output)() as never;
+    const source = data.output.slice(0, at);
+    if (compiled?.source !== source) {
+      compiled = { source, process: new Function(`${source}\nreturn process;`)() as Processor };
+    }
+    return compiled.process(text(env.n), text(env.sp), text(env.sig)) as never;
   };
+}
+
+/** How youtubei.js ends the code it evaluates: `return process("<n>", "<sp>", "<sig>");`. */
+const PROCESSOR_CALL = "\nreturn process(";
+
+type Processor = (n: string, sp: string, sig: string) => { n?: string; sig?: string };
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }

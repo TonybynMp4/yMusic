@@ -4,7 +4,7 @@ import { type AudioQuality, defaultSettings as rustDefaults } from "./bindings.t
 import type { Settings, SettingsPatch } from "./bindings.ts";
 import { call, isTauri, type Same } from "./tauri.ts";
 
-export type { Settings, SettingsPatch, StableVolume } from "./bindings.ts";
+export type { SearchHistory, Settings, SettingsPatch, StableVolume } from "./bindings.ts";
 
 /** The engine picks streams by core's quality; Rust saves this one. */
 const qualitiesMatch: Same<AudioQuality, CoreAudioQuality> = true;

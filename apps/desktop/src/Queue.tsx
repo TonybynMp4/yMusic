@@ -2,34 +2,39 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconGripVertical,
-  IconLoader2,
   IconX,
 } from "@tabler/icons-react";
 import { currentItemIndex, type QueueState, type Track, type TrackId } from "@ymusic/core";
+import type { QueueFrom } from "@ymusic/ipc";
 import {
+  memo,
   type PointerEvent as ReactPointerEvent,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
 
+import { FromDevice } from "@/components/FromDevice";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
+import { positionOf, sourceOf, useRowDrag } from "./useRowDrag.ts";
 
 const ROW_HEIGHT = 48;
-/** How close to the list's top or bottom edge a drag starts scrolling it. */
-const SCROLL_EDGE = 40;
+/** Rows drawn past each edge of the viewport, as in `TrackList`. */
+const OVERSCAN = 25;
 
 interface Props {
   queue: QueueState;
+  /** What the queue plays from, named above it as YouTube Music does. */
+  playingFrom: QueueFrom | null;
   /** The queue's source is still loading, so more tracks are on the way. */
   filling: boolean;
   autoplay: boolean;
@@ -39,32 +44,6 @@ interface Props {
   /** Moves the track at playing position `from` to position `to`. */
   onMove: (from: number, to: number) => void;
   onClear: () => void;
-}
-
-/** A drag in progress: the row picked up, and where it would land now. */
-interface Drag {
-  from: number;
-  to: number;
-}
-
-/** The row shown at `position` while a drag holds `from` over `to`. */
-function sourceOf(position: number, drag: Drag | null): number {
-  if (!drag) return position;
-  const { from, to } = drag;
-  if (position === to) return from;
-  if (from < to && position >= from && position < to) return position + 1;
-  if (to < from && position > to && position <= from) return position - 1;
-  return position;
-}
-
-/** Where the row at `source` is drawn while a drag holds `from` over `to`. */
-function positionOf(source: number, drag: Drag | null): number {
-  if (!drag) return source;
-  const { from, to } = drag;
-  if (source === from) return to;
-  if (from < to && source > from && source <= to) return source - 1;
-  if (to < from && source >= to && source < from) return source + 1;
-  return source;
 }
 
 /** Where the playing row is, relative to what the list shows. */
@@ -187,6 +166,7 @@ function useFollowPlaying(
  */
 export function Queue({
   queue,
+  playingFrom,
   filling,
   autoplay,
   onAutoplay,
@@ -197,14 +177,25 @@ export function Queue({
 }: Props) {
   const current = currentItemIndex(queue);
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
-  const [drag, setDrag] = useState<Drag | null>(null);
-  /** Ends the drag in progress without moving anything. */
-  const cancelDrag = useRef<() => void>(() => {});
-  useEffect(() => () => cancelDrag.current(), []);
+  const queued = queue.order.length;
+  const { drag, startDrag } = useRowDrag(viewport, ROW_HEIGHT, queued, onMove);
   const playing = useFollowPlaying(
     viewport,
     queue.cursor === null ? null : positionOf(queue.cursor, drag),
     drag !== null,
+  );
+  // Rows get handlers that never change and call the latest ones, so a
+  // memoized row re-renders only when its own song or state does.
+  const latest = useRef<{
+    onJump: (id: TrackId) => void;
+    onRemove: (id: TrackId) => void;
+    startDrag: (source: number, event: ReactPointerEvent) => void;
+  }>({ onJump, onRemove, startDrag: () => {} });
+  const jump = useCallback((id: TrackId) => latest.current.onJump(id), []);
+  const remove = useCallback((id: TrackId) => latest.current.onRemove(id), []);
+  const dragFrom = useCallback(
+    (source: number, event: ReactPointerEvent) => latest.current.startDrag(source, event),
+    [],
   );
 
   if (queue.items.length === 0) {
@@ -215,79 +206,27 @@ export function Queue({
     );
   }
 
-  const queued = queue.order.length;
   const suggested = queue.suggestions.length;
   // One list for both, so they scroll together; the heading takes a row.
   const count = queued + (suggested > 0 ? 1 + suggested : 0);
 
-  // The rows reorder as the pointer moves, and the move happens on release.
-  // Listening on the window rather than capturing the pointer keeps the drag
-  // alive when its row is re-rendered elsewhere or scrolled out of the list.
-  const startDrag = (from: number, event: ReactPointerEvent) => {
-    if (event.button !== 0 || !viewport) return;
-    event.preventDefault();
-    const last = queued - 1;
-    const start = event.clientY + viewport.scrollTop;
-    let pointer = event.clientY;
-    let to = from;
-    const update = () => {
-      const offset = pointer + viewport.scrollTop - start;
-      to = Math.min(last, Math.max(0, from + Math.round(offset / ROW_HEIGHT)));
-      setDrag((previous) => (previous?.to === to ? previous : { from, to }));
-    };
-    // Held near an edge, the list scrolls that way, faster the closer it gets.
-    let frame = 0;
-    const scroll = () => {
-      const { top, bottom } = viewport.getBoundingClientRect();
-      const speed =
-        pointer < top + SCROLL_EDGE
-          ? pointer - (top + SCROLL_EDGE)
-          : pointer > bottom - SCROLL_EDGE
-            ? pointer - (bottom - SCROLL_EDGE)
-            : 0;
-      if (speed !== 0) {
-        viewport.scrollTop += speed / 3;
-        update();
-      }
-      frame = requestAnimationFrame(scroll);
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      pointer = e.clientY;
-      update();
-    };
-    const stop = () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", stop);
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.cursor = "";
-      cancelDrag.current = () => {};
-      setDrag(null);
-    };
-    const onPointerUp = () => {
-      stop();
-      if (to !== from) onMove(from, to);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") stop();
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", stop);
-    window.addEventListener("keydown", onKeyDown);
-    document.body.style.cursor = "grabbing";
-    cancelDrag.current = stop;
-    setDrag({ from, to });
-    frame = requestAnimationFrame(scroll);
-  };
+  latest.current = { onJump, onRemove, startDrag };
 
   return (
     <div className="flex h-full flex-col">
+      {playingFrom && (
+        <div className="px-4 pt-3">
+          <p className="text-xs text-muted-foreground">Playing from</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <span className="truncate">{playingFrom.title}</span>
+            {playingFrom.device && <FromDevice device={playingFrom.device} />}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {queue.items.length} tracks
-          {filling && <IconLoader2 size={12} className="animate-spin" aria-label="Loading more" />}
+          {filling && <Spinner size={12} label="Loading more" />}
         </span>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -309,6 +248,7 @@ export function Queue({
               count={count}
               scroller={viewport}
               rowHeight={ROW_HEIGHT}
+              overscan={OVERSCAN}
               getKey={(position) =>
                 position < queued
                   ? `${position}:${queue.order[sourceOf(position, drag)]}`
@@ -331,7 +271,7 @@ export function Queue({
                 if (position > queued) {
                   const track = queue.suggestions[position - queued - 1];
                   if (!track) return null;
-                  return <Row track={track} onJump={onJump} suggestion />;
+                  return <Row track={track} onJump={jump} suggestion />;
                 }
                 const source = sourceOf(position, drag);
                 const itemIndex = queue.order[source]!;
@@ -341,11 +281,12 @@ export function Queue({
                   <Row
                     track={track}
                     current={itemIndex === current}
-                    onJump={onJump}
-                    onRemove={onRemove}
-                    onDragStart={(event) => startDrag(source, event)}
+                    onJump={jump}
+                    onRemove={remove}
+                    source={source}
+                    onDragStart={dragFrom}
                     dragging={drag?.from === source}
-                    className={cn(drag && "pointer-events-none")}
+                    inert={drag !== null}
                   />
                 );
               }}
@@ -372,26 +313,30 @@ export function Queue({
   );
 }
 
-function Row({
+const Row = memo(function Row({
   track,
   current = false,
   onJump,
   onRemove,
+  source = 0,
   onDragStart,
   dragging = false,
+  inert = false,
   suggestion = false,
-  className,
 }: {
   track: Track;
   current?: boolean;
   onJump: (id: TrackId) => void;
   onRemove?: (id: TrackId) => void;
-  onDragStart?: (event: ReactPointerEvent) => void;
+  /** The row's place in the queue, handed back when a drag starts on it. */
+  source?: number;
+  onDragStart?: (source: number, event: ReactPointerEvent) => void;
   /** Picked up and following the pointer. */
   dragging?: boolean;
+  /** A drag is in progress: rows let the pointer through. */
+  inert?: boolean;
   /** An autoplay suggestion, faded unless hovered. A disliked one fades as far as a queued one does. */
   suggestion?: boolean;
-  className?: string;
 }) {
   const remove = onRemove && (() => onRemove(track.id));
   const dimmed = useDisliked(track) && !current;
@@ -404,13 +349,13 @@ function Row({
         current ? "bg-accent" : "hover:bg-accent/60",
         dragging && "bg-accent shadow-lg ring-1 ring-foreground/10",
         suggestion && !dimmed && "opacity-70 hover:opacity-100",
-        className,
+        inert && "pointer-events-none",
       )}
     >
       {onDragStart && (
         <span
           aria-hidden
-          onPointerDown={onDragStart}
+          onPointerDown={(event) => onDragStart(source, event)}
           className={cn(
             "-mx-1 grid h-full w-5 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 group-hover:opacity-100",
             dragging && "opacity-100",
@@ -454,4 +399,4 @@ function Row({
       )}
     </InteractionArea>
   );
-}
+});

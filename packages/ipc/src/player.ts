@@ -13,10 +13,12 @@ import type {
   LoadRequest,
   PlaybackEvent as RustPlaybackEvent,
   PlaybackStatus,
+  Position,
+  SavedVolume,
 } from "./bindings.ts";
 import { call, isTauri, rustTrackId, type Same } from "./tauri.ts";
 
-export type { AudioDevice, AudioStats } from "./bindings.ts";
+export type { AudioDevice, AudioStats, Position, SavedVolume } from "./bindings.ts";
 
 /** The queue is written against core's statuses, which mpv's must match. */
 const statusesMatch: Same<PlaybackStatus, CorePlaybackStatus> = true;
@@ -26,6 +28,18 @@ void statusesMatch;
 export async function playerAudioDevices(): Promise<AudioDevice[]> {
   if (!isTauri) return [];
   return call("playerAudioDevices");
+}
+
+/**
+ * The volume the last run left off at, and the last one above zero, for
+ * Unmute. Both are slider positions in 0..1.
+ */
+export const fullVolume: SavedVolume = { volume: 1, unmuted: 1 };
+
+/** Full volume outside Tauri, where nothing is saved. */
+export async function playerSavedVolume(): Promise<SavedVolume> {
+  if (!isTauri) return fullVolume;
+  return call("playerSavedVolume");
 }
 
 /** Stats for nerds' readings for the song playing. Null outside Tauri. */
@@ -53,10 +67,19 @@ function loadRequest(lease: StreamLease): LoadRequest {
 export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
+  #playing = false;
+  #seeking = false;
+  // Bumped whenever a reply in flight would be stale, so it gets dropped.
+  #asked = 0;
+  #poll: ReturnType<typeof setTimeout> | null = null;
 
-  async load(lease: StreamLease, paused = false): Promise<void> {
+  async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
     await this.#ensureSubscribed();
-    await call("playerLoad", { ...loadRequest(lease), startPaused: paused });
+    await call("playerLoad", {
+      ...loadRequest(lease),
+      startPaused: paused,
+      startMs: startMs === undefined ? null : Math.max(0, Math.round(startMs)),
+    });
   }
 
   async queueNext(after: TrackId, lease: StreamLease | null): Promise<void> {
@@ -71,8 +94,22 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     await call("playerPause");
   }
 
+  /**
+   * mpv only moves `time-pos` once the seek lands, so a reply asked for before
+   * then still holds the old position and would pull the bar back for a
+   * second. Polling waits for the status the core sends when playback
+   * restarts, which comes with the new position.
+   */
   async seek(positionMs: number): Promise<void> {
-    await call("playerSeek", Math.max(0, Math.round(positionMs)));
+    this.#seeking = true;
+    this.#stopPolling();
+    try {
+      await call("playerSeek", Math.max(0, Math.round(positionMs)));
+    } catch (error) {
+      this.#seeking = false;
+      if (this.#playing) this.#pollIn(0);
+      throw error;
+    }
   }
 
   async setVolume(volume: number): Promise<void> {
@@ -99,9 +136,54 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     const channel = new Channel<RustPlaybackEvent>();
     channel.onmessage = (message) => {
       const event = toCoreEvent(message);
-      for (const listener of this.#listeners) listener(event);
+      // A failed stream gets an error and no status after it, so the error
+      // has to stop the polling too.
+      if (event.type === "status" || event.type === "error") {
+        this.#seeking = false;
+        this.#playing = event.type === "status" && event.status === "playing";
+        if (this.#playing) this.#pollIn(0);
+        else this.#stopPolling();
+      }
+      this.#deliver(event);
     };
     await call("playerSubscribe", channel);
+  }
+
+  #deliver(event: PlaybackEvent): void {
+    for (const listener of this.#listeners) listener(event);
+  }
+
+  /**
+   * The core only pushes the position when a song starts or after a seek.
+   * Every message it pushes reaches the page as a script WebKit compiles and
+   * keeps, while a command's reply leaves nothing behind, so while a song
+   * plays the page asks for the position instead.
+   */
+  #pollIn(delayMs: number): void {
+    this.#stopPolling();
+    this.#poll = setTimeout(() => void this.#askPosition(), delayMs);
+  }
+
+  #stopPolling(): void {
+    if (this.#poll !== null) clearTimeout(this.#poll);
+    this.#poll = null;
+    this.#asked++;
+  }
+
+  async #askPosition(): Promise<void> {
+    this.#poll = null;
+    const asked = this.#asked;
+    let position: Position | null = null;
+    try {
+      position = await call("playerPosition");
+    } catch (error) {
+      console.error("could not read the playback position", error);
+    }
+    // Nothing loaded: the next "playing" status starts the polling again.
+    if (!this.#playing || this.#seeking || asked !== this.#asked || !position) return;
+    this.#deliver({ type: "position", ...position });
+    // Just after the next whole second, so the time label ticks on time.
+    this.#pollIn(1000 - (position.positionMs % 1000) + 20);
   }
 }
 

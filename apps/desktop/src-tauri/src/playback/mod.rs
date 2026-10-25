@@ -13,16 +13,17 @@
 
 mod event;
 
-pub use event::{PlaybackEvent, PlaybackStatus};
+pub use event::{PlaybackEvent, PlaybackStatus, Position};
 
 use event::seconds_to_ms;
 use libmpv2::{events::Event, Format, Mpv};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::StableVolume;
+use crate::volume::{VolumeStore, SETTLE};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     thread,
 };
 
@@ -54,6 +55,7 @@ struct Sink {
 const OBSERVE_TIME_POS: u64 = 1;
 const OBSERVE_DURATION: u64 = 2;
 const OBSERVE_PAUSE: u64 = 3;
+const OBSERVE_VOLUME: u64 = 4;
 
 #[derive(Debug, Clone, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +73,9 @@ pub struct LoadRequest {
     /// YouTube's loudness for the track, in dB above its reference level.
     #[serde(default)]
     pub loudness_db: Option<f64>,
+    /// Where to start, for a queue restored at launch. From the top when None.
+    #[serde(default)]
+    pub start_ms: Option<u64>,
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -145,6 +150,9 @@ struct State {
     current_track: Arc<Mutex<Option<String>>>,
     loudness: Arc<Mutex<Loudness>>,
     gapless: Arc<Mutex<Gapless>>,
+    /// Where mpv's volume goes to be saved once it settles, once
+    /// `remember_volume` has started that.
+    volume_changes: Arc<Mutex<Option<mpsc::Sender<f64>>>>,
 }
 
 pub struct Player {
@@ -156,6 +164,9 @@ pub struct Player {
     state: State,
     /// mpv 0.38 added an index argument to `loadfile`, before the options.
     loadfile_index: bool,
+    /// The thread saving the volume, joined on quit so a change still
+    /// settling is saved too.
+    volume_saver: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 /// libmpv refuses to initialize under a locale where `LC_NUMERIC` is not "C",
@@ -233,6 +244,10 @@ impl Player {
             .map_err(|error| format!("could not observe duration: {error}"))?;
         mpv.observe_property("pause", Format::Flag, OBSERVE_PAUSE)
             .map_err(|error| format!("could not observe pause: {error}"))?;
+        // Rust sees every volume change, the slider's and the OS media
+        // widget's alike, so it is the one place that can save it.
+        mpv.observe_property("volume", Format::Double, OBSERVE_VOLUME)
+            .map_err(|error| format!("could not observe volume: {error}"))?;
 
         spawn_event_thread(Arc::clone(&mpv), sink.clone(), state.clone());
 
@@ -241,6 +256,7 @@ impl Player {
             sink,
             state,
             loadfile_index,
+            volume_saver: Mutex::default(),
         })
     }
 
@@ -284,7 +300,20 @@ impl Player {
         };
 
         self.set_property("pause", request.start_paused)?;
-        self.loadfile(&request.url, "replace", &filter)
+        self.loadfile(&request.url, "replace", &filter, request.start_ms)
+    }
+
+    /// The track mpv has and how far into it playback is, or None with
+    /// nothing loaded.
+    pub fn position(&self) -> Option<(String, u64)> {
+        let track = self
+            .state
+            .current_track
+            .lock()
+            .expect("track mutex")
+            .clone()?;
+        let seconds = self.mpv.get_property::<f64>("time-pos").ok()?;
+        Some((track, (seconds.max(0.0) * 1000.0).round() as u64))
     }
 
     /// Appends the track to play when `after` ends, or with None, takes back
@@ -332,7 +361,7 @@ impl Player {
             .lock()
             .expect("loudness mutex")
             .filter(next.loudness_db);
-        self.loadfile(&next.url, "append", &filter)
+        self.loadfile(&next.url, "append", &filter, None)
     }
 
     /// Appends the next track again, so a change to stable volume or the
@@ -350,8 +379,17 @@ impl Player {
     /// global `af` back when a file with its own ends, so every file gets
     /// one, or a song loaded over an appended one would play with whatever
     /// that put back.
-    fn loadfile(&self, url: &str, flags: &str, filter: &str) -> Result<(), String> {
-        let options = format!("af={}", quote_option(filter));
+    fn loadfile(
+        &self,
+        url: &str,
+        flags: &str,
+        filter: &str,
+        start_ms: Option<u64>,
+    ) -> Result<(), String> {
+        let mut options = format!("af={}", quote_option(filter));
+        if let Some(start_ms) = start_ms.filter(|&ms| ms > 0) {
+            options.push_str(&format!(",start={}", start_ms as f64 / 1000.0));
+        }
         if self.loadfile_index {
             self.command("loadfile", &[url, flags, "-1", &options])
         } else {
@@ -414,6 +452,12 @@ impl Player {
             self.apply_loudness(&loudness)?;
         }
         self.refresh_next()
+    }
+
+    /// Where the playing song is, for the page to ask once a second. None when
+    /// nothing is loaded.
+    pub fn progress(&self) -> Option<Position> {
+        read_position(&self.mpv)
     }
 
     /// What stats for nerds shows. The meters read nothing while it is off.
@@ -518,6 +562,36 @@ impl Player {
     /// alternative is the app quietly getting a linear slider back.
     pub fn set_volume(&self, position: f64) -> Result<(), String> {
         self.set_property("volume", (position.clamp(0.0, 1.0) * 100.0).round())
+    }
+
+    /// Starts from `store`'s saved volume and saves the volume to it from now
+    /// on. Called at startup, before anything loads.
+    pub fn remember_volume(&self, store: VolumeStore) -> Result<(), String> {
+        self.set_volume(store.get().volume)?;
+        let (send, changes) = mpsc::channel();
+        let saver = thread::Builder::new()
+            .name("volume-saver".into())
+            .spawn(move || store.save_settled(changes, SETTLE))
+            .map_err(|error| format!("could not start saving the volume: {error}"))?;
+        *self.state.volume_changes.lock().expect("volume mutex") = Some(send);
+        *self.volume_saver.lock().expect("saver mutex") = Some(saver);
+        Ok(())
+    }
+
+    /// Saves a volume change that has not settled yet and stops saving.
+    /// Called on quit, so a change made just before it is not lost.
+    pub fn flush_volume(&self) {
+        // Dropping the sender is what tells the saver to write and return.
+        self.state
+            .volume_changes
+            .lock()
+            .expect("volume mutex")
+            .take();
+        if let Some(saver) = self.volume_saver.lock().expect("saver mutex").take() {
+            if saver.join().is_err() {
+                log::warn!("the volume saver panicked");
+            }
+        }
     }
 
     pub fn stop(&self) -> Result<(), String> {
@@ -693,6 +767,8 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
         .name("mpv-events".into())
         .spawn(move || {
             let mut duration_ms: Option<u64> = None;
+            // Set on a restart, so the next `time-pos` reaches the page too.
+            let mut page_wants_position = false;
 
             loop {
                 let Some(event) = mpv.wait_event(0.5) else {
@@ -748,11 +824,39 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 emit(&sink, PlaybackEvent::Ended { track_id: previous });
                             }
                         }
+                        release_freed_memory();
                     }
                     // mpv restarts playback after every seek too, including a
                     // seek while paused, so "playing" has to be checked rather
                     // than assumed or a paused scrub flips the UI to playing.
                     Event::PlaybackRestart => {
+                        // mpv reports `time-pos` many times a second, and each
+                        // message runs a script in the page and updates its
+                        // state. At that rate the web process held about 80 MB
+                        // more by the end of a session, so the page asks for
+                        // the position itself (`Player::progress`) while a
+                        // song plays. It only hears it from here when a song
+                        // starts or after a seek, which also covers a scrub
+                        // while paused, when the page is not asking.
+                        //
+                        // `time-pos` can still fall short of the seek target
+                        // here and only settle in the next change, which mpv
+                        // may also have queued before this event. So the page
+                        // gets both what mpv reads now and that next change.
+                        page_wants_position = true;
+                        if let Some(Position {
+                            position_ms,
+                            duration_ms,
+                        }) = read_position(&mpv)
+                        {
+                            emit(
+                                &sink,
+                                PlaybackEvent::Position {
+                                    position_ms,
+                                    duration_ms,
+                                },
+                            );
+                        }
                         let paused = mpv.get_property::<bool>("pause").unwrap_or(false);
                         let status = if paused {
                             PlaybackStatus::Paused
@@ -803,13 +907,16 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                     } => match reply_userdata {
                         OBSERVE_TIME_POS => {
                             if let libmpv2::events::PropertyData::Double(seconds) = change {
-                                emit(
-                                    &sink,
-                                    PlaybackEvent::Position {
-                                        position_ms: seconds_to_ms(seconds),
-                                        duration_ms,
-                                    },
-                                );
+                                let event = PlaybackEvent::Position {
+                                    position_ms: seconds_to_ms(seconds),
+                                    duration_ms,
+                                };
+                                if page_wants_position {
+                                    page_wants_position = false;
+                                    emit(&sink, event);
+                                } else {
+                                    emit_to_observers(&sink, event);
+                                }
                             }
                         }
                         OBSERVE_DURATION => {
@@ -831,6 +938,15 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 );
                             }
                         }
+                        OBSERVE_VOLUME => {
+                            if let libmpv2::events::PropertyData::Double(volume) = change {
+                                if let Some(send) =
+                                    state.volume_changes.lock().expect("volume mutex").as_ref()
+                                {
+                                    let _ = send.send(volume / 100.0);
+                                }
+                            }
+                        }
                         _ => {}
                     },
                     Event::Shutdown => break,
@@ -840,6 +956,21 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
         })
         .expect("spawning the mpv event thread");
 }
+
+/// Hands memory freed by the last song, mostly mpv's demuxer cache, back to
+/// the system. glibc only returns what sits at the top of the heap on its own,
+/// so without this a song's buffers stay in the process after it ends. Called
+/// as the next file starts, after the UI has heard about it.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn release_freed_memory() {
+    // SAFETY: malloc_trim only walks glibc's own arenas, under their locks.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn release_freed_memory() {}
 
 /// What a file starting means for the queue.
 enum Advance {
@@ -871,10 +1002,23 @@ fn advance(mpv: &Mpv, state: &State) -> Advance {
     Advance::Joined(next.track_id)
 }
 
-fn emit(sink: &Sink, event: PlaybackEvent) {
+fn read_position(mpv: &Mpv) -> Option<Position> {
+    let position_ms = mpv.get_property::<f64>("time-pos").ok()?;
+    let duration_ms = mpv.get_property::<f64>("duration").ok();
+    Some(Position {
+        position_ms: seconds_to_ms(position_ms),
+        duration_ms: duration_ms.map(seconds_to_ms),
+    })
+}
+
+fn emit_to_observers(sink: &Sink, event: PlaybackEvent) {
     for observer in sink.observers.lock().expect("observer mutex").iter() {
         observer.send(event.clone());
     }
+}
+
+fn emit(sink: &Sink, event: PlaybackEvent) {
+    emit_to_observers(sink, event.clone());
     if let Some(frontend) = sink.frontend.lock().expect("sink mutex").as_ref() {
         frontend.send(event);
     }

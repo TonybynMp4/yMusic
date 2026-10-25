@@ -21,7 +21,7 @@ There are no global events. The two streams, playback and media keys, are `Chann
 
 ## Where zod still parses
 
-Zod is for data the app does not produce: InnerTube responses, parsed at the engine boundary into the models in `packages/core`. The IPC payloads are not parsed. Rust and the frontend are built from one commit, and the compiler checks both sides against one generated file, so a runtime parse there would only repeat what `tsc` and `cargo test` already proved.
+Zod is for data the app cannot vouch for. InnerTube responses are parsed at the engine boundary into the models in `packages/core`. The saved queue is parsed too: Rust stores it as the frontend sends it and hands it back as `unknown`, and the file may come from an older build or a hand edit, so `queueLoad` checks it and reads a file that fails as nothing saved. The other IPC payloads are not parsed. Rust and the frontend are built from one commit, and the compiler checks both sides against one generated file, so a runtime parse there would only repeat what `tsc` and `cargo test` already proved.
 
 Some Rust types mirror a core schema that also parses YouTube's data: `AudioCodec`, `AudioQuality` and `PlaybackStatus`. The wrappers pin each pair with `Same<A, B>` from `tauri.ts`, so a change to one fails `tsc` until the other matches.
 

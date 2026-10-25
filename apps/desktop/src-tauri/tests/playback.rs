@@ -7,7 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ymusic_lib::playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player};
+use ymusic_lib::{
+    playback::{EventSink, LoadRequest, PlaybackEvent, PlaybackStatus, Player},
+    volume::{VolumeStore, SETTLE},
+};
 
 #[derive(Clone, Default)]
 struct Recorder(Arc<Mutex<Vec<PlaybackEvent>>>);
@@ -95,6 +98,7 @@ fn request(url: String) -> LoadRequest {
         headers: Default::default(),
         start_paused: false,
         loudness_db: None,
+        start_ms: None,
     }
 }
 
@@ -232,6 +236,9 @@ fn loading_a_song_drops_the_appended_one() {
 #[test]
 fn plays_a_local_file_through_to_the_end() {
     let (player, recorder) = player();
+    // The page only hears the position after a restart, observers every one.
+    let positions = Recorder::default();
+    player.observe(positions.clone());
     player.load(request(fixture_url("tone.wav"))).expect("load");
 
     assert!(
@@ -254,9 +261,9 @@ fn plays_a_local_file_through_to_the_end() {
         "never reported playing"
     );
     assert!(
-        recorder.max_position_ms() > 500,
+        positions.max_position_ms() > 500,
         "position never advanced past 500ms, got {}",
-        recorder.max_position_ms()
+        positions.max_position_ms()
     );
 
     // The duration mpv reports should match the fixture, within a frame or two.
@@ -344,8 +351,10 @@ fn seeking_while_paused_stays_paused() {
 
     let before = recorder.events().len();
     player.seek(1_500).expect("seek");
+    // Paused, mpv settles a little short of the target (about 1.3 s here)
+    // once the restart is done, and that is what the page ends up with.
     assert!(
-        recorder.wait_for(Duration::from_secs(5), |r| r.max_position_ms() >= 1_400),
+        recorder.wait_for(Duration::from_secs(5), |r| r.max_position_ms() >= 1_200),
         "the seek never landed"
     );
     // Give a stray restart event time to arrive before judging its absence.
@@ -362,6 +371,37 @@ fn seeking_while_paused_stays_paused() {
     );
 }
 
+/// A queue restored at launch loads its song paused where it was left, and
+/// the player reads that position back for the next exit.
+#[test]
+fn a_restored_song_starts_paused_where_it_was_left() {
+    let (player, recorder) = player();
+    player
+        .load(LoadRequest {
+            start_paused: true,
+            start_ms: Some(1_500),
+            ..track("restored", fixture_url("tone.wav"))
+        })
+        .expect("load");
+    assert!(
+        recorder.wait_for(Duration::from_secs(10), |r| r.max_position_ms() >= 1_400),
+        "never opened at the saved position"
+    );
+    // Long enough that a song left playing would have moved on.
+    std::thread::sleep(Duration::from_millis(600));
+    let last_status = recorder.events().into_iter().rev().find_map(|e| match e {
+        PlaybackEvent::Status { status } => Some(status),
+        _ => None,
+    });
+    assert_eq!(last_status, Some(PlaybackStatus::Paused));
+    let (track, position_ms) = player.position().expect("a position");
+    assert_eq!(track, "restored");
+    assert!(
+        (1_400..1_900).contains(&position_ms),
+        "read back {position_ms} ms"
+    );
+}
+
 /// The point of the whole design: mpv streams an HTTPS audio URL itself, over
 /// range requests, with the headers we hand it. Requires network access.
 #[test]
@@ -373,10 +413,12 @@ fn streams_https_audio_with_custom_headers() {
         "User-Agent".into(),
         "YMUSIC/0.1 (playback smoke test)".into(),
     );
+    let positions = Recorder::default();
+    player.observe(positions.clone());
     player.load(load).expect("load");
 
     assert!(
-        recorder.wait_for(Duration::from_secs(30), |r| r.max_position_ms() > 500),
+        positions.wait_for(Duration::from_secs(30), |r| r.max_position_ms() > 500),
         "never got 500ms into the stream; events: {:?}",
         recorder.events()
     );
@@ -385,4 +427,58 @@ fn streams_https_audio_with_custom_headers() {
         "unexpected errors: {:?}",
         recorder.errors()
     );
+}
+
+/// The saved volume is mpv's, so it starts the next run where this one left
+/// off, and only the settled end of a drag down to mute becomes the level to
+/// unmute to.
+#[test]
+fn the_volume_is_saved_once_it_settles() {
+    let (player, _events) = player();
+    let path = std::env::temp_dir()
+        .join(format!("ymusic-saved-volume-{}", std::process::id()))
+        .join("volume.json");
+    let _ = std::fs::remove_file(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, r#"{ "volume": 0.6, "unmuted": 0.6 }"#).unwrap();
+
+    let store = VolumeStore::open(path.clone());
+    player
+        .remember_volume(store.clone())
+        .expect("remember volume");
+
+    for step in [50, 30, 10, 2, 0] {
+        player.set_volume(step as f64 / 100.0).expect("set volume");
+    }
+    let deadline = Instant::now() + SETTLE * 4;
+    while store.get().volume != 0.0 {
+        assert!(Instant::now() < deadline, "the volume was never saved");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let saved = VolumeStore::open(path).get();
+    assert_eq!(saved.volume, 0.0);
+    assert_eq!(
+        saved.unmuted, 0.6,
+        "no step of the drag is the unmute level"
+    );
+}
+
+/// A change made just before quitting is saved, not lost while it settles.
+#[test]
+fn quitting_saves_a_volume_still_settling() {
+    let (player, _events) = player();
+    let path = std::env::temp_dir()
+        .join(format!("ymusic-flushed-volume-{}", std::process::id()))
+        .join("volume.json");
+    let _ = std::fs::remove_file(&path);
+
+    player
+        .remember_volume(VolumeStore::open(path.clone()))
+        .expect("remember volume");
+    player.set_volume(0.3).expect("set volume");
+    // Wait for mpv to report the change, but not for it to settle.
+    std::thread::sleep(SETTLE / 5);
+    player.flush_volume();
+
+    assert_eq!(VolumeStore::open(path).get().volume, 0.3);
 }

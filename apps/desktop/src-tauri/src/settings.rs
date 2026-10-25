@@ -1,8 +1,8 @@
 //! The user's settings, kept as `settings.json` beside the app's other data.
 //!
-//! Every field has a default and the file is read with `#[serde(default)]`, so
-//! a file written by an older build (missing a field) or a newer one (with a
-//! field this build does not know) still loads. A file that will not parse at
+//! Every field has a default and the file is laid over the defaults, so a file
+//! written by an older build (missing a field) or a newer one (with a field
+//! this build does not know) still loads. A file that will not parse at
 //! all is logged and replaced by the defaults: losing a preference is a much
 //! better outcome than a player that refuses to start.
 
@@ -31,6 +31,19 @@ pub enum StableVolume {
     LoudOnly,
 }
 
+/// Where searches are remembered.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchHistory {
+    /// On the account, as YouTube Music records them.
+    #[default]
+    Youtube,
+    /// In a list on this device, with searches kept off the account.
+    Device,
+    /// Nowhere.
+    Off,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -42,7 +55,7 @@ pub struct Settings {
     pub audio_device: String,
     pub skip_disliked: bool,
     pub pause_watch_history: bool,
-    pub pause_search_history: bool,
+    pub search_history: SearchHistory,
     /// Closing the window hides it to the tray and playback carries on.
     pub close_to_tray: bool,
     pub check_for_updates: bool,
@@ -60,7 +73,7 @@ impl Default for Settings {
             audio_device: "auto".into(),
             skip_disliked: false,
             pause_watch_history: false,
-            pause_search_history: false,
+            search_history: SearchHistory::Youtube,
             close_to_tray: false,
             check_for_updates: true,
             include_prereleases: false,
@@ -88,7 +101,7 @@ pub struct SettingsPatch {
     #[specta(optional)]
     pub pause_watch_history: Option<bool>,
     #[specta(optional)]
-    pub pause_search_history: Option<bool>,
+    pub search_history: Option<SearchHistory>,
     #[specta(optional)]
     pub close_to_tray: Option<bool>,
     #[specta(optional)]
@@ -112,11 +125,10 @@ impl SettingsPatch {
 }
 
 impl Settings {
-    /// A settings file, with the defaults for fields it lacks, as one written
-    /// before a setting existed does, and unknown fields ignored, as one
-    /// written by a newer version may have.
-    fn from_file(bytes: &[u8]) -> Result<Self, serde_json::Error> {
-        let file: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+    /// The fields of a settings file, with the defaults for fields it lacks,
+    /// as one written before a setting existed does, and unknown fields
+    /// ignored, as one written by a newer version may have.
+    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> serde_json::Result<Self> {
         let mut json = serde_json::to_value(Self::default()).expect("settings serialize");
         let fields = json.as_object_mut().expect("settings are an object");
         for (key, value) in file {
@@ -153,7 +165,7 @@ pub struct SettingsStore {
 impl SettingsStore {
     pub fn open(path: PathBuf) -> Self {
         let current = match fs::read(&path) {
-            Ok(bytes) => Settings::from_file(&bytes).unwrap_or_else(|error| {
+            Ok(bytes) => read(&bytes).unwrap_or_else(|error| {
                 log::error!(
                     "ignoring unreadable settings in {}: {error}",
                     path.display()
@@ -197,15 +209,25 @@ impl SettingsStore {
     }
 }
 
-fn save(path: &PathBuf, settings: &Settings) -> Result<(), String> {
-    let json = serde_json::to_vec_pretty(settings).expect("settings serialize");
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).map_err(|error| format!("could not save settings: {error}"))?;
+/// Parses a saved file, moving settings an older build wrote under another
+/// name to where this one reads them.
+fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
+    let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+    // The search history switch was once a pause, on or off. Paused meant
+    // nothing recorded anywhere, which is Off now.
+    let paused = fields.remove("pauseSearchHistory");
+    if let (Some(serde_json::Value::Bool(paused)), false) =
+        (paused, fields.contains_key("searchHistory"))
+    {
+        let history = if paused { "off" } else { "youtube" };
+        fields.insert("searchHistory".into(), history.into());
     }
-    // Written aside and renamed over, so a crash mid-write leaves the old file.
-    let partial = path.with_extension("json.partial");
-    fs::write(&partial, json)
-        .and_then(|()| fs::rename(&partial, path))
+    Settings::from_fields(fields)
+}
+
+fn save(path: &std::path::Path, settings: &Settings) -> Result<(), String> {
+    let json = serde_json::to_vec_pretty(settings).expect("settings serialize");
+    crate::files::write_atomically(path, &json)
         .map_err(|error| format!("could not save settings: {error}"))
 }
 
@@ -253,6 +275,25 @@ mod tests {
         let settings = SettingsStore::open(path).get();
         assert_eq!(settings.stable_volume, StableVolume::On);
         assert!(settings.autoplay);
+    }
+
+    #[test]
+    fn a_saved_pause_on_search_history_becomes_off() {
+        let history = |json: &str| read(json.as_bytes()).unwrap().search_history;
+        assert_eq!(
+            history(r#"{ "pauseSearchHistory": true }"#),
+            SearchHistory::Off
+        );
+        assert_eq!(
+            history(r#"{ "pauseSearchHistory": false }"#),
+            SearchHistory::Youtube
+        );
+        assert_eq!(history("{}"), SearchHistory::Youtube);
+        assert_eq!(
+            history(r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#),
+            SearchHistory::Device,
+            "a choice already made wins over the old switch"
+        );
     }
 
     #[test]

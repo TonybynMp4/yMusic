@@ -7,6 +7,7 @@ import {
   peekNext,
   type QueueAction,
   queueReducer,
+  restoredQueue,
   type RepeatMode,
   type StreamLease,
   type Track,
@@ -15,9 +16,11 @@ import {
   type VideoId,
   videoIdFromTrackId,
 } from "@ymusic/core";
+import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { keepLease } from "./leases.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
@@ -31,11 +34,15 @@ function logPlaybackFailure(error: unknown): void {
 }
 
 /**
- * Where a queue came from, so it can keep growing: a playlist still loading
- * its later pages, or a song radio (what YouTube Music starts when you play a
- * search result).
+ * Where a queue came from, so it can keep growing and be named under
+ * "Playing from": a playlist still loading its later pages, a fixed list
+ * such as an album, or a song radio (what YouTube Music starts when you
+ * play a search result).
  */
-export type PlayFrom = { kind: "playlist"; id: string } | { kind: "radio" };
+export type PlayFrom =
+  | { kind: "playlist"; id: string; title: string }
+  | { kind: "list"; title: string }
+  | { kind: "radio" };
 
 /**
  * The seed for autoplay: the last YouTube track in playing order. Local files
@@ -60,14 +67,19 @@ function radioSeed(queue: QueueState): TrackId | null {
  *
  * `account` is the signed-in account's name, which the saved ratings belong to.
  */
-export function usePlayer({ settings, update }: SettingsState, account: string | null) {
+export function usePlayer(
+  { settings, update }: SettingsState,
+  account: string | null,
+  savedVolume: number,
+) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
   const { state, position, engine, load, reportError } = usePlayback();
   /**
    * The slider position in 0..1. Held here rather than in the player bar
-   * because the OS can set it too, from the MPRIS volume control.
+   * because the OS can set it too, from the MPRIS volume control. It starts
+   * at the saved volume, which Rust has already given mpv.
    */
-  const [volume, setVolumeState] = useState(1);
+  const [volume, setVolumeState] = useState(savedVolume);
   /** On by default, as in YouTube Music: when the queue runs out, its suggestions play on. */
   const autoplay = settings.autoplay;
   /** The queue's source is still arriving, so autoplay waits for its real end. */
@@ -81,6 +93,18 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   const source = useRef<{ playlistId: string; ids: Set<TrackId> } | null>(null);
   /** A track to load without playing it, as a resumed queue waits in the player bar. */
   const cued = useRef<TrackId | null>(null);
+  /** Where to start a restored queue's song, until it plays. */
+  const resumeAt = useRef<{ trackId: TrackId; ms: number } | null>(null);
+  /**
+   * What this device last made the account's server queue. Saved with the
+   * queue, so the next launch can tell whether another device played since.
+   */
+  const [shared, setShared] = useState<SavedQueue["shared"]>(null);
+  /** What the queue plays from, for "Playing from". Replaced with the queue. */
+  const [playingFrom, setPlayingFrom] = useState<QueueFrom | null>(null);
+  // Removing the last song empties the queue without a `clear`, and a song
+  // added after that plays from nothing.
+  if (queue.items.length === 0 && playingFrom !== null) setPlayingFrom(null);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -117,7 +141,12 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
   };
-  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory);
+  /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
+  const playlistOf = useCallback((id: TrackId) => {
+    const from = source.current;
+    return from?.ids.has(id) ? from.playlistId : null;
+  }, []);
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory, playlistOf);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -145,6 +174,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
    * `loadedId` moves as soon as a load starts, before mpv knows about it.
    */
   const inMpv = useRef<TrackId | null>(null);
+  /** The lease mpv is playing, for the degraded badge and stats for nerds. */
+  const [streaming, setStreaming] = useState<StreamLease | null>(null);
 
   /** Read at resolve time, so a change reaches the next song without a reload. */
   const quality = useRef(settings.audioQuality);
@@ -168,7 +199,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       .then((lease) => {
         // Not cached if the quality changed while it resolved; a load already
         // waiting on it still gets it.
-        if (quality.current === requested) leases.current.set(id, lease);
+        if (quality.current === requested) keepLease(leases.current, id, lease);
         return lease;
       })
       .finally(() => {
@@ -185,6 +216,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       if (loadedId.current !== null) {
         loadedId.current = null;
         inMpv.current = null;
+        setStreaming(null);
         void engine.stop().catch(logPlaybackFailure);
       }
       return;
@@ -200,6 +232,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     retried.current = null;
     wantsPaused.current = cued.current === trackId;
     cued.current = null;
+    if (resumeAt.current?.trackId !== trackId) resumeAt.current = null;
 
     let cancelled = false;
     void (async () => {
@@ -210,8 +243,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       // Read after the lease, so a play pressed while it resolved holds.
       const paused = wantsPaused.current;
       queued.current = null;
-      await load(lease, paused);
+      await load(lease, paused, resumeAt.current?.ms);
       inMpv.current = trackId;
+      setStreaming(lease);
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
       logPlaybackFailure(error);
@@ -267,8 +301,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   }, [playing, joinable, upcomingId, trackId, leaseFor, audioQuality, engine]);
 
   // A YouTube stream can resolve fine and still be refused once mpv asks for
-  // it, and a 403 surfaces only here. Retry such a track once on the PO-token
-  // client before letting the error stand.
+  // it, and a 403 surfaces only here. Retry such a track once on the player
+  // clients after the one that resolved it before letting the error stand.
   useEffect(
     () =>
       engine.subscribe((event) => {
@@ -277,17 +311,24 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         if (failed === null || failed !== loadedId.current) return;
         if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
         retried.current = failed;
+        // The lease mpv refused: `streaming` may not have reached it yet.
+        const refused = leases.current.get(failed)?.playerClient ?? null;
         leases.current.delete(failed);
         void (async () => {
-          const lease = await resolveTrack(failed, { fallback: true, quality: quality.current });
+          const lease = await resolveTrack(failed, {
+            refused,
+            quality: quality.current,
+          });
           if (loadedId.current !== failed) return;
-          leases.current.set(failed, lease);
+          keepLease(leases.current, failed, lease);
           // A song paused by the user, or cued by a resumed queue, stays
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;
           queued.current = null;
-          await load(lease, paused);
+          const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
+          await load(lease, paused, startMs);
           inMpv.current = failed;
+          setStreaming(lease);
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
@@ -325,6 +366,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         if (inMpv.current !== currentId.current) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
+        setStreaming(leases.current.get(event.trackId) ?? null);
         retried.current = null;
         queued.current = null;
         cameUp.current = true;
@@ -342,7 +384,10 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
   /** Clearing or replacing the queue also stops it growing from its old source. */
   const send = useCallback(
     (action: QueueAction) => {
-      if (action.type === "setQueue" || action.type === "clear") stopFollowing();
+      if (action.type === "setQueue" || action.type === "clear") {
+        stopFollowing();
+        setPlayingFrom(null);
+      }
       if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
       dispatch(action);
     },
@@ -375,6 +420,9 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
       }
 
       send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+      if (from?.kind === "playlist" || from?.kind === "list") {
+        setPlayingFrom({ title: from.title, device: null });
+      }
       if (from?.kind !== "playlist") {
         source.current = null;
         return;
@@ -413,36 +461,72 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
 
   /**
    * Queues `tracks` at `index` without playing, for a queue resumed from
-   * another device. `playlistId` is the playlist it plays, if any.
+   * another device. `playlistId` is the playlist it plays, if any, and
+   * `queueFrom` what it is named and where it was left.
    */
   const cue = useCallback(
-    (tracks: Track[], index: number, playlistId: string | null) => {
+    (tracks: Track[], index: number, playlistId: string | null, queueFrom: QueueFrom | null) => {
       const first = tracks[index];
       if (!first) return;
       send({ type: "setQueue", tracks, startIndex: index });
       cued.current = first.id;
       source.current = playlistId ? { playlistId, ids: new Set(tracks.map((t) => t.id)) } : null;
+      setPlayingFrom(queueFrom);
     },
     [send],
   );
 
+  /**
+   * Puts back a queue saved by an earlier run, paused on its song, at
+   * `at` when that is the same song. False when the saved queue does
+   * not hold together, so the caller can fall back to something else.
+   */
+  const restore = useCallback(
+    (saved: SavedQueue, at: QueuePosition | null) => {
+      const restored = restoredQueue(saved);
+      const first = restored && currentTrack(restored);
+      if (!first) return false;
+      stopFollowing();
+      cameUp.current = false;
+      dispatch({ type: "restore", queue: saved });
+      cued.current = first.id;
+      resumeAt.current =
+        at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
+      source.current = saved.source
+        ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
+        : null;
+      setShared(saved.shared);
+      setPlayingFrom(saved.from);
+      return true;
+    },
+    [stopFollowing],
+  );
+
+  /** The YouTube playlist the queue was started from and the songs it gave, for saving. */
+  const savedSource = useCallback((): SavedQueue["source"] => {
+    const from = source.current;
+    return from ? { playlistId: from.playlistId, ids: [...from.ids] } : null;
+  }, []);
+
   // Once a YouTube song is playing, make it the account's queue, so YouTube
   // Music on other devices offers to resume it. Only once playing: a queue
   // resumed from elsewhere and still waiting here must not replace itself.
-  const shared = useRef<TrackId | null>(null);
+  const sharedId = useRef<TrackId | null>(null);
   const { learn, now } = ratings;
   useEffect(() => {
-    if (!playing || trackId === null || shared.current === trackId) return;
+    // Once mpv plays it, a reload (a retry, or the song again) starts from the top.
+    if (playing && trackId !== null && inMpv.current === trackId) resumeAt.current = null;
+    if (!playing || trackId === null || sharedId.current === trackId) return;
     const videoId = videoIdFromTrackId(trackId);
     if (videoId === null) return;
-    shared.current = trackId;
-    const from = source.current;
-    const playlistId = from?.ids.has(trackId) ? from.playlistId : null;
+    sharedId.current = trackId;
+    const playlistId = playlistOf(trackId);
     const asked = now();
     void youtube
       .shareQueue(videoId, playlistId)
       .then((rating) => {
         if (rating === null) return;
+        if (account !== null) setShared({ account, videoId, playlistId });
         learn(videoId, rating, asked);
         // Disliked elsewhere since it was last seen here: it started, so skip
         // it now, unless the user has already moved on to another track.
@@ -452,7 +536,7 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
         }
       })
       .catch((error: unknown) => console.error("could not share the queue with YouTube", error));
-  }, [playing, trackId, learn, now]);
+  }, [playing, trackId, learn, now, account, playlistOf]);
 
   // Autoplay: once the queue is complete, ask YouTube Music what would follow
   // its last song, and keep that ready to play when the queue runs out.
@@ -541,7 +625,15 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     [videoId, next, sendRating],
   );
 
-  const seek = useCallback((positionMs: number) => void engine.seek(positionMs), [engine]);
+  // The core only sends the new position once mpv lands the seek, so until
+  // then the bar would fall back to where the song was.
+  const seek = useCallback(
+    (positionMs: number) => {
+      position.set(Math.max(0, Math.round(positionMs)));
+      void engine.seek(positionMs);
+    },
+    [engine, position],
+  );
   const setVolume = useCallback(
     (fraction: number) => {
       const clamped = Math.min(1, Math.max(0, fraction));
@@ -550,6 +642,8 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     },
     [engine],
   );
+  /** The track mpv has, which `position` belongs to once it is not null. */
+  const loadedTrack = useCallback(() => inMpv.current, []);
   const setRepeat = useCallback(
     (repeat: RepeatMode) => dispatch({ type: "setRepeat", repeat }),
     [],
@@ -566,11 +660,18 @@ export function usePlayer({ settings, update }: SettingsState, account: string |
     autoplay,
     setAutoplay,
     track,
+    /** The playing song's stream, once mpv has it. */
+    lease: streaming?.trackId === track?.id ? streaming : null,
     playback: state,
     position,
+    loadedTrack,
     volume,
     playTrack,
     cue,
+    restore,
+    playingFrom,
+    shared,
+    savedSource,
     play,
     pause,
     toggle,

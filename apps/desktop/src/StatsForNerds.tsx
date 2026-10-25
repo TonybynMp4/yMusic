@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconX } from "@tabler/icons-react";
+import type { StreamLease } from "@ymusic/core";
 import { playerStats, type AudioStats } from "@ymusic/ipc";
 
 import { IconButton } from "@/components/IconButton";
@@ -28,7 +29,7 @@ const PEAK_ZONES: MeterZone[] = [
  * gain, and what meters either side of that gain measure. Key it on the track,
  * so a new song starts with empty readings rather than the last song's.
  */
-export function StatsForNerds(props: { onClose: () => void }) {
+export function StatsForNerds(props: { lease: StreamLease | null; onClose: () => void }) {
   const [stats, setStats] = useState<AudioStats | null>(null);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function StatsForNerds(props: { onClose: () => void }) {
         </IconButton>
       </div>
       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1 tabular-nums">
-        {rows(stats).map(([label, value]) => (
+        {[...stream(props.lease), ...rows(stats)].map(([label, value]) => (
           <Stat key={label} label={label} value={value} />
         ))}
       </dl>
@@ -72,6 +73,15 @@ function Stat(props: { label: string; value: ReactNode }) {
 }
 
 const NONE = "-";
+
+/** YouTube's format and the client that resolved it. Nothing for a local file. */
+function stream(lease: StreamLease | null): [string, ReactNode][] {
+  if (lease?.itag == null) return [];
+  return [
+    ["Itag", lease.isPremiumFormat ? `${lease.itag} (Premium)` : String(lease.itag)],
+    ["Player client", lease.playerClient ?? NONE],
+  ];
+}
 
 function rows(s: AudioStats | null): [string, ReactNode][] {
   return [

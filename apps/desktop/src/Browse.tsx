@@ -2,9 +2,10 @@ import {
   IconArrowsShuffle,
   IconDisc,
   IconHeart,
-  IconLoader2,
+  IconPencil,
   IconPlayerPlayFilled,
   IconPlaylist,
+  IconRefresh,
   IconUser,
 } from "@tabler/icons-react";
 import type {
@@ -17,13 +18,21 @@ import type {
   TrackId,
 } from "@ymusic/core";
 
-import { useState, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 
 import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { InteractionArea, InteractionButton, type Subject } from "./Interactions.tsx";
+import { formatTotal } from "./format.ts";
+import {
+  InteractionArea,
+  InteractionButton,
+  PRIVACY_LABELS,
+  usePlaylistEditing,
+  type Subject,
+} from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
@@ -55,27 +64,33 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     );
   }
   const { page } = state;
+  /** Every play on the page queues from it, which also names the queue. */
+  const playingFrom = (from: PlayFrom): BrowseActions => ({
+    ...actions,
+    onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
+  });
   switch (page.kind) {
-    case "album":
-      return <Album page={page.page} actions={actions} route={route} />;
+    case "album": {
+      const from: PlayFrom = { kind: "list", title: page.page.title };
+      return <Album page={page.page} actions={playingFrom(from)} route={route} />;
+    }
     case "playlist": {
       // Queue the whole playlist, including the rows still loading.
-      const from: PlayFrom = { kind: "playlist", id: route.id };
-      const following = {
-        ...actions,
-        onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
-      };
+      const from: PlayFrom = { kind: "playlist", id: route.id, title: page.page.title };
       return (
         <Playlist
           page={page.page}
           loadingMore={state.loadingMore}
-          actions={following}
+          resume={state.resume}
+          actions={playingFrom(from)}
           route={route}
         />
       );
     }
-    case "artist":
-      return <Artist page={page.page} actions={actions} route={route} />;
+    case "artist": {
+      const from: PlayFrom = { kind: "list", title: page.page.name };
+      return <Artist page={page.page} actions={playingFrom(from)} route={route} />;
+    }
   }
 }
 
@@ -130,17 +145,28 @@ function Album({
 function Playlist({
   page,
   loadingMore,
+  resume,
   actions,
   route,
 }: {
   page: PlaylistPage;
   loadingMore: boolean;
+  /** Set when the rest of the playlist failed to load: fetches it again. */
+  resume: (() => void) | undefined;
   actions: BrowseActions;
   route: Route;
 }) {
   // The same icons as the sidebar: Liked Music always shows the heart, and a
   // playlist whose artwork is missing shows the playlist icon.
   const liked = route.id === LIKED_MUSIC;
+  const editing = usePlaylistEditing(page);
+  // Every row is in: not still loading, and not stopped early by a failure.
+  const complete = !loadingMore && !resume;
+  // YouTube's count and length until every row is in, then the rows' own,
+  // which follow your edits.
+  const count = complete ? page.tracks.length : (page.trackCount ?? page.tracks.length);
+  const total = page.tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
+  const length = complete ? (total > 0 ? formatTotal(total) : null) : page.length;
   return (
     <>
       <Header
@@ -149,10 +175,23 @@ function Playlist({
           liked ? <IconHeart size={64} stroke={1.25} /> : <IconPlaylist size={64} stroke={1.25} />
         }
         title={page.title}
-        subtitle={page.subtitle}
+        byline={page.owner?.name}
+        subtitle={[page.subtitle, page.privacy && PRIVACY_LABELS[page.privacy]]
+          .filter(Boolean)
+          .join(" • ")}
+        details={[`${count} ${count === 1 ? "song" : "songs"}`, length].filter(Boolean).join(" • ")}
+        description={page.description}
         tracks={page.tracks}
         actions={actions}
         subject={{ kind: "collection", route }}
+        extra={
+          editing && (
+            <Button variant="outline" className="rounded-full" onClick={editing.edit}>
+              <IconPencil size={16} stroke={1.75} />
+              Edit
+            </Button>
+          )
+        }
       />
       <TrackList
         tracks={page.tracks}
@@ -161,12 +200,27 @@ function Playlist({
         onToggle={actions.onToggle}
         onPlay={(id) => actions.onPlay(page.tracks, id)}
         onOpen={actions.onOpen}
+        // Rows move and go only once all are in: the queue follows a loading
+        // playlist by how many rows it has, and a move past the last row
+        // loaded would land after rows that never arrived.
+        editing={
+          editing && complete ? { onRemove: editing.remove, onMove: editing.move } : undefined
+        }
       />
       {loadingMore && (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-          <IconLoader2 size={14} className="animate-spin" aria-hidden />
+          <Spinner size={14} />
           Loading more songs ({page.tracks.length} so far)
         </p>
+      )}
+      {resume && (
+        <div className="flex items-center justify-center gap-3 py-4 text-xs text-muted-foreground">
+          Couldn't load the rest of this playlist
+          <Button variant="outline" size="sm" onClick={resume}>
+            <IconRefresh />
+            Retry
+          </Button>
+        </div>
       )}
     </>
   );
@@ -259,18 +313,52 @@ function Artist({
   );
 }
 
-/** Two lines until clicked, then the whole thing; clicking again folds it. */
+/**
+ * Two lines until More, then the whole text in paragraphs, as YouTube Music
+ * does. More only shows when two lines cut the text off.
+ */
 function Description({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // Measured while the clamped paragraph is mounted, and again as its width
+  // changes. Keyed by the text, so a new description is measured afresh.
+  const clamp = useCallback((el: HTMLParagraphElement) => {
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <button
-      type="button"
-      aria-expanded={open}
-      onClick={() => setOpen((o) => !o)}
-      className="max-w-2xl cursor-pointer text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
-    >
-      <span className={cn("whitespace-pre-line", !open && "line-clamp-2")}>{text}</span>
-    </button>
+    <div className="typography max-w-2xl text-muted-foreground">
+      {open ? (
+        paragraphs.map((p, i) => (
+          <p key={i} className="whitespace-pre-line">
+            {p}
+          </p>
+        ))
+      ) : (
+        <p key={text} ref={clamp} className="line-clamp-2">
+          {paragraphs.join(" ")}
+        </p>
+      )}
+      {(open || clipped) && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="mt-1 cursor-pointer font-medium text-foreground outline-none hover:underline focus-visible:underline"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -281,10 +369,15 @@ export function Header(props: {
   title: string;
   byline?: React.ReactNode;
   subtitle: string | null;
+  /** A second summary line: how many songs, how long. */
+  details?: string | undefined;
+  description?: string | null | undefined;
   tracks: Track[];
   actions: BrowseActions;
   /** What the page's menu acts on. The "Local files" page has none. */
   subject?: Subject | undefined;
+  /** More buttons beside Play and Shuffle. */
+  extra?: React.ReactNode;
 }) {
   return (
     <div className="mb-4 flex items-end gap-6 px-3 pt-2">
@@ -299,7 +392,14 @@ export function Header(props: {
         <h1 className="text-3xl font-bold tracking-tight">{props.title}</h1>
         {props.byline && <p className="text-sm">{props.byline}</p>}
         {props.subtitle && <p className="text-xs text-muted-foreground">{props.subtitle}</p>}
-        <PlayButtons tracks={props.tracks} actions={props.actions} subject={props.subject} />
+        {props.details && <p className="text-xs text-muted-foreground">{props.details}</p>}
+        {props.description && <Description text={props.description} />}
+        <PlayButtons
+          tracks={props.tracks}
+          actions={props.actions}
+          subject={props.subject}
+          extra={props.extra}
+        />
       </div>
     </div>
   );
@@ -309,10 +409,12 @@ function PlayButtons({
   tracks,
   actions,
   subject,
+  extra,
 }: {
   tracks: Track[];
   actions: BrowseActions;
   subject?: Subject | undefined;
+  extra?: React.ReactNode;
 }) {
   const empty = tracks.length === 0;
   return (
@@ -334,24 +436,28 @@ function PlayButtons({
         <IconArrowsShuffle size={16} stroke={1.75} />
         Shuffle
       </Button>
+      {extra}
       {subject && <InteractionButton subject={subject} size="icon" />}
     </div>
   );
 }
 
 /** A horizontally scrolling row of cards, as YouTube Music lays out a shelf. */
-function Shelf({
+export function Shelf({
   title,
   cards,
   onOpen,
+  action,
 }: {
   title: string;
   cards: BrowseCard[];
   onOpen: (route: Route) => void;
+  /** Beside the title, such as search's "Show all". */
+  action?: React.ReactNode;
 }) {
   return (
     <section className="mb-6">
-      <h2 className="mb-2 px-3 text-xl font-semibold">{title}</h2>
+      <ShelfHeader title={title} action={action} />
       <div className="flex gap-4 overflow-x-auto px-3 pb-2">
         {cards.map((card) => (
           <Card key={`${card.kind}:${card.id}`} card={card} onOpen={onOpen} />
@@ -361,7 +467,17 @@ function Shelf({
   );
 }
 
-function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
+/** A shelf's title, with an action such as "Show all" at the other end. */
+export function ShelfHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between px-3">
+      <h2 className="mb-2 text-xl font-semibold">{title}</h2>
+      {action}
+    </div>
+  );
+}
+
+export function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => void }) {
   // Artists are round, everything else square: YouTube Music's own cue.
   const round = card.kind === "artist";
   const route: Route = { kind: card.kind, id: card.id };
@@ -371,7 +487,7 @@ function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => vo
       <button
         type="button"
         onClick={() => onOpen(route)}
-        className="flex w-full flex-col gap-2 text-left outline-none"
+        className="group/open flex w-full flex-col gap-2 text-left outline-none"
       >
         <Art
           thumbnails={card.thumbnails}
@@ -383,7 +499,7 @@ function Card({ card, onOpen }: { card: BrowseCard; onOpen: (route: Route) => vo
           fallback={round ? <IconUser size={32} stroke={1.5} /> : <IconDisc size={32} stroke={1.5} />}
         />
         <span className={cn("min-w-0", round && "text-center")}>
-          <span className="line-clamp-2 text-sm group-focus-visible:underline">{card.title}</span>
+          <span className="line-clamp-2 text-sm group-focus-visible/open:underline">{card.title}</span>
           {card.subtitle && (
             <span className="block truncate text-xs text-muted-foreground">{card.subtitle}</span>
           )}

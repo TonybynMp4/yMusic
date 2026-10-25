@@ -1,0 +1,67 @@
+import { Track, TrackId, VideoId } from "@ymusic/core";
+import { z } from "zod";
+
+import type { QueuePosition } from "./bindings.ts";
+import { call, isTauri } from "./tauri.ts";
+
+export type { QueuePosition } from "./bindings.ts";
+
+export const QueueFrom = z.object({ title: z.string(), device: z.string().nullable() });
+export type QueueFrom = z.infer<typeof QueueFrom>;
+
+/**
+ * The queue as saved in `queue.json`. Rust stores it as it comes, so this
+ * schema is its only check: a file that fails it, written by an older build
+ * or by hand, reads as nothing saved.
+ */
+export const SavedQueue = z.object({
+  items: z.array(Track).readonly(),
+  order: z.array(z.number().int().nonnegative()).readonly(),
+  cursor: z.number().int().nonnegative(),
+  repeat: z.enum(["off", "all", "one"]),
+  shuffle: z.boolean(),
+  /**
+   * The YouTube playlist the queue was started from, which sharing names,
+   * and the songs that came from it: one added to the queue since is shared
+   * on its own, not as part of the playlist.
+   */
+  source: z.object({ playlistId: z.string(), ids: z.array(TrackId).readonly() }).nullable(),
+  /**
+   * What the queue plays from, shown under "Playing from", and the device it
+   * was left on when it came from another one, in the account's words.
+   */
+  from: QueueFrom.nullable().default(null),
+  /**
+   * What this device last wrote to the account's server queue, and which
+   * account it was. Kept when the queue changes without playing anything.
+   */
+  shared: z
+    .object({ account: z.string(), videoId: VideoId, playlistId: z.string().nullable() })
+    .nullable(),
+});
+export type SavedQueue = z.infer<typeof SavedQueue>;
+
+/** What the last run saved. Nothing outside Tauri, or when the file does not parse. */
+export async function queueLoad(): Promise<{
+  queue: SavedQueue | null;
+  position: QueuePosition | null;
+}> {
+  if (!isTauri) return { queue: null, position: null };
+  const saved = await call("queueLoad");
+  const queue = SavedQueue.safeParse(saved.queue);
+  if (saved.queue !== null && !queue.success) {
+    console.error("ignoring the saved queue", queue.error);
+  }
+  return { queue: queue.success ? queue.data : null, position: saved.position };
+}
+
+/** Replaces the saved queue. Null clears it. */
+export async function queueSave(queue: SavedQueue | null): Promise<void> {
+  if (!isTauri) return;
+  await call("queueSave", queue);
+}
+
+export async function queueSavePosition(position: QueuePosition): Promise<void> {
+  if (!isTauri) return;
+  await call("queueSavePosition", position);
+}

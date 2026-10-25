@@ -36,6 +36,8 @@ export interface LocalTrack extends Track {
   albumArtist: string | null;
   trackNumber: number | null;
   discNumber: number | null;
+  /** When the file was first scanned, in milliseconds since the Unix epoch. */
+  addedAt: number;
 }
 
 /**
@@ -89,6 +91,7 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
     trackNumber: row.trackNumber,
     discNumber: row.discNumber,
     year: row.year,
+    addedAt: row.addedAt * 1000,
   };
 }
 

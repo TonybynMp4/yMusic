@@ -1,6 +1,19 @@
-import { IconDots, IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react";
+import {
+  IconDots,
+  IconGripVertical,
+  IconPlayerPauseFilled,
+  IconPlayerPlayFilled,
+} from "@tabler/icons-react";
 import type { Track, TrackId } from "@ymusic/core";
-import { Fragment, type ReactNode } from "react";
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 
 import { Art } from "@/components/Art";
 import { VirtualList } from "@/components/VirtualList";
@@ -9,6 +22,7 @@ import { formatDuration } from "./format.ts";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
+import { sourceOf, useRowDrag } from "./useRowDrag.ts";
 
 interface Props {
   /** Any source: a local file and a YouTube result render identically. */
@@ -23,17 +37,77 @@ interface Props {
   onOpen?: ((route: Route) => void) | undefined;
   /** Leave the album out of the byline, as on the album's own page. */
   hideAlbum?: boolean;
+  /** Set on your own playlist: rows can be removed, and reordered by dragging. */
+  editing?: { onRemove: (index: number) => void; onMove: (from: number, to: number) => void } | undefined;
 }
 
 /** Every row is this tall, which is what lets long lists skip rendering most of them. */
 const ROW_HEIGHT = 48;
 /** Below this, rendering every row is cheaper than keeping track of which to render. */
 const VIRTUAL_FROM = 60;
+/**
+ * Rows drawn past each edge of the viewport: about two screenfuls, so a
+ * quick scroll lands on rows (and covers) already there.
+ */
+const OVERSCAN = 25;
 
 export function TrackList(props: Props) {
   const scroller = useScrollParent();
-  const { tracks } = props;
+  const { tracks, currentId, playing, hideAlbum } = props;
+  // Rows get handlers that never change and read the latest props when
+  // called, so a memoized row re-renders only when its own song or state does.
+  const latest = useRef(props);
+  latest.current = props;
+  const onPlay = useCallback((id: TrackId) => latest.current.onPlay(id), []);
+  const onToggle = useCallback(() => latest.current.onToggle(), []);
+  const linked = props.onOpen !== undefined;
+  const onOpen = useMemo(
+    () => (linked ? (route: Route) => latest.current.onOpen?.(route) : undefined),
+    [linked],
+  );
+  const { drag, startDrag } = useRowDrag(scroller, ROW_HEIGHT, tracks.length, (from, to) =>
+    latest.current.editing?.onMove(from, to),
+  );
+  const latestStart = useRef(startDrag);
+  latestStart.current = startDrag;
+  const editable = props.editing !== undefined;
+  const onRemove = useMemo(
+    () => (editable ? (index: number) => latest.current.editing?.onRemove(index) : undefined),
+    [editable],
+  );
+  const onDragStart = useMemo(
+    () =>
+      editable
+        ? (index: number, event: ReactPointerEvent) => latestStart.current(index, event)
+        : undefined,
+    [editable],
+  );
   if (tracks.length === 0) return null;
+
+  // While a row is dragged, the rows draw in the order it would leave them.
+  const row = (position: number) => {
+    const index = sourceOf(position, drag);
+    const track = tracks[index]!;
+    const isCurrent = track.id === currentId;
+    return (
+      <Row
+        track={track}
+        index={index}
+        isCurrent={isCurrent}
+        playing={isCurrent && playing}
+        onPlay={onPlay}
+        onToggle={onToggle}
+        onOpen={onOpen}
+        hideAlbum={hideAlbum}
+        onRemove={onRemove}
+        onDragStart={onDragStart}
+        dragging={drag?.from === index}
+        dragActive={drag !== null}
+      />
+    );
+  };
+  // By position too: a playlist can hold the same track twice.
+  const key = (position: number) => `${position}:${tracks[sourceOf(position, drag)]!.id}`;
 
   if (scroller && tracks.length >= VIRTUAL_FROM) {
     return (
@@ -41,49 +115,92 @@ export function TrackList(props: Props) {
         count={tracks.length}
         scroller={scroller}
         rowHeight={ROW_HEIGHT}
-        // By position too: a playlist can hold the same track twice.
-        getKey={(index) => `${index}:${tracks[index]!.id}`}
-        renderRow={(index) => <Row {...props} track={tracks[index]!} />}
+        overscan={OVERSCAN}
+        getKey={key}
+        renderRow={row}
       />
     );
   }
   return (
     <ul>
-      {tracks.map((track, index) => (
-        <li key={`${index}:${track.id}`}>
-          <Row {...props} track={track} />
-        </li>
+      {tracks.map((_, position) => (
+        <li key={key(position)}>{row(position)}</li>
       ))}
     </ul>
   );
 }
 
-function Row({
+interface RowProps {
+  track: Track;
+  isCurrent: boolean;
+  /** Whether this row's song is playing: false on every row but the current one. */
+  playing: boolean;
+  onPlay: (id: TrackId) => void;
+  onToggle: () => void;
+  onOpen: ((route: Route) => void) | undefined;
+  hideAlbum: boolean | undefined;
+  /** Where the row is in the list, for removing or dragging it. */
+  index: number;
+  /** Set on your own playlist's rows, which can be removed and dragged. */
+  onRemove: ((index: number) => void) | undefined;
+  onDragStart: ((index: number, event: ReactPointerEvent) => void) | undefined;
+  /** Picked up and following the pointer. */
+  dragging: boolean;
+  /** Some row is being dragged, so none takes the pointer. */
+  dragActive: boolean;
+}
+
+const Row = memo(function Row({
   track,
-  currentId,
+  index,
+  isCurrent,
   playing,
   onPlay,
   onToggle,
   onOpen,
   hideAlbum,
-}: Props & { track: Track }) {
-  const isCurrent = track.id === currentId;
+  onRemove,
+  onDragStart,
+  dragging,
+  dragActive,
+}: RowProps) {
   const dimmed = useDisliked(track) && !isCurrent;
   const play = () => (isCurrent ? onToggle() : onPlay(track.id));
+  const subject = {
+    kind: "song" as const,
+    track,
+    ...(onRemove && { onRemoveFromPlaylist: () => onRemove(index) }),
+  };
   return (
     // The whole row plays on click, for the mouse; the title is the real
     // button, for the keyboard. Byline links sit inside the row but not
     // inside that button, which cannot nest them. A right click opens the
     // same menu as the dots button.
     <InteractionArea
-      subject={{ kind: "song", track }}
+      subject={subject}
       onClick={() => onPlay(track.id)}
       style={{ height: ROW_HEIGHT }}
       className={cn(
         "group flex cursor-default items-center gap-3 rounded-lg px-3 transition-colors",
         isCurrent ? "bg-accent" : "hover:bg-accent/60",
+        onDragStart && "pl-1",
+        dragging && "bg-accent shadow-lg ring-1 ring-foreground/10",
+        dragActive && "pointer-events-none",
       )}
     >
+      {onDragStart && (
+        <span
+          aria-hidden
+          onPointerDown={(event) => onDragStart(index, event)}
+          onClick={(event) => event.stopPropagation()}
+          className={cn(
+            "-mr-2 grid h-full w-5 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground opacity-0 group-hover:opacity-100",
+            dragging && "opacity-100",
+          )}
+        >
+          <IconGripVertical size={14} stroke={1.75} />
+        </span>
+      )}
       <RowArt
         track={track}
         isCurrent={isCurrent}
@@ -105,7 +222,7 @@ function Row({
         <Byline track={track} onOpen={onOpen} hideAlbum={hideAlbum} />
       </span>
       <InteractionButton
-        subject={{ kind: "song", track }}
+        subject={subject}
         className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
       />
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
@@ -113,7 +230,7 @@ function Row({
       </span>
     </InteractionArea>
   );
-}
+});
 
 /**
  * The cover, and over it what YouTube Music shows there: bars moving while
@@ -250,17 +367,26 @@ export function TitleLink({
 }
 
 function BylineLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  // A span, not a button: a button lays out as one block, which a truncated
+  // byline cuts whole, leaving a gap where the name was.
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
-      className="outline-none hover:text-foreground hover:underline focus-visible:underline"
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+      className="cursor-pointer outline-none hover:text-foreground hover:underline focus-visible:underline"
     >
       {children}
-    </button>
+    </span>
   );
 }
 
@@ -270,9 +396,14 @@ export function Artwork({ track, size = 36 }: { track: Track; size?: number }) {
     <Art
       thumbnails={track.thumbnails}
       width={size}
-      className="shrink-0 rounded text-xs"
+      // Preflight's `max-width: 100%` lets a squeezed parent shrink the cover,
+      // and makes it count as nothing towards the parent's minimum width.
+      className="max-w-none shrink-0 rounded text-xs"
       style={{ width: size, height: size }}
       fallback={track.title.slice(0, 1).toUpperCase()}
+      // Song rows are virtualized, so one that exists is near the viewport
+      // already; the browser's own lazy loading would only hold its cover back.
+      lazy={false}
     />
   );
 }

@@ -23,11 +23,19 @@ export const commands = {
 	startPaused?: boolean,
 	/**  YouTube's loudness for the track, in dB above its reference level. */
 	loudnessDb?: number | null,
+	/**  Where to start, for a queue restored at launch. From the top when None. */
+	startMs?: number | null,
 } | null) => __TAURI_INVOKE<null>("player_queue_next", { after, request }),
 	playerPlay: () => __TAURI_INVOKE<null>("player_play"),
 	playerPause: () => __TAURI_INVOKE<null>("player_pause"),
 	playerSeek: (positionMs: number) => __TAURI_INVOKE<null>("player_seek", { positionMs }),
+	playerPosition: () => __TAURI_INVOKE<{
+	positionMs: number,
+	durationMs: number | null,
+} | null>("player_position"),
 	playerSetVolume: (volume: number | null) => __TAURI_INVOKE<null>("player_set_volume", { volume }),
+	/**  The volume the last run left off at, which the player bar starts from. */
+	playerSavedVolume: () => __TAURI_INVOKE<SavedVolume>("player_saved_volume"),
 	playerStop: () => __TAURI_INVOKE<null>("player_stop"),
 	playerAudioDevices: () => __TAURI_INVOKE<AudioDevice[]>("player_audio_devices"),
 	playerStats: () => __TAURI_INVOKE<AudioStats>("player_stats"),
@@ -110,6 +118,11 @@ export const commands = {
 	 *  returns all of them.
 	 */
 	settingsSet: (patch: SettingsPatch) => __TAURI_INVOKE<Settings>("settings_set", { patch }),
+	/**  The queue saved by the last run, and the playing song's position in it. */
+	queueLoad: () => __TAURI_INVOKE<SavedQueue>("queue_load"),
+	/**  Replaces the saved queue. Null clears it. */
+	queueSave: (queue: QueueJson) => __TAURI_INVOKE<null>("queue_save", { queue }),
+	queueSavePosition: (position: QueuePosition) => __TAURI_INVOKE<null>("queue_save_position", { position }),
 	/**
 	 *  A release newer than this build, if there is one. Prereleases count when
 	 *  the settings say so.
@@ -138,7 +151,7 @@ export const commands = {
 };
 
 /* Constants */
-export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"includePrereleases":false,"pauseSearchHistory":false,"pauseWatchHistory":false,"skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
+export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"includePrereleases":false,"pauseWatchHistory":false,"searchHistory":"youtube","skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
 
 /* Types */
 /**
@@ -232,6 +245,8 @@ export type LoadRequest = {
 	startPaused?: boolean,
 	/**  YouTube's loudness for the track, in dB above its reference level. */
 	loudnessDb?: number | null,
+	/**  Where to start, for a queue restored at launch. From the top when None. */
+	startMs?: number | null,
 };
 
 /**  Mirrors `StreamLease` in `@ymusic/core`. */
@@ -245,6 +260,8 @@ export type LocalLease = {
 	loudnessDb: number | null,
 	headers: { [key in string]: string },
 	expiresAt: number | null,
+	playerClient: string | null,
+	degraded: string | null,
 };
 
 /**  Mirrors `Track` in `@ymusic/core`, in its local-file flavour. */
@@ -263,6 +280,8 @@ export type LocalTrack = {
 	codec: AudioCodec,
 	bitrate: number | null,
 	coverArt: CoverArt | null,
+	/**  When the file was first scanned, in seconds since the Unix epoch. */
+	addedAt: number,
 };
 
 /**  A media key or widget action, as the frontend handles it. */
@@ -305,6 +324,35 @@ export type PlaybackEvent = { type: "status"; status: PlaybackStatus } | { type:
 
 export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "ended";
 
+/**  The reply to the page asking where playback is. */
+export type Position = {
+	positionMs: number,
+	durationMs: number | null,
+};
+
+/**
+ *  The frontend's queue, which Rust stores as it comes and never reads. The
+ *  frontend parses it on the way back (`packages/ipc/src/queue.ts`).
+ */
+export type QueueJson = unknown;
+
+export type QueuePosition = {
+	trackId: string,
+	positionMs: number,
+};
+
+/**  Both files, as read at launch. */
+export type SavedQueue = {
+	queue: unknown | null,
+	position: QueuePosition | null,
+};
+
+export type SavedVolume = {
+	volume: number,
+	/**  The last settled volume above zero. */
+	unmuted: number,
+};
+
 export type ScanFailure = {
 	path: string,
 	reason: string,
@@ -324,6 +372,15 @@ export type ScanReport = {
 	removed: number,
 };
 
+/**  Where searches are remembered. */
+export type SearchHistory = 
+/**  On the account, as YouTube Music records them. */
+"youtube" | 
+/**  In a list on this device, with searches kept off the account. */
+"device" | 
+/**  Nowhere. */
+"off";
+
 export type Settings = {
 	/**  When the queue runs out, its suggestions play on. */
 	autoplay: boolean,
@@ -333,7 +390,7 @@ export type Settings = {
 	audioDevice: string,
 	skipDisliked: boolean,
 	pauseWatchHistory: boolean,
-	pauseSearchHistory: boolean,
+	searchHistory: SearchHistory,
 	/**  Closing the window hides it to the tray and playback carries on. */
 	closeToTray: boolean,
 	checkForUpdates: boolean,
@@ -354,7 +411,7 @@ export type SettingsPatch = {
 	audioDevice?: string | null,
 	skipDisliked?: boolean | null,
 	pauseWatchHistory?: boolean | null,
-	pauseSearchHistory?: boolean | null,
+	searchHistory?: SearchHistory | null,
 	closeToTray?: boolean | null,
 	checkForUpdates?: boolean | null,
 	includePrereleases?: boolean | null,

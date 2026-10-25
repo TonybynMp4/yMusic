@@ -1,22 +1,27 @@
 pub mod account;
 pub mod botguard;
 pub mod commands;
+pub mod files;
 pub mod http;
 pub mod images;
 pub mod library;
 pub mod platform;
 pub mod playback;
+pub mod queue;
 pub mod settings;
 mod tray;
 pub mod updates;
+pub mod volume;
 
 use account::{Account, OsKeyring};
 use library::Library;
 use platform::media::MediaSession;
 use playback::Player;
+use queue::{QueuePosition, QueueStore};
 use settings::SettingsStore;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use volume::VolumeStore;
 
 /// The commands the frontend's types are generated from, for runtime `$r`, in
 /// one place so tests mount exactly what ships and the bindings name exactly
@@ -36,7 +41,9 @@ macro_rules! ymusic_specta {
                 player_play,
                 player_pause,
                 player_seek,
+                player_position,
                 player_set_volume,
+                player_saved_volume,
                 player_stop,
                 player_audio_devices,
                 player_stats,
@@ -62,6 +69,9 @@ macro_rules! ymusic_specta {
                 account_sign_out,
                 settings_get,
                 settings_set::<$r>,
+                queue_load,
+                queue_save,
+                queue_save_position,
                 update_check::<$r>,
                 open_logs_folder::<$r>,
                 cache_size,
@@ -156,9 +166,23 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
             platform::window::apply_backdrop(&window);
+            platform::window::forward_touchpad_pinch(&window);
+            // WebKitGTK's default cache model keeps up to 64 MB of images no
+            // page shows any more. DOCUMENT_BROWSER caps that at 24 MB: enough
+            // that going back to a page draws its artwork from memory at once,
+            // where DOCUMENT_VIEWER keeps none and every visit waits on the
+            // `img` scheme again (docs/memory.md).
+            #[cfg(target_os = "linux")]
+            let _ = window.with_webview(|webview| {
+                use webkit2gtk::{CacheModel, WebContextExt, WebViewExt};
+                if let Some(context) = webview.inner().context() {
+                    context.set_cache_model(CacheModel::DocumentBrowser);
+                }
+            });
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);
+            app.manage(open_queue(app.handle()));
 
             // The loader already refuses to start without `libmpv.so.2` (mpv
             // 0.35), so what can still fail here is mpv itself. The app is a
@@ -171,6 +195,11 @@ pub fn run() {
                     let media = MediaSession::attach(&window);
                     player.observe(media.clone());
                     player.apply_settings(&startup_settings);
+                    let volume = open_volume(app.handle());
+                    if let Err(error) = player.remember_volume(volume.clone()) {
+                        log::warn!("{error}");
+                    }
+                    app.manage(volume);
                     app.manage(player);
                     app.manage(media);
                 }
@@ -207,8 +236,35 @@ pub fn run() {
             }
         })
         .invoke_handler(ymusic_invoke_handler!(tauri::Wry))
-        .run(tauri::generate_context!())
-        .expect("error while running ymusic");
+        .build(tauri::generate_context!())
+        .expect("error while building ymusic")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                save_position(app);
+                if let Some(player) = app.try_state::<Player>() {
+                    player.flush_volume();
+                }
+            }
+        });
+}
+
+/// Saves where the playing song is, on the way out. The frontend saves it as
+/// it plays too, but only every few seconds, and it may be gone by now.
+fn save_position<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let (Some(player), Some(store)) = (app.try_state::<Player>(), app.try_state::<QueueStore>())
+    else {
+        return;
+    };
+    let Some((track_id, position_ms)) = player.position() else {
+        return;
+    };
+    let position = QueuePosition {
+        track_id,
+        position_ms,
+    };
+    if let Err(error) = store.save_position(&position) {
+        log::error!("{error}");
+    }
 }
 
 /// Opens the on-disk library, falling back to an in-memory one if the data
@@ -239,12 +295,34 @@ fn cache_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf
         .unwrap_or_else(|_| std::env::temp_dir().join("ymusic"))
 }
 
+fn open_queue<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> QueueStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => QueueStore::open(dir),
+        Err(err) => {
+            log::error!("no app data directory, the queue will not persist: {err}");
+            QueueStore::in_memory()
+        }
+    }
+}
+
 fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore {
     match app.path().app_data_dir() {
         Ok(dir) => SettingsStore::open(dir.join("settings.json")),
         Err(err) => {
             log::error!("no app data directory, settings will not persist: {err}");
             SettingsStore::in_memory()
+        }
+    }
+}
+
+/// The saved volume, beside the settings. Without a data directory every
+/// launch starts at full volume, as it would with nothing saved.
+fn open_volume<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VolumeStore {
+    match app.path().app_data_dir() {
+        Ok(dir) => VolumeStore::open(dir.join("volume.json")),
+        Err(err) => {
+            log::error!("no app data directory, the volume will not persist: {err}");
+            VolumeStore::in_memory()
         }
     }
 }

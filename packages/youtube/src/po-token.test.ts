@@ -49,7 +49,7 @@ live("the PO-token fallback", () => {
     const engine = new YouTubeEngine(globalThis.fetch, frameVm());
     const lease = await unlessBotChecked(
       context,
-      engine.resolve("SM4tQcUt_mQ" as VideoId, { fallback: true }),
+      engine.resolve("SM4tQcUt_mQ" as VideoId, { refused: "VISIONOS" }),
     );
 
     const url = new URL(lease.url);
@@ -65,5 +65,9 @@ live("the PO-token fallback", () => {
     // And the token is what did it: the same URL without one is refused.
     url.searchParams.delete("pot");
     expect(await status(url)).toBe(403);
+
+    // A second track goes through the decipher code compiled for the first.
+    const second = await engine.resolve("lYBUbBu4W08" as VideoId, { refused: "VISIONOS" });
+    expect(await status(new URL(second.url))).toBe(206);
   });
 });

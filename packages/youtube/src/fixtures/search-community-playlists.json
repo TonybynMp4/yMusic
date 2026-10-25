@@ -1,0 +1,328 @@
+{
+ "contents": {
+  "tabbedSearchResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "title": "YT Music",
+      "selected": true,
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "messageRenderer": {
+              "button": {
+               "buttonRenderer": {
+                "style": "STYLE_TEXT",
+                "isDisabled": false,
+                "text": {
+                 "simpleText": "About these results"
+                },
+                "icon": {
+                 "iconType": "INFO_OUTLINE"
+                },
+                "navigationEndpoint": {
+                 "urlEndpoint": {
+                  "url": "https://www.youtube.com/howyoutubeworks/product-features/search/",
+                  "target": "TARGET_NEW_WINDOW"
+                 }
+                },
+                "iconPosition": "BUTTON_ICON_POSITION_TYPE_RIGHT_OF_TEXT"
+               }
+              },
+              "style": {
+               "value": "RENDER_STYLE_PANEL"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "musicShelfRenderer": {
+           "title": {
+            "runs": [
+             {
+              "text": "Community playlists"
+             }
+            ]
+           },
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://yt3.googleusercontent.com/5B8ayajFk7Y-xvBbxO3fDd5dl7XukLCt9HIUH2tqmaHKPLf4hPiU8UqbrPqIHYi44RH3JdkQ2Wl4=s192",
+                   "width": 192,
+                   "height": 192
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/5B8ayajFk7Y-xvBbxO3fDd5dl7XukLCt9HIUH2tqmaHKPLf4hPiU8UqbrPqIHYi44RH3JdkQ2Wl4=s576",
+                   "width": 576,
+                   "height": 576
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/5B8ayajFk7Y-xvBbxO3fDd5dl7XukLCt9HIUH2tqmaHKPLf4hPiU8UqbrPqIHYi44RH3JdkQ2Wl4=s1200",
+                   "width": 1200,
+                   "height": 1200
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "ALL OF BOARDS OF CANADA"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "ziggysoftpaws😀 ",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCH44Q-ZmDs0ZeMTJXpJQnLA",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "508 views"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseId": "VLPLjzYDMM6wFxD6cfgt9Sg7L3N4QY1NAjvX",
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEICEAQJCAASFqi85f_AwYI_OD90AY&rs=AMzJL3mUTGJVMqjxAQiLNPohMpNea1U7Xw",
+                   "width": 64,
+                   "height": 36
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEJCIABEEggAEhaovOX_wMGCPzg_dAG&rs=AMzJL3lQvNfwPsOmg_nEczo-EDORDtfKCg",
+                   "width": 128,
+                   "height": 72
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCPABEIcBIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3lwePfPERR8cWrKbqm5mjA-9kzb5Q",
+                   "width": 240,
+                   "height": 135
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCKAEELICIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3l27FVzt8p2dPeMbCTvxJjlM4zSWw",
+                   "width": 544,
+                   "height": 306
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCLAGEMsDIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3kHxEbrPJbONGcjLrlKTKpmfI1oUA",
+                   "width": 816,
+                   "height": 459
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCKALEKoGIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3my0_hFAMWE40MEln4QdzYGpSgebw",
+                   "width": 1440,
+                   "height": 810
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCIAPELgIIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3lHkqPylBORmwAYDNaQY6qVMNayqA",
+                   "width": 1920,
+                   "height": 1080
+                  },
+                  {
+                   "url": "https://i.ytimg.com/pl_c/PLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl/studio_square_thumbnail.jpg?sqp=CLWfs9YG-oaymwEKCMAWENQMIABIWqLzl_8DBgj84P3QBg&rs=AMzJL3noYUWHpk5eKQ7QwA5Toe-CjQcuKw",
+                   "width": 2880,
+                   "height": 1620
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Boards of Canada"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "pHinnWeb",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCFn5r-9Z6xvSLJJnlj2jEIA",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "66 views"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseId": "VLPLw9rkjiVaa3HrNeMLxKdh93XAiSXgr_sl",
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/ZKRS1qGqEUk/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3n5qL0QK026WulULjec0hXB1hQoxw",
+                   "width": 400,
+                   "height": 225
+                  },
+                  {
+                   "url": "https://i.ytimg.com/vi/ZKRS1qGqEUk/hqdefault.jpg?sqp=-oaymwEWCOADEI4CIAQqCggAEOADGC0guwJIWg&rs=AMzJL3lGMhv0uh_4Z5-BnaKS8nGG1R8bQQ",
+                   "width": 480,
+                   "height": 270
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Boards Of Canada"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "HeavensWanderer Natalie",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCchQEpvWg36JKpHrux2fhNw",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " • "
+                   },
+                   {
+                    "text": "7.4K views"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseId": "VLPL9DA2A7861329E5F4",
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+                 }
+                }
+               }
+              }
+             }
+            }
+           ],
+           "shelfDivider": {
+            "musicShelfDividerRenderer": {
+             "hidden": true
+            }
+           }
+          }
+         }
+        ]
+       }
+      },
+      "tabIdentifier": "music_search_catalog"
+     }
+    }
+   ]
+  }
+ }
+}

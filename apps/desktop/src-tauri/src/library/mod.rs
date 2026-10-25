@@ -119,6 +119,8 @@ pub struct LocalTrack {
     pub codec: AudioCodec,
     pub bitrate: Option<u32>,
     pub cover_art: Option<CoverArt>,
+    /// When the file was first scanned, in seconds since the Unix epoch.
+    pub added_at: i64,
 }
 
 /// Mirrors `StreamLease` in `@ymusic/core`.
@@ -134,6 +136,8 @@ pub struct LocalLease {
     pub loudness_db: Option<f64>,
     pub headers: std::collections::HashMap<String, String>,
     pub expires_at: Option<i64>,
+    pub player_client: Option<String>,
+    pub degraded: Option<String>,
 }
 
 pub struct Library {
@@ -272,6 +276,8 @@ impl Library {
             loudness_db: None,
             headers: std::collections::HashMap::new(),
             expires_at: None,
+            player_client: None,
+            degraded: None,
         })
     }
 

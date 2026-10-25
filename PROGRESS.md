@@ -33,6 +33,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 
 - [x] Data engine in a Web Worker over Comlink, with fetch sent through Rust
 - [x] Search, with YouTube Music and local files in one box
+- [x] Search shows videos, albums, playlists and artists, with YouTube Music's chips
+- [x] A search chip loads more results as you scroll
 - [x] Stream resolution on `VISIONOS`
 - [x] PO-token fallback on `TV_SIMPLY`, with BotGuard in an isolated frame
 - [x] Sign-in through Google's page, session sealed with a keyring-held key
@@ -122,8 +124,10 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Stable volume: YouTube's loudness value per track, ReplayGain for local files
 - [x] Audio output device
 - [x] Stats for nerds: stream, gain, loudness, peaks and limiter over the artwork
+- [x] Premium playback: signed-in `WEB_REMIX` resolves itag 774 or 141, with a degraded badge when a fallback plays less
+- [x] Player script parsed in a short-lived worker and cached, not in the engine worker
 - [x] Pause watch history
-- [x] Pause search history
+- [x] Search history: on the account, on this device, or off
 - [x] Music folders: add, remove, rescan
 - [x] Keep playing in the tray when the window closes
 - [x] Update check at startup, with prereleases opt-in and a link to the release
@@ -135,22 +139,38 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Pooled HTTP for InnerTube (one shared reqwest client instead of a TLS handshake per request)
 - [ ] Metadata cache in SQLite for playlist, album and artist pages
 - [ ] Player tabs: Details (the default), Up next, Lyrics, Related, Comments
-- [ ] Library page with chips, sort and grid or list (the Albums and Artists chips are the item below)
-- [ ] Playlist details and editing: rename, description, privacy, reorder, remove, delete
-- [ ] The queue saved across restarts
-- [ ] The volume saved across restarts
-- [ ] Search history, local or the account's
+- [x] Library page with chips, sort and grid or list
+- [x] Playlist details and editing: rename, description, privacy, cover, reorder, remove, delete
+- [ ] React performance pass (see `docs/react-performance.md`)
+- [x] The queue saved across restarts
+- [x] The volume saved across restarts
+- [x] Search history, local or the account's
+- [ ] Playback errors shown in a better place than red text over the player bar (prototype the options first)
+- [ ] Song and video switch
+- [ ] Window position restored after the tray and restarts (Wayland needs xdg-session-management, see PLAN.md)
 - [ ] Home and Explore pages
-- [ ] Saved albums and artists in the library
+- [x] Saved albums and artists in the library
 - [ ] Local playlists
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
+- [ ] Canvas from Spotify, as a plugin
+- [ ] AI music filter, as a plugin
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots
 - [ ] Plugin backends on Deno over tRPC
 - [ ] Flatpak
 - [ ] Sync service
 - [ ] Remote control between devices, like Spotify Connect (see PLAN.md)
 - [ ] Mobile
+
+### Memory
+
+- [x] Cap glibc malloc arenas in the core
+- [x] Bound the browse page cache
+- [x] Skip the player script on `VISIONOS`
+- [x] Stop the fallback path keeping code resident
+- [x] Prune stream leases and the song-year cache
+- [x] Drop unused resources from WebKit's memory cache
+- [x] Let the page ask for the playback position instead of pushing it
 
 ## Known issues
 

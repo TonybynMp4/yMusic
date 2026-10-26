@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/setup@v3.0.0
+      - uses: pnpm/setup@v3.1.1
         with:
           cache: true
           require-lockfile: true

@@ -416,7 +416,12 @@ describe("fewer repeats", () => {
         rng,
         weight: () => 1,
       });
-      const after = queueReducer(before, { type: "extend", tracks: [track("z")], rng, weight: () => 1 });
+      const after = queueReducer(before, {
+        type: "extend",
+        tracks: [track("z")],
+        rng,
+        weight: () => 1,
+      });
       counts[titles(after).indexOf("z")]! += 1;
     }
     expect(counts[0]).toBe(0);

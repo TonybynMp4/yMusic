@@ -8,6 +8,7 @@ expression: changed
   "autoplay": true,
   "checkForUpdates": true,
   "closeToTray": false,
+  "fewerRepeats": true,
   "includePrereleases": false,
   "pauseWatchHistory": true,
   "searchHistory": "youtube",

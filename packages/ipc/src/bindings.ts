@@ -162,6 +162,9 @@ export const commands = {
 	/**  Replaces the saved queue. Null clears it. */
 	queueSave: (queue: QueueJson) => __TAURI_INVOKE<null>("queue_save", { queue }),
 	queueSavePosition: (position: QueuePosition) => __TAURI_INVOKE<null>("queue_save_position", { position }),
+	/**  When each track last played, as the last run saved it. */
+	playHistoryLoad: () => __TAURI_INVOKE<unknown | null>("play_history_load"),
+	playHistorySave: (history: PlayHistoryJson) => __TAURI_INVOKE<null>("play_history_save", { history }),
 	/**
 	 *  A release newer than this build, if there is one. Prereleases count when
 	 *  the settings say so.
@@ -190,7 +193,7 @@ export const commands = {
 };
 
 /* Constants */
-export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"includePrereleases":false,"pauseWatchHistory":false,"searchHistory":"youtube","skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
+export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"fewerRepeats":true,"includePrereleases":false,"pauseWatchHistory":false,"searchHistory":"youtube","skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
 
 /* Types */
 /**
@@ -370,6 +373,12 @@ export type PlatformSummary = {
 	hasAutostart: boolean,
 };
 
+/**
+ *  `play-history.json` as the frontend writes it: a track id to the time it
+ *  last played. Rust stores it as it comes and the frontend checks it.
+ */
+export type PlayHistoryJson = unknown;
+
 export type PlaybackEvent = { type: "status"; status: PlaybackStatus } | { type: "position"; positionMs: number; durationMs: number | null } | { type: "ended"; trackId: string | null } | 
 /**  mpv went on to the appended track by itself, with no gap. */
 { type: "advanced"; trackId: string } | { type: "error"; trackId: string | null; message: string };
@@ -441,6 +450,8 @@ export type Settings = {
 	/**  An mpv `audio-device` name. `auto` follows the system's default output. */
 	audioDevice: string,
 	skipDisliked: boolean,
+	/**  Local shuffle puts songs played recently on this device later. */
+	fewerRepeats: boolean,
 	pauseWatchHistory: boolean,
 	searchHistory: SearchHistory,
 	/**  Closing the window hides it to the tray and playback carries on. */
@@ -462,6 +473,7 @@ export type SettingsPatch = {
 	stableVolume?: StableVolume,
 	audioDevice?: string,
 	skipDisliked?: boolean,
+	fewerRepeats?: boolean,
 	pauseWatchHistory?: boolean,
 	searchHistory?: SearchHistory,
 	closeToTray?: boolean,

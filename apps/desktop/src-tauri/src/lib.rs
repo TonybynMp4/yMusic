@@ -77,6 +77,8 @@ macro_rules! ymusic_specta {
                 queue_load,
                 queue_save,
                 queue_save_position,
+                play_history_load,
+                play_history_save,
                 update_check::<$r>,
                 open_logs_folder::<$r>,
                 cache_size,

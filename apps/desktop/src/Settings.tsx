@@ -96,6 +96,16 @@ export function SettingsView({ settings: { settings, update }, library, updates,
           }
         />
         <Row
+          label="Fewer repeats"
+          description="When yMusic shuffles the queue itself, songs you played recently on this device tend to come later."
+          control={
+            <Switch
+              checked={settings.fewerRepeats}
+              onCheckedChange={(fewerRepeats) => update({ fewerRepeats })}
+            />
+          }
+        />
+        <Row
           label="Audio quality"
           description="Applies from the next song."
           control={

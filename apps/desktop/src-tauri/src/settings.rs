@@ -119,6 +119,8 @@ settings! {
     /// An mpv `audio-device` name. `auto` follows the system's default output.
     audio_device: String = "auto".into(),
     skip_disliked: bool = false,
+    /// Local shuffle puts songs played recently on this device later.
+    fewer_repeats: bool = true,
     pause_watch_history: bool = false,
     search_history: SearchHistory = SearchHistory::Youtube,
     /// Closing the window hides it to the tray and playback carries on.

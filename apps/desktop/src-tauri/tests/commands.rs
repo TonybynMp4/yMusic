@@ -172,6 +172,11 @@ fn every_command_is_reachable_over_ipc() {
             serde_json::json!({ "position": { "trackId": "yt:abc", "positionMs": 1500 } }),
         ),
         ("queue_load", serde_json::json!({})),
+        (
+            "play_history_save",
+            serde_json::json!({ "history": { "yt:abc": 1 } }),
+        ),
+        ("play_history_load", serde_json::json!({})),
         // `account_sign_in` opens a real Google page, so it stays out of here.
         ("account_refresh", serde_json::json!({ "stale": "" })),
         ("account_rotate", serde_json::json!({})),

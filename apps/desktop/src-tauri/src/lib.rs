@@ -69,6 +69,8 @@ macro_rules! ymusic_commands {
             $crate::commands::queue_load,
             $crate::commands::queue_save,
             $crate::commands::queue_save_position,
+            $crate::commands::play_history_load,
+            $crate::commands::play_history_save,
             $crate::commands::update_check,
             $crate::commands::open_logs_folder,
             $crate::commands::cache_size,

@@ -66,6 +66,8 @@ Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory
 
 **Skip disliked songs** skips a disliked song when the queue moves on to it, but not one you pick. See [Interactions](interactions.md#liking-and-disliking).
 
+**Fewer repeats**, on by default, makes the queue's own shuffle put songs played recently on this device later, while staying random. It has no effect on a shuffle YouTube Music does on its servers. On by default because it is what most people expect shuffle to do, and it changes nothing until there is play history to read. See [Shuffle](playback.md#shuffle).
+
 ## What is not a setting
 
 Gapless playback. It is always on, and there is nothing to switch: see [Playback](playback.md).

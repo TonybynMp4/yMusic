@@ -7,6 +7,8 @@
 //! playback was. It is apart because it changes far more often than the
 //! queue, which can be a whole playlist, and it is written on exit too, from
 //! mpv's own position, after the frontend can no longer say.
+//! `play-history.json` holds when each track last played, which shuffle reads
+//! for fewer repeats. Its shape, and its bound, belong to the frontend too.
 
 use std::{
     fs,
@@ -40,6 +42,7 @@ pub struct QueueStore {
 
 const QUEUE_FILE: &str = "queue.json";
 const POSITION_FILE: &str = "queue-position.json";
+const HISTORY_FILE: &str = "play-history.json";
 
 impl QueueStore {
     pub fn open(dir: PathBuf) -> Self {
@@ -79,6 +82,16 @@ impl QueueStore {
         self.write(POSITION_FILE, position)
     }
 
+    /// When each track last played. Missing or unreadable reads as none.
+    pub fn load_history(&self) -> Option<serde_json::Value> {
+        let dir = self.dir.as_ref()?;
+        read(&dir.join(HISTORY_FILE))
+    }
+
+    pub fn save_history(&self, history: &serde_json::Value) -> Result<(), String> {
+        self.write(HISTORY_FILE, history)
+    }
+
     fn write(&self, name: &str, value: &impl Serialize) -> Result<(), String> {
         let Some(dir) = &self.dir else {
             return Ok(());
@@ -86,7 +99,7 @@ impl QueueStore {
         let json = serde_json::to_vec(value).map_err(|error| error.to_string())?;
         let _writing = self.writing.lock().expect("queue store mutex");
         crate::files::write_atomically(&dir.join(name), &json)
-            .map_err(|error| format!("could not save the queue: {error}"))
+            .map_err(|error| format!("could not save {name}: {error}"))
     }
 }
 
@@ -148,6 +161,17 @@ mod tests {
         store.save_queue(&json!({ "cursor": 0 })).unwrap();
         store.save_queue(&serde_json::Value::Null).unwrap();
         assert_eq!(QueueStore::open(dir).load().queue, None);
+    }
+
+    #[test]
+    fn the_play_history_survives_a_restart() {
+        let dir = temp_dir("history");
+        assert_eq!(QueueStore::open(dir.clone()).load_history(), None);
+        let history = json!({ "yt:one": 1_761_696_000_000_u64 });
+        QueueStore::open(dir.clone())
+            .save_history(&history)
+            .unwrap();
+        assert_eq!(QueueStore::open(dir).load_history(), Some(history));
     }
 
     #[test]

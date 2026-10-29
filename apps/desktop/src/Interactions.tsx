@@ -1349,8 +1349,10 @@ function linked(artists: readonly Artist[]): { name: string; channelId: string }
  */
 async function tracksOf(page: Page): Promise<{ tracks: Track[]; from?: PlayFrom }> {
   switch (page.kind) {
-    case "album":
-      return { tracks: page.page.tracks, from: { kind: "list", title: page.page.title } };
+    case "album": {
+      const { tracks, title, audioPlaylistId } = page.page;
+      return { tracks, from: { kind: "list", title, playlistId: audioPlaylistId } };
+    }
     case "playlist": {
       const { id, title } = page.page;
       return { tracks: page.page.tracks, from: { kind: "playlist", id, title } };

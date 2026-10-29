@@ -37,12 +37,16 @@ function logPlaybackFailure(error: unknown): void {
  * Where a queue came from, so it can keep growing and be named under
  * "Playing from": a playlist still loading its later pages, a fixed list
  * such as an album, or a song radio (what YouTube Music starts when you
- * play a search result).
+ * play a search result). A list's `playlistId`, when it has one, is what
+ * YouTube Music's shuffle shuffles.
  */
 export type PlayFrom =
   | { kind: "playlist"; id: string; title: string }
-  | { kind: "list"; title: string }
+  | { kind: "list"; title: string; playlistId?: string | null }
   | { kind: "radio" };
+
+/** Pages of YouTube Music's shuffle to follow at most, about two thousand songs. */
+const MAX_SHUFFLE_PAGES = 40;
 
 /**
  * The seed for autoplay: the last YouTube track in playing order. Local files
@@ -381,10 +385,14 @@ export function usePlayer(
     setFilling(false);
   }, []);
 
+  /** Counts queues replaced, so a shuffle that arrives late can tell it was overtaken. */
+  const replaced = useRef(0);
+
   /** Clearing or replacing the queue also stops it growing from its old source. */
   const send = useCallback(
     (action: QueueAction) => {
       if (action.type === "setQueue" || action.type === "clear") {
+        replaced.current++;
         stopFollowing();
         setPlayingFrom(null);
       }
@@ -457,6 +465,67 @@ export function usePlayer(
       };
     },
     [send],
+  );
+
+  /**
+   * Shuffle play. With YouTube Music's shuffle chosen and a list that is a
+   * YouTube playlist, the queue is the server's order, fetched a page at a
+   * time, with local shuffle off since the order is shuffled already. The
+   * server draws with replacement, so a song it picks again is dropped.
+   * Otherwise, or if YouTube fails, the list is shuffled here.
+   */
+  const shufflePlay = useCallback(
+    (tracks: Track[], from?: PlayFrom) => {
+      const local = () => {
+        if (tracks.length === 0) return;
+        // Shuffle first, so the queue is laid down shuffled from a random start.
+        dispatch({ type: "setShuffle", shuffle: true });
+        playTrack(tracks, tracks[Math.floor(Math.random() * tracks.length)]!.id, from);
+      };
+      const playlistId =
+        from?.kind === "playlist" ? from.id : from?.kind === "list" ? from.playlistId : null;
+      if (settings.shuffleWith !== "youtube" || playlistId == null) return local();
+
+      const started = ++replaced.current;
+      void (async () => {
+        const first = await youtube.shuffle(playlistId).catch((error: unknown) => {
+          console.error("could not get YouTube Music's shuffle", error);
+          return null;
+        });
+        if (replaced.current !== started) return;
+        if (first === null || first.tracks.length === 0) return local();
+
+        dispatch({ type: "setShuffle", shuffle: false });
+        send({ type: "setQueue", tracks: first.tracks, startIndex: 0 });
+        if (from?.kind === "playlist" || from?.kind === "list") {
+          setPlayingFrom({ title: from.title, device: null });
+        }
+        const ids = new Set(first.tracks.map((t) => t.id));
+        source.current = { playlistId, ids };
+        // An object, so the loop sees `unfollow` set it from outside.
+        const run = { stopped: false };
+        unfollow.current = () => {
+          run.stopped = true;
+        };
+        setFilling(true);
+        let more = first.more;
+        for (let page = 1; more !== null && page < MAX_SHUFFLE_PAGES && !run.stopped; page++) {
+          const next = await youtube.shuffleMore(more).catch((error: unknown) => {
+            console.error("could not get more of YouTube Music's shuffle", error);
+            return null;
+          });
+          if (run.stopped || next === null) break;
+          const added = next.tracks.filter((t) => !ids.has(t.id));
+          // A page of nothing but repeats: the server has run out of new songs.
+          if (added.length === 0) break;
+          for (const t of added) ids.add(t.id);
+          dispatch({ type: "extend", tracks: added });
+          more = next.more;
+        }
+        if (!run.stopped) setFilling(false);
+      })();
+    },
+    [settings.shuffleWith, send, playTrack],
   );
 
   /**
@@ -667,6 +736,7 @@ export function usePlayer(
     loadedTrack,
     volume,
     playTrack,
+    shufflePlay,
     cue,
     restore,
     playingFrom,

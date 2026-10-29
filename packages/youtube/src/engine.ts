@@ -63,7 +63,14 @@ import { inProcessPlayerScript, LIBRARY_VERSION } from "./player-extract.ts";
 import { currentPlayerId, type PlayerScript, type PlayerScriptSource } from "./player-script.ts";
 import { type BotGuardVm, PoTokenMinter } from "./po-token.ts";
 import { FREE_BEST_ITAG, isSubscriber, PREMIUM_ITAGS } from "./premium.ts";
-import { getMix, getRadio, getSongYear } from "./radio.ts";
+import {
+  getMix,
+  getRadio,
+  getShuffle,
+  getShuffleMore,
+  getSongYear,
+  type ShufflePage,
+} from "./radio.ts";
 import { setRating, type Rating } from "./rating.ts";
 import { getServerQueue, setServerQueue, type ServerQueue } from "./resume.ts";
 import { searchMusic, type SearchMore } from "./search.ts";
@@ -243,6 +250,15 @@ export class YouTubeEngine {
    */
   async mix(playlistId: string, videoId: string | null = null): Promise<Track[]> {
     return getMix(await this.#browseClient(), playlistId, videoId);
+  }
+
+  /** YouTube Music's own shuffle of `playlistId`; `more` pages through `shuffleMore`. */
+  async shuffle(playlistId: string): Promise<ShufflePage> {
+    return getShuffle(await this.#browseClient(), playlistId);
+  }
+
+  async shuffleMore(more: string): Promise<ShufflePage> {
+    return getShuffleMore(await this.#browseClient(), more);
   }
 
   /** Saves an album or playlist to the library, or removes it. `id` is the bare playlist id. */

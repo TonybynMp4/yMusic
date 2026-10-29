@@ -1,6 +1,7 @@
 import { YTNodes, type Innertube } from "youtubei.js";
 import { trackIdForVideo, type Track, type VideoId } from "@ymusic/core";
 
+import { playlistIdFromBrowseId } from "./browse.ts";
 import { toTrack, type RawSong } from "./parse.ts";
 import type { RawThumbnail } from "./thumbnails.ts";
 
@@ -20,6 +21,8 @@ interface RawPanelVideo {
 
 interface UpNextResponse {
   contents?: readonly unknown[] | null;
+  /** A token for the next page; youtubei.js leaves it null on the last. */
+  continuation?: unknown;
 }
 
 /**
@@ -52,6 +55,52 @@ export async function getMix(
   });
   const panel = response.contents_memo?.getType(YTNodes.PlaylistPanel)[0];
   return radioFrom((panel ?? {}) as unknown as UpNextResponse, null);
+}
+
+/** What YouTube Music's own Shuffle buttons send with a playlist. */
+const SHUFFLE_PARAMS = "wAEB8gECKAE=";
+
+/** A page of YouTube Music's shuffle and, when there is one, the token for the next. */
+export interface ShufflePage {
+  tracks: Track[];
+  more: string | null;
+}
+
+/**
+ * YouTube Music's own shuffle of a playlist or an album's `OLAK5uy…`
+ * playlist, with or without the `VL` browse prefix, fifty songs a page. The server draws with
+ * replacement, so a long playlist repeats songs, sometimes within a page.
+ * The token is a plain string, so unlike a youtubei.js continuation it can
+ * cross the worker boundary as it is.
+ */
+export async function getShuffle(youtube: Innertube, playlistId: string): Promise<ShufflePage> {
+  const response = await youtube.actions.execute("/next", {
+    playlistId: playlistIdFromBrowseId(playlistId),
+    params: SHUFFLE_PARAMS,
+    isAudioOnly: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  return shufflePageFrom(response.contents_memo?.getType(YTNodes.PlaylistPanel)[0]);
+}
+
+export async function getShuffleMore(youtube: Innertube, more: string): Promise<ShufflePage> {
+  const response = await youtube.actions.execute("/next", {
+    continuation: more,
+    isAudioOnly: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  return shufflePageFrom(response.continuation_contents);
+}
+
+/** Exported for tests. */
+export function shufflePageFrom(panel: unknown): ShufflePage {
+  const page = (panel ?? {}) as UpNextResponse;
+  return {
+    tracks: radioFrom(page, null),
+    more: typeof page.continuation === "string" ? page.continuation : null,
+  };
 }
 
 /**

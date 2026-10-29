@@ -71,7 +71,8 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
   });
   switch (page.kind) {
     case "album": {
-      const from: PlayFrom = { kind: "list", title: page.page.title };
+      const { title, audioPlaylistId } = page.page;
+      const from: PlayFrom = { kind: "list", title, playlistId: audioPlaylistId };
       return <Album page={page.page} actions={playingFrom(from)} route={route} />;
     }
     case "playlist": {

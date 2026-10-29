@@ -379,6 +379,20 @@ pub async fn queue_save_position(
     store.save_position(&position)
 }
 
+/// When each track last played, as the last run saved it.
+#[tauri::command]
+pub fn play_history_load(store: State<'_, QueueStore>) -> Option<serde_json::Value> {
+    store.load_history()
+}
+
+#[tauri::command]
+pub async fn play_history_save(
+    store: State<'_, QueueStore>,
+    history: serde_json::Value,
+) -> Result<(), String> {
+    store.save_history(&history)
+}
+
 /// A release newer than this build, if there is one. Prereleases count when
 /// the settings say so.
 #[tauri::command]

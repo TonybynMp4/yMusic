@@ -54,6 +54,8 @@ pub struct Settings {
     /// An mpv `audio-device` name. `auto` follows the system's default output.
     pub audio_device: String,
     pub skip_disliked: bool,
+    /// Shuffle puts songs played recently on this device later.
+    pub fewer_repeats: bool,
     pub pause_watch_history: bool,
     pub search_history: SearchHistory,
     /// Closing the window hides it to the tray and playback carries on.
@@ -72,6 +74,7 @@ impl Default for Settings {
             stable_volume: StableVolume::Off,
             audio_device: "auto".into(),
             skip_disliked: false,
+            fewer_repeats: true,
             pause_watch_history: false,
             search_history: SearchHistory::Youtube,
             close_to_tray: false,

@@ -61,6 +61,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Full-page player with the queue as a tab
 - [x] Playing a playlist queues all of it, including pages still loading
 - [x] Shuffle mixes rows that arrive later into the tracks still to come
+- [x] Fewer repeats: shuffle puts songs played recently on this device later
 - [x] A search result starts that song's radio
 - [x] Autoplay: YouTube Music's suggestions after the queue, with a switch
 - [x] Reorder the queue by dragging

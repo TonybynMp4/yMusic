@@ -34,7 +34,7 @@ export function AccountMenu({ state, onSettings }: { state: AccountState; onSett
   if (!isTauri) return null;
   if (state.busy) {
     return (
-      <span className="grid size-8 place-items-center text-muted-foreground" aria-label="Signing in">
+      <span className="grid size-8 shrink-0 place-items-center text-muted-foreground" aria-label="Signing in">
         <Spinner size={16} />
       </span>
     );
@@ -43,7 +43,7 @@ export function AccountMenu({ state, onSettings }: { state: AccountState; onSett
   const { account } = state;
   if (account === null) {
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         {state.error && (
           <IconButton label={state.error} onClick={state.signIn}>
             <IconAlertTriangle size={16} className="text-amber-500" />
@@ -113,10 +113,17 @@ function SignInMenu({ state, onSettings }: { state: AccountState; onSettings: ()
   return (
     <DropdownMenu onOpenChange={load}>
       <DropdownMenuTrigger
-        render={<Button variant="outline" className="h-9 rounded-full" />}
+        // Just the icon below 640 px, so the search box keeps its room.
+        render={
+          <Button
+            variant="outline"
+            aria-label="Sign in"
+            className="h-9 shrink-0 rounded-full max-sm:w-9 max-sm:px-0"
+          />
+        }
       >
         <IconLogin2 size={16} stroke={1.75} />
-        Sign in
+        <span className="max-sm:hidden">Sign in</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuItem onClick={state.signIn}>

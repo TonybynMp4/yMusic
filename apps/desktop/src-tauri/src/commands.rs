@@ -383,7 +383,7 @@ pub fn settings_set<R: Runtime>(
     settings: State<'_, SettingsStore>,
     patch: SettingsPatch,
 ) -> Result<Settings, String> {
-    let next = settings.update(patch.to_json())?;
+    let next = settings.update(patch)?;
     if let Some(player) = app.try_state::<Player>() {
         player.apply_settings(&next);
     }

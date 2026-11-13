@@ -44,84 +44,92 @@ pub enum SearchHistory {
     Off,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct Settings {
+/// Declares `Settings`, its defaults, and `SettingsPatch`, the change
+/// `settings_set` takes, from one list, so a new setting is one line here and
+/// the frontend can change it.
+macro_rules! settings {
+    ($($(#[doc = $doc:literal])* $field:ident: $ty:ty = $default:expr,)*) => {
+        #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
+        #[serde(rename_all = "camelCase")]
+        pub struct Settings {
+            $($(#[doc = $doc])* pub $field: $ty,)*
+        }
+
+        impl Default for Settings {
+            fn default() -> Self {
+                Self { $($field: $default,)* }
+            }
+        }
+
+        /// The settings `settings_set` changes: each field present replaces
+        /// the saved one, and the rest stay. A field sent as `null` is a wrong
+        /// type, like any other, rather than a field left out.
+        #[derive(Clone, Debug, Default, PartialEq, Serialize, specta::Type)]
+        #[serde(rename_all = "camelCase")]
+        pub struct SettingsPatch {
+            $(
+                #[specta(optional, type = $ty)]
+                pub $field: Option<$ty>,
+            )*
+        }
+
+        // By hand, through a private struct, because `deserialize_with` on
+        // the public one makes specta export a separate type per direction.
+        // `Serialize` is derived only to give specta the field names.
+        impl<'de> Deserialize<'de> for SettingsPatch {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Fields {
+                    $(
+                        #[serde(default, deserialize_with = "present")]
+                        $field: Option<$ty>,
+                    )*
+                }
+                let fields = Fields::deserialize(deserializer)?;
+                Ok(Self { $($field: fields.$field,)* })
+            }
+        }
+
+        impl Settings {
+            /// The settings with the fields present in `patch` replaced.
+            pub fn apply(&self, patch: SettingsPatch) -> Self {
+                let mut next = self.clone();
+                $(if let Some(value) = patch.$field {
+                    next.$field = value;
+                })*
+                next
+            }
+        }
+    };
+}
+
+settings! {
     /// When the queue runs out, its suggestions play on.
-    pub autoplay: bool,
-    pub audio_quality: AudioQuality,
-    pub stable_volume: StableVolume,
+    autoplay: bool = true,
+    audio_quality: AudioQuality = AudioQuality::High,
+    stable_volume: StableVolume = StableVolume::Off,
     /// An mpv `audio-device` name. `auto` follows the system's default output.
-    pub audio_device: String,
-    pub skip_disliked: bool,
-    pub pause_watch_history: bool,
-    pub search_history: SearchHistory,
+    audio_device: String = "auto".into(),
+    skip_disliked: bool = false,
+    pause_watch_history: bool = false,
+    search_history: SearchHistory = SearchHistory::Youtube,
     /// Closing the window hides it to the tray and playback carries on.
-    pub close_to_tray: bool,
-    pub check_for_updates: bool,
-    pub include_prereleases: bool,
+    close_to_tray: bool = false,
+    check_for_updates: bool = true,
+    include_prereleases: bool = false,
     /// Loudness, peaks and the stable volume gain, measured as a song plays.
-    pub stats_for_nerds: bool,
+    stats_for_nerds: bool = false,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            autoplay: true,
-            audio_quality: AudioQuality::High,
-            stable_volume: StableVolume::Off,
-            audio_device: "auto".into(),
-            skip_disliked: false,
-            pause_watch_history: false,
-            search_history: SearchHistory::Youtube,
-            close_to_tray: false,
-            check_for_updates: true,
-            include_prereleases: false,
-            stats_for_nerds: false,
-        }
-    }
-}
-
-/// The settings `settings_set` changes: each field present replaces the
-/// saved one, and the rest stay. One field per setting, so the frontend's type
-/// for a patch comes from here too.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SettingsPatch {
-    #[specta(optional)]
-    pub autoplay: Option<bool>,
-    #[specta(optional)]
-    pub audio_quality: Option<AudioQuality>,
-    #[specta(optional)]
-    pub stable_volume: Option<StableVolume>,
-    #[specta(optional)]
-    pub audio_device: Option<String>,
-    #[specta(optional)]
-    pub skip_disliked: Option<bool>,
-    #[specta(optional)]
-    pub pause_watch_history: Option<bool>,
-    #[specta(optional)]
-    pub search_history: Option<SearchHistory>,
-    #[specta(optional)]
-    pub close_to_tray: Option<bool>,
-    #[specta(optional)]
-    pub check_for_updates: Option<bool>,
-    #[specta(optional)]
-    pub include_prereleases: Option<bool>,
-    #[specta(optional)]
-    pub stats_for_nerds: Option<bool>,
-}
-
-impl SettingsPatch {
-    /// The patch as the JSON object `Settings::merge` takes, with only the
-    /// fields it sets.
-    pub fn to_json(&self) -> serde_json::Value {
-        let mut json = serde_json::to_value(self).expect("settings patch serialize");
-        if let serde_json::Value::Object(fields) = &mut json {
-            fields.retain(|_, value| !value.is_null());
-        }
-        json
-    }
+/// Reads a patch field that is there. A missing one is `None` through
+/// `#[serde(default)]`, so `null` reaches `T` and fails as a wrong type.
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 impl Settings {
@@ -137,22 +145,6 @@ impl Settings {
             }
         }
         serde_json::from_value(json)
-    }
-
-    /// Applies the fields present in `patch` and leaves the rest alone.
-    pub fn merge(&self, patch: serde_json::Value) -> Result<Self, String> {
-        let serde_json::Value::Object(patch) = patch else {
-            return Err("a settings patch is an object".into());
-        };
-        let mut current = serde_json::to_value(self).expect("settings serialize");
-        let fields = current.as_object_mut().expect("settings are an object");
-        for (key, value) in patch {
-            if !fields.contains_key(&key) {
-                return Err(format!("no setting called `{key}`"));
-            }
-            fields.insert(key, value);
-        }
-        serde_json::from_value(current).map_err(|error| format!("bad settings patch: {error}"))
     }
 }
 
@@ -196,11 +188,11 @@ impl SettingsStore {
         self.current.lock().expect("settings mutex").clone()
     }
 
-    /// Merges `patch`, saves, and returns the result. Nothing changes if the
-    /// patch is invalid or the file cannot be written.
-    pub fn update(&self, patch: serde_json::Value) -> Result<Settings, String> {
+    /// Applies `patch`, saves, and returns the result. Nothing changes if the
+    /// file cannot be written.
+    pub fn update(&self, patch: SettingsPatch) -> Result<Settings, String> {
         let mut current = self.current.lock().expect("settings mutex");
-        let next = current.merge(patch)?;
+        let next = current.apply(patch);
         if let Some(path) = &self.path {
             save(path, &next)?;
         }
@@ -236,34 +228,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// A setting added to `Settings` and not to `SettingsPatch` would compile,
-    /// and the frontend could never change it.
-    #[test]
-    fn a_patch_can_set_every_setting() {
-        let d = Settings::default();
-        let every = SettingsPatch {
-            autoplay: Some(d.autoplay),
-            audio_quality: Some(d.audio_quality),
-            stable_volume: Some(d.stable_volume),
-            audio_device: Some(d.audio_device.clone()),
-            skip_disliked: Some(d.skip_disliked),
-            pause_watch_history: Some(d.pause_watch_history),
-            search_history: Some(d.search_history),
-            close_to_tray: Some(d.close_to_tray),
-            check_for_updates: Some(d.check_for_updates),
-            include_prereleases: Some(d.include_prereleases),
-            stats_for_nerds: Some(d.stats_for_nerds),
-        };
-        let keys = |value: serde_json::Value| -> Vec<String> {
-            let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
-            keys.sort();
-            keys
-        };
-        assert_eq!(
-            keys(every.to_json()),
-            keys(serde_json::to_value(&d).unwrap())
-        );
-        assert_eq!(d.merge(every.to_json()), Ok(d));
+    fn patch(json: serde_json::Value) -> SettingsPatch {
+        serde_json::from_value(json).unwrap()
     }
 
     fn temp_path(name: &str) -> PathBuf {
@@ -284,7 +250,7 @@ mod tests {
         let path = temp_path("restart");
         let store = SettingsStore::open(path.clone());
         store
-            .update(json!({ "autoplay": false, "audioQuality": "low" }))
+            .update(patch(json!({ "autoplay": false, "audioQuality": "low" })))
             .unwrap();
 
         let reopened = SettingsStore::open(path).get();
@@ -335,11 +301,28 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_patch_changes_nothing() {
-        let store = SettingsStore::in_memory();
-        assert!(store.update(json!({ "autoplay": "yes" })).is_err());
-        assert!(store.update(json!({ "noSuchSetting": true })).is_err());
-        assert!(store.update(json!(["autoplay"])).is_err());
-        assert_eq!(store.get(), Settings::default());
+    fn a_patch_sets_only_its_fields() {
+        let next = Settings::default().apply(patch(json!({ "audioDevice": "pipewire/out" })));
+        assert_eq!(next.audio_device, "pipewire/out");
+        assert_eq!(
+            next,
+            Settings {
+                audio_device: "pipewire/out".into(),
+                ..Settings::default()
+            }
+        );
+    }
+
+    #[test]
+    fn a_bad_patch_does_not_parse() {
+        let parse = |json| serde_json::from_value::<SettingsPatch>(json);
+        assert!(parse(json!({ "autoplay": "yes" })).is_err());
+        assert!(
+            parse(json!({ "audioDevice": null })).is_err(),
+            "null is not a device"
+        );
+        assert!(parse(json!({ "noSuchSetting": true })).is_err());
+        assert!(parse(json!(["autoplay"])).is_err());
+        assert_eq!(parse(json!({})).unwrap(), SettingsPatch::default());
     }
 }

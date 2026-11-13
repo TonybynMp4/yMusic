@@ -400,22 +400,22 @@ export type Settings = {
 };
 
 /**
- *  The settings `settings_set` changes: each field present replaces the
- *  saved one, and the rest stay. One field per setting, so the frontend's type
- *  for a patch comes from here too.
+ *  The settings `settings_set` changes: each field present replaces
+ *  the saved one, and the rest stay. A field sent as `null` is a wrong
+ *  type, like any other, rather than a field left out.
  */
 export type SettingsPatch = {
-	autoplay?: boolean | null,
-	audioQuality?: AudioQuality | null,
-	stableVolume?: StableVolume | null,
-	audioDevice?: string | null,
-	skipDisliked?: boolean | null,
-	pauseWatchHistory?: boolean | null,
-	searchHistory?: SearchHistory | null,
-	closeToTray?: boolean | null,
-	checkForUpdates?: boolean | null,
-	includePrereleases?: boolean | null,
-	statsForNerds?: boolean | null,
+	autoplay?: boolean,
+	audioQuality?: AudioQuality,
+	stableVolume?: StableVolume,
+	audioDevice?: string,
+	skipDisliked?: boolean,
+	pauseWatchHistory?: boolean,
+	searchHistory?: SearchHistory,
+	closeToTray?: boolean,
+	checkForUpdates?: boolean,
+	includePrereleases?: boolean,
+	statsForNerds?: boolean,
 };
 
 /**  How stable volume evens songs out. */

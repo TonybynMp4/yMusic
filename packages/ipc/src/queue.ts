@@ -1,14 +1,18 @@
 import { Track, TrackId, VideoId } from "@ymusic/core";
 import { z } from "zod";
 
-import { invokeParsed, invokeVoid, isTauri } from "./tauri.ts";
+import type { QueuePosition } from "./bindings.ts";
+import { call, isTauri } from "./tauri.ts";
+
+export type { QueuePosition } from "./bindings.ts";
 
 export const QueueFrom = z.object({ title: z.string(), device: z.string().nullable() });
 export type QueueFrom = z.infer<typeof QueueFrom>;
 
 /**
  * The queue as saved in `queue.json`. Rust stores it as it comes, so this
- * schema is its only check: a file that fails it reads as nothing saved.
+ * schema is its only check: a file that fails it, written by an older build
+ * or by hand, reads as nothing saved.
  */
 export const SavedQueue = z.object({
   items: z.array(Track).readonly(),
@@ -37,25 +41,13 @@ export const SavedQueue = z.object({
 });
 export type SavedQueue = z.infer<typeof SavedQueue>;
 
-/** How far into the playing song playback was. */
-export const QueuePosition = z.object({
-  trackId: z.string(),
-  positionMs: z.number().int().nonnegative(),
-});
-export type QueuePosition = z.infer<typeof QueuePosition>;
-
-const Saved = z.object({
-  queue: z.unknown().nullable(),
-  position: QueuePosition.nullable(),
-});
-
 /** What the last run saved. Nothing outside Tauri, or when the file does not parse. */
 export async function queueLoad(): Promise<{
   queue: SavedQueue | null;
   position: QueuePosition | null;
 }> {
   if (!isTauri) return { queue: null, position: null };
-  const saved = await invokeParsed("queue_load", Saved);
+  const saved = await call("queueLoad");
   const queue = SavedQueue.safeParse(saved.queue);
   if (saved.queue !== null && !queue.success) {
     console.error("ignoring the saved queue", queue.error);
@@ -66,10 +58,10 @@ export async function queueLoad(): Promise<{
 /** Replaces the saved queue. Null clears it. */
 export async function queueSave(queue: SavedQueue | null): Promise<void> {
   if (!isTauri) return;
-  await invokeVoid("queue_save", { queue });
+  await call("queueSave", queue);
 }
 
 export async function queueSavePosition(position: QueuePosition): Promise<void> {
   if (!isTauri) return;
-  await invokeVoid("queue_save_position", { position });
+  await call("queueSavePosition", position);
 }

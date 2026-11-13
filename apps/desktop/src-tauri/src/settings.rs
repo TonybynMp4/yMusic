@@ -1,8 +1,8 @@
 //! The user's settings, kept as `settings.json` beside the app's other data.
 //!
-//! Every field has a default and the file is read with `#[serde(default)]`, so
-//! a file written by an older build (missing a field) or a newer one (with a
-//! field this build does not know) still loads. A file that will not parse at
+//! Every field has a default and the file is laid over the defaults, so a file
+//! written by an older build (missing a field) or a newer one (with a field
+//! this build does not know) still loads. A file that will not parse at
 //! all is logged and replaced by the defaults: losing a preference is a much
 //! better outcome than a player that refuses to start.
 
@@ -10,7 +10,7 @@ use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AudioQuality {
     #[default]
@@ -20,7 +20,7 @@ pub enum AudioQuality {
 }
 
 /// How stable volume evens songs out.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum StableVolume {
     #[default]
@@ -32,7 +32,7 @@ pub enum StableVolume {
 }
 
 /// Where searches are remembered.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum SearchHistory {
     /// On the account, as YouTube Music records them.
@@ -44,8 +44,8 @@ pub enum SearchHistory {
     Off,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     /// When the queue runs out, its suggestions play on.
     pub autoplay: bool,
@@ -82,7 +82,63 @@ impl Default for Settings {
     }
 }
 
+/// The settings `settings_set` changes: each field present replaces the
+/// saved one, and the rest stay. One field per setting, so the frontend's type
+/// for a patch comes from here too.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SettingsPatch {
+    #[specta(optional)]
+    pub autoplay: Option<bool>,
+    #[specta(optional)]
+    pub audio_quality: Option<AudioQuality>,
+    #[specta(optional)]
+    pub stable_volume: Option<StableVolume>,
+    #[specta(optional)]
+    pub audio_device: Option<String>,
+    #[specta(optional)]
+    pub skip_disliked: Option<bool>,
+    #[specta(optional)]
+    pub pause_watch_history: Option<bool>,
+    #[specta(optional)]
+    pub search_history: Option<SearchHistory>,
+    #[specta(optional)]
+    pub close_to_tray: Option<bool>,
+    #[specta(optional)]
+    pub check_for_updates: Option<bool>,
+    #[specta(optional)]
+    pub include_prereleases: Option<bool>,
+    #[specta(optional)]
+    pub stats_for_nerds: Option<bool>,
+}
+
+impl SettingsPatch {
+    /// The patch as the JSON object `Settings::merge` takes, with only the
+    /// fields it sets.
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut json = serde_json::to_value(self).expect("settings patch serialize");
+        if let serde_json::Value::Object(fields) = &mut json {
+            fields.retain(|_, value| !value.is_null());
+        }
+        json
+    }
+}
+
 impl Settings {
+    /// The fields of a settings file, with the defaults for fields it lacks,
+    /// as one written before a setting existed does, and unknown fields
+    /// ignored, as one written by a newer version may have.
+    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> serde_json::Result<Self> {
+        let mut json = serde_json::to_value(Self::default()).expect("settings serialize");
+        let fields = json.as_object_mut().expect("settings are an object");
+        for (key, value) in file {
+            if fields.contains_key(&key) {
+                fields.insert(key, value);
+            }
+        }
+        serde_json::from_value(json)
+    }
+
     /// Applies the fields present in `patch` and leaves the rest alone.
     pub fn merge(&self, patch: serde_json::Value) -> Result<Self, String> {
         let serde_json::Value::Object(patch) = patch else {
@@ -156,19 +212,17 @@ impl SettingsStore {
 /// Parses a saved file, moving settings an older build wrote under another
 /// name to where this one reads them.
 fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
-    let mut value: serde_json::Value = serde_json::from_slice(bytes)?;
-    if let Some(fields) = value.as_object_mut() {
-        // The search history switch was once a pause, on or off. Paused meant
-        // nothing recorded anywhere, which is Off now.
-        let paused = fields.remove("pauseSearchHistory");
-        if let (Some(serde_json::Value::Bool(paused)), false) =
-            (paused, fields.contains_key("searchHistory"))
-        {
-            let history = if paused { "off" } else { "youtube" };
-            fields.insert("searchHistory".into(), history.into());
-        }
+    let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+    // The search history switch was once a pause, on or off. Paused meant
+    // nothing recorded anywhere, which is Off now.
+    let paused = fields.remove("pauseSearchHistory");
+    if let (Some(serde_json::Value::Bool(paused)), false) =
+        (paused, fields.contains_key("searchHistory"))
+    {
+        let history = if paused { "off" } else { "youtube" };
+        fields.insert("searchHistory".into(), history.into());
     }
-    serde_json::from_value(value)
+    Settings::from_fields(fields)
 }
 
 fn save(path: &std::path::Path, settings: &Settings) -> Result<(), String> {

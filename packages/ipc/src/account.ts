@@ -1,13 +1,12 @@
-import { z } from "zod";
+import type { Browser } from "./bindings.ts";
+import { call, isTauri } from "./tauri.ts";
 
-import { invokeParsed, invokeVoid, isTauri } from "./tauri.ts";
-
-const Cookie = z.string().nullable();
+export type { Browser } from "./bindings.ts";
 
 /** The saved session's cookie header, or null when signed out. */
 export async function accountCookie(): Promise<string | null> {
   if (!isTauri) return null;
-  return invokeParsed("account_cookie", Cookie);
+  return call("accountCookie");
 }
 
 /**
@@ -15,21 +14,18 @@ export async function accountCookie(): Promise<string | null> {
  * it lands on YouTube Music. Null means the user closed the window.
  */
 export async function accountSignIn(): Promise<string | null> {
-  return invokeParsed("account_sign_in", Cookie);
+  return call("accountSignIn");
 }
-
-const Browsers = z.array(z.object({ id: z.string(), name: z.string() }));
-export type Browser = z.infer<typeof Browsers>[number];
 
 /** Browser profiles on this machine that a session can be imported from. */
 export async function accountBrowsers(): Promise<Browser[]> {
   if (!isTauri) return [];
-  return invokeParsed("account_browsers", Browsers);
+  return call("accountBrowsers");
 }
 
 /** Takes the YouTube session from one of `accountBrowsers()` and keeps it. */
 export async function accountImport(id: string): Promise<string> {
-  return invokeParsed("account_import", z.string(), { id });
+  return call("accountImport", id);
 }
 
 /**
@@ -38,7 +34,7 @@ export async function accountImport(id: string): Promise<string> {
  * Null when none of those gives anything newer.
  */
 export async function accountRefresh(stale: string): Promise<string | null> {
-  return invokeParsed("account_refresh", Cookie, { stale });
+  return call("accountRefresh", stale);
 }
 
 /**
@@ -46,9 +42,9 @@ export async function accountRefresh(stale: string): Promise<string | null> {
  * Null for an imported session, or when the rotation did not take.
  */
 export async function accountRotate(): Promise<string | null> {
-  return invokeParsed("account_rotate", Cookie);
+  return call("accountRotate");
 }
 
 export async function accountSignOut(): Promise<void> {
-  return invokeVoid("account_sign_out");
+  await call("accountSignOut");
 }

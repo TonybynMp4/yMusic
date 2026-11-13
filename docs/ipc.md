@@ -9,15 +9,15 @@ Rust owns the types of everything that crosses between the core and the frontend
 - `ymusic_invoke_handler!` is the handler the app and the tests mount. It routes `http_fetch` to Tauri's own handler and everything else to specta's. `http_fetch` takes and returns raw bytes (see [the data engine](engine.md)), which specta has no type for, so its wrapper in `packages/ipc/src/http.ts` stays hand-written and is the one plain `invoke` left.
 - Commands reject with their error string, as a plain `invoke` does (`ErrorHandlingMode::Throw`).
 - Specta refuses 64-bit integers by default, because JSON numbers lose precision above 2^53. The ones that cross are milliseconds, byte counts and itags, so the builder casts them all to `number`.
-- Specta types every `f64` as `number | null`, since serde writes NaN as `null`. `MediaKeyEvent::SetVolume` clamps its volume first, so its field is typed `number`.
+- Specta types every `f64` as `number | null`, since serde writes NaN as `null`. A field that can never hold NaN is typed `number` with `#[specta(type = specta_typescript::Number)]`: `MediaKeyEvent::SetVolume`'s volume, clamped before it is sent, and `SavedVolume`'s `volume` and `unmuted`, which come from mpv's volume or a file `sanitize` has made finite. A new override needs the same guarantee.
 - `Settings::default()` is exported as the `defaultSettings` constant, which is what a plain browser gets.
-- `settings_set` takes a `SettingsPatch`, one optional field per setting, so a misspelt setting fails `tsc`. Rust also rejects unknown fields at run time.
+- `settings_set` takes a `SettingsPatch`, one optional field per setting, so a misspelt setting fails `tsc`. The `settings!` macro in `settings.rs` declares `Settings`, its defaults, the patch and `Settings::apply` from one list, so a new setting is one line there. At run time Rust rejects an unknown field, and a field sent as `null`, which the TypeScript type also leaves out.
 
 There are no global events. The two streams, playback and media keys, are `Channel<T>` arguments, so their payloads (`PlaybackEvent`, `MediaKeyEvent`) come through the command types.
 
 ## Keeping the bindings current
 
-`pnpm bindings` regenerates the file. `tests/bindings.rs` exports a fresh copy to a temporary file and fails if it differs from the committed one, so CI's `cargo test` catches a Rust change that was not regenerated. A drifted type then fails `tsc` wherever the frontend uses it.
+`pnpm bindings` regenerates the file by running `write_bindings` in `tests/bindings.rs`, a test marked `#[ignore]` so a plain `cargo test` never writes. `bindings_are_current` in the same file exports a fresh copy to a temporary file and fails if it differs from the committed one, so CI's `cargo test` catches a Rust change that was not regenerated. A drifted type then fails `tsc` wherever the frontend uses it.
 
 ## Where zod still parses
 

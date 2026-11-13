@@ -14,6 +14,7 @@ import { FullPlayer } from "./FullPlayer.tsx";
 import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LibraryView } from "./Library.tsx";
 import { LocalView } from "./Local.tsx";
+import type { ScenarioControls } from "./memoryScenario.ts";
 import { NowPlaying } from "./NowPlaying.tsx";
 import { recordPlayed } from "./recent.ts";
 import { ScrollParent } from "./scroll.ts";
@@ -175,6 +176,30 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
       window.removeEventListener("keydown", onKey);
     };
   }, [back]);
+
+  // The memory harness's scripted session. Without the build flag the test is
+  // a constant and the scenario is left out of the bundle.
+  const scenario = useRef<ScenarioControls | null>(null);
+  if (import.meta.env.VITE_MEMORY_SCENARIO) {
+    scenario.current = {
+      go,
+      playTrack: player.playTrack,
+      setVolume: player.setVolume,
+      seek: player.seek,
+      next: player.next,
+      trackId: player.track?.id ?? null,
+      status: player.playback.status,
+      durationMs: player.playback.durationMs,
+      signedIn: account.account !== null,
+    };
+  }
+  useEffect(() => {
+    if (!import.meta.env.VITE_MEMORY_SCENARIO) return;
+    void import("./memoryScenario.ts").then(({ runMemoryScenario }) =>
+      runMemoryScenario(() => scenario.current!),
+    );
+  }, []);
+
   const play = (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
     if (tracks.length === 0) return;
     if (id === null) {

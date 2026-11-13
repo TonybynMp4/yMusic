@@ -72,6 +72,14 @@ pub fn player_queue_next(
     player.queue_next(&after, request)
 }
 
+/// Writes a song that failed to play to the log, with the raw error the
+/// snackbar leaves out. Failures before mpv (a stream that won't resolve, a
+/// missing file) are otherwise only in the webview's console.
+#[tauri::command]
+pub fn player_log_failure(track_id: String, message: String) {
+    log::warn!("could not play {track_id}: {message}");
+}
+
 #[tauri::command]
 pub fn player_play(player: State<'_, Player>) -> Result<(), String> {
     player.play()

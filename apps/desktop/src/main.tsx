@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { defaultSettings, fullVolume, playerSavedVolume, settingsGet } from "@ymusic/ipc";
 import { App } from "./App.tsx";
+import { SnackbarProvider } from "@/components/ui/snackbar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
 
@@ -30,7 +31,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         one is open, moving along a row of transport buttons shows the next
         immediately instead of waiting out the delay again. */}
     <TooltipProvider delay={400}>
-      <App settings={settings} volume={volume} />
+      <SnackbarProvider>
+        <App settings={settings} volume={volume} />
+      </SnackbarProvider>
     </TooltipProvider>
   </React.StrictMode>,
 );

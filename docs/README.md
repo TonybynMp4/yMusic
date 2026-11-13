@@ -3,13 +3,13 @@
 How the parts that are built work, and why they are built that way. Plans for what is not built yet live in [PLAN.md](../PLAN.md).
 
 - [Architecture](architecture.md): the Tauri shell, platform integration, libraries and the monorepo layout.
-- [Playback](playback.md): libmpv, stream leases and volume.
+- [Playback](playback.md): libmpv, stream leases, volume, and what a failed song shows.
 - [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution, PO tokens, reporting plays, search history, resume, and the queue across restarts.
 - [Search](search.md): YouTube Music's results, chips and why one request covers All.
 - [Sign-in](sign-in.md): the cookie session, browser import and why OAuth is out.
 - [Settings](settings.md): the settings file, and how each setting reaches mpv, the engine or the window.
 - [Browse pages and long lists](browse.md): album, artist and playlist pages, loading long playlists, and virtualized track lists.
-- [Interactions](interactions.md): the menus on songs, albums, playlists and artists, editing your playlists, and liking songs.
+- [Interactions](interactions.md): the menus on songs, albums, playlists and artists, editing your playlists, liking songs, and the snackbar.
 - [Artwork](artwork.md): the `img` scheme, WebP requests and the capped disk cache.
 - [Library page](library-page.md): the chips, sorts and layouts of the page for everything saved.
 - [Local library](library.md): scanning folders, and where songs and folder pages get their cover art.

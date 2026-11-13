@@ -18,6 +18,19 @@ The player bar gives way on narrow windows without anything overlapping: only th
 
 The year comes with a song from an album page (the header's subtitle), from an up-next panel (radio, mix, the resumed queue, where youtubei.js reads it off the byline's last run) and from a local file's tags. A YouTube song from a search or a playlist has none, so `useSongYear` asks for it with a plain `/next` for that song and reads its own panel row. The answer is kept for the session (a failed lookup is not, and is tried again the next time the song shows), and a song with no album on YouTube, such as a music video, shows no year.
 
+## Snackbar
+
+What an action did, and a song that failed to play, show as YouTube Music's snackbar: one short message at the bottom left, over the content and above the player bar. It is Base UI's Toast, in `components/ui/snackbar.tsx`, mounted once in `main.tsx`.
+
+- Show one with `showSnackbar({ message, action })` from `lib/snackbar.ts`. The toast manager lives at module level, so code with no provider in reach can show one too.
+- One at a time, as in YouTube Music: a new snackbar closes the one that is up.
+- At most one action, a text button. Pressing it closes the snackbar.
+- It goes after 4 seconds, or 6 with an action, so there is time to reach the button. Hovering it holds the timer, as Base UI does. It can also be swiped down.
+- `onClose` runs whenever it goes: timed out, replaced, swiped or its action pressed. Playback failures use this to skip a song that cannot play.
+- Failures are announced at once to screen readers (`urgent`), everything else politely.
+
+The update notice is not a snackbar. It stays until dismissed, at the bottom right.
+
 ## Your playlists
 
 A playlist's page shows its owner, its summary line, who can see it (your own playlists only: YouTube says so on the edit form alone), a second line with the song count and total length, and the description. Until every row has loaded, the count and length are YouTube's; after, they come from the rows, so they follow your edits.

@@ -8,6 +8,7 @@ import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { showSnackbar } from "@/lib/snackbar";
 import { AccountMenu } from "./AccountMenu.tsx";
 import { BrowseView, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { FullPlayer } from "./FullPlayer.tsx";
@@ -29,6 +30,7 @@ import { tracksIn, useLibrary } from "./useLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { forgetSaved } from "./useSavedLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
+import { usePlaybackFailures } from "./usePlaybackFailures.ts";
 import { useResume } from "./useResume.ts";
 import { useSavedQueue } from "./useSavedQueue.ts";
 import { searchHistoryIn, useSearchHistory, type RecentSearch } from "./useSearchHistory.ts";
@@ -84,7 +86,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   useRecordPlays(player, library);
   const resumed = useResume(player, account.account?.name ?? null, !account.busy);
   useSavedQueue(player, resumed);
-  const notice = useNotice();
+  usePlaybackFailures(player);
   const updates = useUpdates(props.settings.checkForUpdates);
 
   const toggleSidebar = () =>
@@ -132,7 +134,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     playlists.deleted(id);
     forgetSaved("playlists");
     forgetPage({ kind: "playlist", id });
-    notice.show(`Deleted ${title}`);
+    notify(`Deleted ${title}`);
   };
   const showSearch = () => {
     go(null);
@@ -190,13 +192,13 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     void player
       .rate(videoId, value)
       .then(() => {
-        if (value === "like") notice.show("Saved to Liked Music");
-        else if (before === "like") notice.show("Removed from Liked Music");
+        if (value === "like") notify("Saved to Liked Music");
+        else if (before === "like") notify("Removed from Liked Music");
         // A liked song is a saved one, so the library's Songs chip changes too.
         if (value === "like" || before === "like") forgetSaved("songs");
       })
       .catch((error: unknown) =>
-        notice.show(error instanceof Error ? error.message : String(error)),
+        notify(error instanceof Error ? error.message : String(error)),
       );
   };
   // Null for a local file or while signed out: the rating is the account's.
@@ -250,7 +252,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     enqueue: (tracks, at) =>
       player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
     open: go,
-    notify: notice.show,
+    notify,
     libraryChanged: () => {
       playlists.reload();
       forgetSaved();
@@ -467,14 +469,6 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
           degraded={player.lease?.degraded ?? null}
         />
         <UpdateNotice updates={updates} />
-        {notice.message && (
-          <p
-            role="status"
-            className="pointer-events-none fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-md bg-foreground px-4 py-2 text-sm text-background shadow-lg"
-          >
-            {notice.message}
-          </p>
-        )}
       </div>
     </InteractionsProvider>
   );
@@ -556,19 +550,9 @@ function useRecordPlays(
   }, [playing, track, all, folders]);
 }
 
-/** How long a notice stays up. */
-const NOTICE_MS = 4000;
-
-/** One short message at a time, as YouTube Music's snackbar shows them. */
-function useNotice() {
-  const [message, setMessage] = useState<string | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-  const show = useCallback((text: string) => {
-    window.clearTimeout(timer.current);
-    setMessage(text);
-    timer.current = window.setTimeout(() => setMessage(null), NOTICE_MS);
-  }, []);
-  return { message, show };
+/** A snackbar with only a message, for what an action did. */
+function notify(message: string) {
+  showSnackbar({ message });
 }
 
 /**

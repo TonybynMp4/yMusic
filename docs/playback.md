@@ -73,3 +73,24 @@ The queue, in the full player's Up next tab, keeps the playing song in view. Ope
 Above the queue, "Playing from" names what it plays: the playlist, album or artist it was started from, or for a resumed queue, the name the account gives it (the subtitle of the `GET_QUEUE` answer's queue header). A song radio, a mix or local files have no name, and nothing shows. The name belongs to the queue, so it goes when the queue is replaced or cleared, and it is saved with it.
 
 A queue picked up from another device gets a `devices-share` icon after the name, and the same icon in the player bar, after the song's title. Hovering it gives the account's own sentence for where the queue was left ("From your Android device"), which the answer carries in `musicQueueConfig.musicQueueRestorationInfo`. It is only read when `isCrossDeviceQueue` is set. The icon marks where the queue came from, not where it plays, which is why it is a share glyph and not a bare device.
+
+## When a song fails
+
+A song that fails to play shows a snackbar (see [Interactions](interactions.md#snackbar)) with plain copy and one action. The raw error goes to the log: `usePlayer` sends it to Rust with `player_log_failure`, which writes `could not play <track id>: <message>` to the log file. mpv's own failures are in the log already, but a stream that would not resolve or a missing file would otherwise be in the webview console only.
+
+A failure reaches the snackbar once it stands. A 403 from mpv on a YouTube song gets its retry on the next player client first (see [Player clients](#player-clients)), and only a second failure shows.
+
+`playbackFailure.ts` reads the kind of failure from the raw message, since Rust's errors arrive as plain strings:
+
+| Kind | From | Copy | Action |
+| --- | --- | --- | --- |
+| missing | a local file gone from disk or from the library | Couldn't find the file for *title* | Skip |
+| unavailable | YouTube's `ERROR` status, the one answer the engine stops on | *title* isn't available on YouTube Music | Skip |
+| offline | a request that never reached YouTube, or `navigator.onLine` false | Couldn't play *title*. Check your connection | Retry |
+| failed | anything else, such as a stream mpv refused on every client | Couldn't play *title* | Retry |
+
+Retry can help with the last two, so the song stays and the queue waits. A lost connection should not run through the whole queue. Retry resolves the song afresh, with its own fallback retry, from the start of the song.
+
+Missing and unavailable songs will not play however often they are tried. The queue moves on by itself when the snackbar goes, after 4 seconds, and Skip moves on at once. Picking another song in the meantime cancels the skip. With nothing to move on to (the last song, or repeat one), the snackbar has no action.
+
+When the song changes, its snackbar closes, so a Retry never applies to a song that is no longer playing. The player bar no longer shows the raw error.

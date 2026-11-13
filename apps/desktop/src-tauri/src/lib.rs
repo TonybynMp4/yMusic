@@ -101,6 +101,15 @@ pub fn run() {
                 .level_for("cookie_store", log::LevelFilter::Warn)
                 .build(),
         )
+        // Before the windows are built, so the main window is resized and
+        // placed while still hidden. It starts hidden (tauri.conf.json) and
+        // `setup` shows it once it is where it was.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(platform::window::SAVED_STATE)
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
@@ -132,6 +141,7 @@ pub fn run() {
                     context.set_cache_model(CacheModel::DocumentBrowser);
                 }
             });
+            platform::window::keep_on_screen(&window);
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);
@@ -141,7 +151,7 @@ pub fn run() {
             // 0.35), so what can still fail here is mpv itself. The app is a
             // music player without it, so say so and quit rather than open a
             // window where nothing plays.
-            match Player::new() {
+            let started = match Player::new() {
                 Ok(player) => {
                     // Media keys are a nicety; `attach` logs and carries on
                     // without them rather than failing startup.
@@ -155,10 +165,10 @@ pub fn run() {
                     app.manage(volume);
                     app.manage(player);
                     app.manage(media);
+                    true
                 }
                 Err(error) => {
                     log::error!("{error}");
-                    let _ = window.hide();
                     let handle = app.handle().clone();
                     app.dialog()
                         .message(format!(
@@ -170,14 +180,20 @@ pub fn run() {
                         .title("yMusic cannot play audio")
                         .kind(MessageDialogKind::Error)
                         .show(move |_| handle.exit(1));
+                    false
                 }
-            }
+            };
 
             app.manage(http::Http::new());
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
             tray::sync(app.handle(), startup_settings.close_to_tray);
+            // Last, so nothing the page invokes finds its state missing. With
+            // no mpv the window stays hidden behind the error dialog.
+            if started {
+                let _ = window.show();
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

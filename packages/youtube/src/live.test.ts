@@ -4,7 +4,7 @@ import type { VideoId } from "@ymusic/core";
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
 import { fetchSignatureTimestamp, getPlaybackTracking } from "./history.ts";
-import { getRadio, getSongYear } from "./radio.ts";
+import { getRadio, getShuffle, getShuffleMore, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
 import { searchMusic, searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
@@ -126,6 +126,18 @@ live("song rating against the real InnerTube", () => {
     });
     expect(JSON.stringify(response.data)).toContain('"likeStatus":"INDIFFERENT"');
     expect(ratingFrom(response.data as RawNext)).toBe("none");
+  }, 30_000);
+});
+
+live("YouTube Music's shuffle against the real InnerTube", () => {
+  it("shuffles a playlist and pages on with a plain token", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    // Top 100 Songs Global: long enough for a second page.
+    const first = await getShuffle(youtube, "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i");
+    expect(first.tracks.length).toBeGreaterThan(20);
+    expect(first.more).toEqual(expect.any(String));
+    const second = await getShuffleMore(youtube, first.more!);
+    expect(second.tracks.length).toBeGreaterThan(0);
   }, 30_000);
 });
 

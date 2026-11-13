@@ -8,6 +8,13 @@ export const StableVolume = z.enum(["off", "on", "loudOnly"]);
 export type StableVolume = z.infer<typeof StableVolume>;
 
 /**
+ * Whose shuffle a Shuffle button plays: the app's own, or YouTube Music's
+ * server shuffle for a list that is a YouTube playlist.
+ */
+export const ShuffleWith = z.enum(["ymusic", "youtube"]);
+export type ShuffleWith = z.infer<typeof ShuffleWith>;
+
+/**
  * Where searches are remembered: on the account, in a list on this device
  * (with searches kept off the account), or nowhere.
  */
@@ -25,6 +32,7 @@ export const Settings = z.object({
   /** An mpv `audio-device` name; `auto` follows the system's default output. */
   audioDevice: z.string().default("auto"),
   skipDisliked: z.boolean().default(false),
+  shuffleWith: ShuffleWith.default("ymusic"),
   pauseWatchHistory: z.boolean().default(false),
   searchHistory: SearchHistory.default("youtube"),
   closeToTray: z.boolean().default(false),

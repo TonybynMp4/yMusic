@@ -12,6 +12,7 @@ import {
   type PlatformSummary,
   playerAudioDevices,
   type SearchHistory,
+  type ShuffleWith,
   type StableVolume,
 } from "@ymusic/ipc";
 import {
@@ -91,6 +92,17 @@ export function SettingsView({
             <Switch
               checked={settings.skipDisliked}
               onCheckedChange={(skipDisliked) => update({ skipDisliked })}
+            />
+          }
+        />
+        <Row
+          label="Shuffle"
+          description={SHUFFLE_DESCRIPTION[settings.shuffleWith]}
+          control={
+            <Choice
+              value={settings.shuffleWith}
+              options={SHUFFLE_WITH}
+              onChange={(shuffleWith) => update({ shuffleWith })}
             />
           }
         />
@@ -309,6 +321,17 @@ const SEARCH_HISTORY_DETAIL: Record<SearchHistory, string> = {
   device:
     "Recent searches are kept on this device. Searches are sent without your account, so they stay out of your YouTube search history and results are not personalised.",
   off: "Searches are not remembered anywhere. They are sent without your account, so results are not personalised.",
+};
+
+const SHUFFLE_WITH: { value: ShuffleWith; label: string }[] = [
+  { value: "ymusic", label: "Every song once" },
+  { value: "youtube", label: "YouTube Music's" },
+];
+
+const SHUFFLE_DESCRIPTION: Record<ShuffleWith, string> = {
+  ymusic: "Shuffle plays every song in the list once before any comes back.",
+  youtube:
+    "Shuffle on a playlist, album or artist asks YouTube Music for its order. On a long playlist it picks some songs more than once and leaves others out, so repeats are dropped.",
 };
 
 const STABLE_VOLUME: { value: StableVolume; label: string }[] = [

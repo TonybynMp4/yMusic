@@ -66,6 +66,8 @@ Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory
 
 **Skip disliked songs** skips a disliked song when the queue moves on to it, but not one you pick. See [Interactions](interactions.md#liking-and-disliking).
 
+**Shuffle** picks whose shuffle the Shuffle buttons play. See [Interactions](interactions.md#shuffle).
+
 ## What is not a setting
 
 Gapless playback. It is always on, and there is nothing to switch: see [Playback](playback.md).

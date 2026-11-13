@@ -176,13 +176,8 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     };
   }, [back]);
   const play = (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
-    if (tracks.length === 0) return;
-    if (id === null) {
-      // Shuffle first, so the queue is laid down shuffled from a random start.
-      player.setShuffle(true);
-      id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
-    }
-    player.playTrack(tracks, id, from);
+    if (id === null) player.shufflePlay(tracks, from);
+    else if (tracks.length > 0) player.playTrack(tracks, id, from);
   };
   /** Rates a song, from the player bar or a song's menu, and says what happened. */
   const rate = (videoId: VideoId, value: Rating) => {

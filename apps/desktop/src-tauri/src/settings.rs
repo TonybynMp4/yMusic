@@ -1,10 +1,15 @@
 //! The user's settings, kept as `settings.json` beside the app's other data.
 //!
-//! Every field has a default and the file is laid over the defaults, so a file
-//! written by an older build (missing a field) or a newer one (with a field
-//! this build does not know) still loads. A file that will not parse at
-//! all is logged and replaced by the defaults: losing a preference is a much
-//! better outcome than a player that refuses to start.
+//! Every field has a default and the file is laid over the defaults one field
+//! at a time, so a file written by an older build (missing a field) or a newer
+//! one (with a field this build does not know, or a value it cannot read)
+//! still loads. A value that does not parse is logged and that one setting
+//! keeps its default. A file that is not a JSON object at all is logged and
+//! replaced by the defaults: losing a preference is a much better outcome than
+//! a player that refuses to start.
+//!
+//! There is no version number. When a setting changes its name or meaning,
+//! `read` gets a small migration for that one change: see the comment there.
 
 use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
 
@@ -135,16 +140,24 @@ where
 impl Settings {
     /// The fields of a settings file, with the defaults for fields it lacks,
     /// as one written before a setting existed does, and unknown fields
-    /// ignored, as one written by a newer version may have.
-    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> serde_json::Result<Self> {
-        let mut json = serde_json::to_value(Self::default()).expect("settings serialize");
-        let fields = json.as_object_mut().expect("settings are an object");
+    /// ignored, as one written by a newer version may have. Each value is
+    /// tried on its own, so one this build cannot read (a newer build's enum
+    /// variant, say) is logged and keeps its default while the rest load.
+    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> Self {
+        let mut settings = Self::default();
         for (key, value) in file {
-            if fields.contains_key(&key) {
-                fields.insert(key, value);
+            let mut json = serde_json::to_value(&settings).expect("settings serialize");
+            let fields = json.as_object_mut().expect("settings are an object");
+            if !fields.contains_key(&key) {
+                continue;
+            }
+            fields.insert(key.clone(), value);
+            match serde_json::from_value(json) {
+                Ok(next) => settings = next,
+                Err(error) => log::warn!("ignoring saved setting `{key}`: {error}"),
             }
         }
-        serde_json::from_value(json)
+        settings
     }
 }
 
@@ -202,9 +215,18 @@ impl SettingsStore {
 }
 
 /// Parses a saved file, moving settings an older build wrote under another
-/// name to where this one reads them.
+/// name to where this one reads them. Only a file that is not a JSON object
+/// fails; a bad value inside one costs that setting alone.
+///
+/// Migrations live here, one block per change, oldest first. When a setting
+/// is renamed or its values change meaning, add a block that rewrites the old
+/// key or value into the new one before `from_fields` runs, and leave the
+/// blocks before it alone: a file can come from any older build. A new
+/// setting, or a new value for an enum, needs no migration, because a missing
+/// key gets its default and an older build defaults a value it cannot read.
 fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
     let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+
     // The search history switch was once a pause, on or off. Paused meant
     // nothing recorded anywhere, which is Off now.
     let paused = fields.remove("pauseSearchHistory");
@@ -214,7 +236,8 @@ fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
         let history = if paused { "off" } else { "youtube" };
         fields.insert("searchHistory".into(), history.into());
     }
-    Settings::from_fields(fields)
+
+    Ok(Settings::from_fields(fields))
 }
 
 fn save(path: &std::path::Path, settings: &Settings) -> Result<(), String> {
@@ -290,6 +313,40 @@ mod tests {
             SearchHistory::Device,
             "a choice already made wins over the old switch"
         );
+    }
+
+    #[test]
+    fn a_bad_value_defaults_only_that_setting() {
+        let settings = read(
+            br#"{
+                "audioQuality": "lossless",
+                "autoplay": "yes",
+                "stableVolume": "loudOnly",
+                "closeToTray": true,
+                "audioDevice": "pipewire/speakers"
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            settings.audio_quality,
+            AudioQuality::High,
+            "an enum value from a newer build"
+        );
+        assert!(settings.autoplay, "a value of the wrong type");
+        assert_eq!(settings.stable_volume, StableVolume::LoudOnly);
+        assert!(settings.close_to_tray);
+        assert_eq!(settings.audio_device, "pipewire/speakers");
+    }
+
+    #[test]
+    fn a_file_that_is_not_an_object_gives_the_defaults() {
+        for json in ["[]", "true", r#""settings""#, "null"] {
+            assert!(read(json.as_bytes()).is_err(), "{json}");
+        }
+        let path = temp_path("not-object");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, r#"["autoplay"]"#).unwrap();
+        assert_eq!(SettingsStore::open(path).get(), Settings::default());
     }
 
     #[test]

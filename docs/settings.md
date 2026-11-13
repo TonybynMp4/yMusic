@@ -4,7 +4,22 @@ Settings is a full page, opened from the account menu (signed in or not), like a
 
 ## Storage
 
-`src-tauri/src/settings.rs` keeps the settings as `settings.json` in the app data directory, next to `library.sqlite3` and `account.bin`. Every field has a default and the struct is read with `#[serde(default)]`, so a file from an older build (missing a field) or a newer one (with a field this build doesn't know) still loads. A file that won't parse is logged and replaced by the defaults. Writes go to `settings.json.partial` and are renamed over the old file, so a crash mid-write keeps the previous settings.
+`src-tauri/src/settings.rs` keeps the settings as `settings.json` in the app data directory, next to `library.sqlite3` and `account.bin`. Writes go to `settings.json.partial` and are renamed over the old file, so a crash mid-write keeps the previous settings.
+
+### Loading a file from another build
+
+`read` parses the file as a JSON object and `Settings::from_fields` lays its keys over the defaults one at a time. Each key is kept only if the settings still parse with it in place.
+
+- A key the file lacks, as in a file from an older build, gets its default.
+- A key this build doesn't know, as in a file from a newer build, is ignored.
+- A value that doesn't parse for its field gets that field's default, and the key and the serde error go to the log as a warning. The other settings load as saved. This covers a downgrade: a newer build may save an `audioQuality` this one doesn't have, and only Audio quality goes back to High.
+- A file that isn't a JSON object at all (corrupt, truncated, an array) is logged as an error and every setting takes its default.
+
+The file is rewritten in full on the next save, so a defaulted value replaces the one this build couldn't read.
+
+### Migrations
+
+There is no version number in the file. When a setting is renamed or its values change meaning, `read` gets a small hand-written block that rewrites the old key or value into the new one before `from_fields` runs. Blocks go oldest first, and old ones stay, since a file can come from any earlier build. The `pauseSearchHistory` block, described under Search history below, is the one to copy. A new setting or a new enum value needs no migration: older files lack the key and get the default, and an older build defaults the value it can't read.
 
 Two commands:
 

@@ -26,7 +26,7 @@ import { TrackList } from "./TrackList.tsx";
 import { UpdateNotice } from "./UpdateNotice.tsx";
 import { useAccount } from "./useAccount.ts";
 import { forgetPage, viewKey, type View } from "./useBrowse.ts";
-import { tracksIn, useLibrary } from "./useLibrary.ts";
+import { tracksIn, useLocalLibrary, type LocalLibrary } from "./useLocalLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
 import { forgetSaved } from "./useSavedLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
@@ -59,7 +59,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const searchInput = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
-  const library = useLibrary(query);
+  const library = useLocalLibrary(query);
   const settings = useSettings(props.settings);
   const account = useAccount();
   const signedIn = account.account !== null;
@@ -539,7 +539,7 @@ function RecentSearches(props: {
  */
 function useRecordPlays(
   player: ReturnType<typeof usePlayer>,
-  library: ReturnType<typeof useLibrary>,
+  library: LocalLibrary,
 ) {
   const playing = player.playback.status === "playing";
   const track = player.track;

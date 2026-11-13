@@ -69,7 +69,7 @@ YouTube's own pause is an account setting the app can't reach, which is why the 
 
 Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins if this build can read it. One it can't, from a newer build, gives way to a paused switch, so paused history never turns back on.
 
-**Library** lists the music folders with add, remove and rescan, using the same `useLibrary` actions as the sidebar.
+**Library** lists the music folders with add, remove and rescan, using the same `useLocalLibrary` actions as the sidebar.
 
 **Keep playing in the tray** adds a tray icon (Show, Play/Pause, Quit) and makes closing the window hide it. The icon only exists while the setting is on. On Linux, Tauri's tray goes through libayatana-appindicator, loaded at run time; the tray crate panics when it's missing, and release builds abort on panic, so the app first checks with `dlopen` that one of the library names the crate tries will load. Without it the setting logs an error and closing quits as before. `platform_summary` reports the same check as `hasTray`, and the settings page disables the switch and says what to install. The `.deb` recommends `libayatana-appindicator3-1` rather than depending on it.
 

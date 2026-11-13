@@ -39,7 +39,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScanSummary } from "./Sidebar.tsx";
 import type { AccountState } from "./useAccount.ts";
 import { searchHistoryIn } from "./useSearchHistory.ts";
-import type { Library } from "./useLibrary.ts";
+import type { LocalLibrary } from "./useLocalLibrary.ts";
 import { clearBrowseCache } from "./useBrowse.ts";
 import { clearSongYears } from "./useSongYear.ts";
 import type { UpdatesState } from "./useUpdates.ts";
@@ -47,7 +47,7 @@ import type { SettingsState } from "./useSettings.ts";
 
 interface Props {
   settings: SettingsState;
-  library: Library;
+  library: LocalLibrary;
   updates: UpdatesState;
   account: AccountState;
 }

@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { Artwork } from "./TrackList.tsx";
 import { positionOf, sourceOf, useRowDrag } from "./useRowDrag.ts";
+import { useStableHandler } from "./useStableHandler.ts";
 
 const ROW_HEIGHT = 48;
 /** Rows drawn past each edge of the viewport, as in `TrackList`. */
@@ -186,17 +187,9 @@ export function Queue({
   );
   // Rows get handlers that never change and call the latest ones, so a
   // memoized row re-renders only when its own song or state does.
-  const latest = useRef<{
-    onJump: (id: TrackId) => void;
-    onRemove: (id: TrackId) => void;
-    startDrag: (source: number, event: ReactPointerEvent) => void;
-  }>({ onJump, onRemove, startDrag: () => {} });
-  const jump = useCallback((id: TrackId) => latest.current.onJump(id), []);
-  const remove = useCallback((id: TrackId) => latest.current.onRemove(id), []);
-  const dragFrom = useCallback(
-    (source: number, event: ReactPointerEvent) => latest.current.startDrag(source, event),
-    [],
-  );
+  const jump = useStableHandler(onJump);
+  const remove = useStableHandler(onRemove);
+  const dragFrom = useStableHandler(startDrag);
 
   if (queue.items.length === 0) {
     return (
@@ -209,8 +202,6 @@ export function Queue({
   const suggested = queue.suggestions.length;
   // One list for both, so they scroll together; the heading takes a row.
   const count = queued + (suggested > 0 ? 1 + suggested : 0);
-
-  latest.current = { onJump, onRemove, startDrag };
 
   return (
     <div className="flex h-full flex-col">

@@ -8,9 +8,6 @@ import type { Track, TrackId } from "@ymusic/core";
 import {
   Fragment,
   memo,
-  useCallback,
-  useMemo,
-  useRef,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -23,6 +20,7 @@ import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.
 import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
 import { sourceOf, useRowDrag } from "./useRowDrag.ts";
+import { useStableHandler } from "./useStableHandler.ts";
 
 interface Props {
   /** Any source: a local file and a YouTube result render identically. */
@@ -54,34 +52,19 @@ const OVERSCAN = 25;
 export function TrackList(props: Props) {
   const scroller = useScrollParent();
   const { tracks, currentId, playing, hideAlbum } = props;
-  // Rows get handlers that never change and read the latest props when
-  // called, so a memoized row re-renders only when its own song or state does.
-  const latest = useRef(props);
-  latest.current = props;
-  const onPlay = useCallback((id: TrackId) => latest.current.onPlay(id), []);
-  const onToggle = useCallback(() => latest.current.onToggle(), []);
-  const linked = props.onOpen !== undefined;
-  const onOpen = useMemo(
-    () => (linked ? (route: Route) => latest.current.onOpen?.(route) : undefined),
-    [linked],
-  );
-  const { drag, startDrag } = useRowDrag(scroller, ROW_HEIGHT, tracks.length, (from, to) =>
-    latest.current.editing?.onMove(from, to),
-  );
-  const latestStart = useRef(startDrag);
-  latestStart.current = startDrag;
+  // Rows get handlers that never change and call the latest props, so a
+  // memoized row re-renders only when its own song or state does.
+  const onPlay = useStableHandler((id: TrackId) => props.onPlay(id));
+  const onToggle = useStableHandler(() => props.onToggle());
+  const open = useStableHandler((route: Route) => props.onOpen?.(route));
+  const onOpen = props.onOpen === undefined ? undefined : open;
+  const move = useStableHandler((from: number, to: number) => props.editing?.onMove(from, to));
+  const { drag, startDrag } = useRowDrag(scroller, ROW_HEIGHT, tracks.length, move);
+  const remove = useStableHandler((index: number) => props.editing?.onRemove(index));
+  const dragStart = useStableHandler(startDrag);
   const editable = props.editing !== undefined;
-  const onRemove = useMemo(
-    () => (editable ? (index: number) => latest.current.editing?.onRemove(index) : undefined),
-    [editable],
-  );
-  const onDragStart = useMemo(
-    () =>
-      editable
-        ? (index: number, event: ReactPointerEvent) => latestStart.current(index, event)
-        : undefined,
-    [editable],
-  );
+  const onRemove = editable ? remove : undefined;
+  const onDragStart = editable ? dragStart : undefined;
   if (tracks.length === 0) return null;
 
   // While a row is dragged, the rows draw in the order it would leave them.

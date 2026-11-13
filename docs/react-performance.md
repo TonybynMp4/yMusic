@@ -11,7 +11,7 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 
 ## Common causes
 
-- **New props every render.** An inline arrow, an object literal or a `cn(...)` built by the parent gives a memoized child new props each time, so `memo` does nothing. Pass handlers that never change and read the latest props from a ref (`TrackList.tsx` and `Queue.tsx` do this), and pass booleans instead of class names.
+- **New props every render.** An inline arrow, an object literal or a `cn(...)` built by the parent gives a memoized child new props each time, so `memo` does nothing. The compiler fixes this for most components. Rows created inside a callback (a virtualized list's `renderRow`) are the exception, so they keep `memo`, get their handlers from `useStableHandler`, and take booleans instead of class names.
 - **Context values rebuilt each render.** Every consumer re-renders whenever the provider's value is a new object.
 - **Fast-changing state high in the tree.** Playback position, scroll position or a drag held in `App` re-renders everything under it.
 - **Heavy components per row.** A Base UI Menu, ContextMenu, Popover or Tooltip root in each row costs far more than the row itself. Share one instance and have rows ask it to open.
@@ -19,6 +19,56 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 - **Long lists drawn in full.** Virtualize from about 60 rows, with a fixed row height and keys that stay stable when rows move.
 - **Style changes on a big ancestor.** Setting a CSS variable, class or attribute on an element restyles everything inside it. On a scroll container, that happens on every scroll event.
 - **Forced synchronous renders** (`flushSync`) inside scroll or pointer handlers.
+
+## React Compiler
+
+The React Compiler memoizes every component and hook in `apps/desktop/src` at build time, so most hand-written `useMemo`, `useCallback` and `memo` is unnecessary. Write plain code first and reach for those only when a profile shows a need.
+
+### How it runs
+
+`vite.config.ts` runs `babel-plugin-react-compiler` through `@rolldown/plugin-babel` with the `reactCompilerPreset()` that `@vitejs/plugin-react` 6 exports. Two constraints:
+
+- `@babel/core` must stay on 7. With Babel 8 the compiler fails on every destructuring default ("Expected object property value to be an LVal").
+- `include` limits Babel to the app's own `.ts` and `.tsx` files. Without the extension check it also gets `styles.css` and the build fails.
+
+plugin-react also has `react({ compiler: true })`, which runs a Rust port through `oxc-transform-react`. It was experimental and pinned to an older oxc when this was set up, so it is not used.
+
+The cost, measured on this machine: `vite build` goes from about 1.4 s to 3.8 s. In dev the first page load waits about 2.5 s longer while Babel and the compiler load, and each file then takes 30 to 650 ms to transform instead of 3 to 5 ms (`Interactions.tsx` is the slowest). HMR for one file stays well under a second.
+
+### What it changed
+
+The compiler assumes components are pure, so patterns that read or write refs during render, or keep values in a mutable object, had to go. The five oxlint rules that check this (`react/set-state-in-effect`, `react/refs`, `react/immutability`, `react/use-memo`, `react/incompatible-library`) are on.
+
+- **Latest-value refs read from effects** are now `useEffectEvent` (`usePlayer`, `useResume`, `useMediaSession`, `CoverCropper`).
+- **Latest-value refs behind handlers given to memoized rows** are now `useStableHandler`, which returns a function with a fixed identity that calls the latest handler. `useEffectEvent` cannot be passed to children, so it does not fit here. Never call the result during render.
+- **Ratings** live in a `RatingStore` read through `useSyncExternalStore`. `ratingOf` gets a new identity whenever a rating changes, so rows that read it re-render then and only then. Before, they re-rendered on every `App` render, and rating changes relied on that.
+- **State reset from an effect** is now adjusted during render, in `useLibrary`, `useSearchHistory` and the sort menus in `Library`.
+- **Loading flags set from an effect** are derived instead: `useLibraryPlaylists` stores which fetch its list answered and compares it with the latest request.
+- **A DOM node held in state** is fine to read, but not to assign to. Scroll restore in `App` calls `scrollTo` instead of setting `scrollTop`.
+- The cover cropper's object URL is created with the picked file in `cover.ts`, not from an effect.
+
+Manual `useCallback` was removed only where the compiled output is byte for byte the same without it. It stays where oxlint's `exhaustive-deps` needs it, because that rule does not know the compiler memoizes a function used as an effect dependency. `Art`'s `useMemo` stays because the compiler does not memoize across the `useState` call that follows it.
+
+### Opting out
+
+Put `"use no memo"` as the first statement of a component or hook, with a comment saying why:
+
+```tsx
+export function VirtualList(props: Props) {
+  "use no memo"; // useVirtualizer returns one mutable object, which the compiler would cache stale.
+```
+
+oxlint ignores the directive, so silence the rule it hits on that line with `// oxlint-disable-next-line <rule> -- <reason>`. Use the same comment, without the directive, for the lint-only `set-state-in-effect` cases where the compiler handles the code fine (`useLibrary`, `useYouTubeSearch`). Never turn a rule off in `.oxlintrc.json`.
+
+### Not compiled
+
+The compiler skips a function it cannot handle and leaves it as written, so it behaves as before, without memoization. Today that is:
+
+- `VirtualList`, opted out above.
+- `useAccount` and `PlaylistTargets`, `NewPlaylistDialog`, `EditPlaylistForm` and `DeletePlaylistDialog` in `Interactions.tsx`, because they use `try`/`finally` or `throw` inside `try`.
+- `useYouTubeSearch`, because `loadMore` has a conditional expression inside `try`.
+
+To list them again, build with a `logger` passed to the compiler options (`reactCompilerPreset({ ... })`) that prints `CompileError` events.
 
 ## What #72 found
 
@@ -33,7 +83,6 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 
 ## Not looked at yet
 
-- `InteractionsProvider` builds a new context value on every `App` render, so every row using `useDisliked` re-renders with it. Rating changes rely on that today, so a fix needs a store or a version number that changes only with ratings.
 - Which `App` state changes during playback, and what re-renders when it does: the player bar, `NowPlaying`, `FullPlayer`.
 - Browse pages: shelves and cards, which are not virtualized.
 - Search results, the sidebar and `Art`.

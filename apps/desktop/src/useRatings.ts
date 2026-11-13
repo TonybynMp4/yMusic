@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { VideoId } from "@ymusic/core";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -49,41 +49,63 @@ interface Given {
   pending: number;
 }
 
-/** What is known for one account. Replaced as a whole when the account changes. */
-interface Store {
-  account: string | null;
-  ratings: Map<VideoId, Rating> | null;
-  given: Map<VideoId, Given>;
-  /** Counts ratings given and settled, to order them against answers. */
-  clock: number;
-}
-
-function open(account: string | null): Store {
-  return { account, ratings: account === null ? null : load(account), given: new Map(), clock: 0 };
-}
-
 /**
- * Ratings for the signed-in account: what is known, a way to record what
- * YouTube says, and a way to rate. Signed out there is nothing to know.
+ * What is known for one account, mutated in place. A new account gets a new
+ * store. `ratingOf` is replaced on every change, so React sees the change in
+ * its identity and anything memoized on it updates.
  */
-export function useRatings(account: string | null) {
-  const store = useRef<Store | null>(null);
-  if (store.current?.account !== account) store.current = open(account);
-  /** The store is mutated in place, so a change is announced by this counter. */
-  const [, setVersion] = useState(0);
+class RatingStore {
+  readonly account: string | null;
+  readonly #ratings: Map<VideoId, Rating> | null;
+  readonly #given = new Map<VideoId, Given>();
+  /** Counts ratings given and settled, to order them against answers. */
+  #clock = 0;
+  #ratingOf: (videoId: VideoId) => Rating | null;
+  readonly #listeners = new Set<() => void>();
+  /** Cleared once another account's store replaces it, so late answers are dropped. */
+  #live = true;
+
+  constructor(account: string | null) {
+    this.account = account;
+    this.#ratings = account === null ? null : load(account);
+    this.#ratingOf = this.#reader();
+  }
+
+  /** Null when signed out: the song can't be rated. */
+  #reader(): (videoId: VideoId) => Rating | null {
+    const ratings = this.#ratings;
+    return (videoId) => (ratings === null ? null : (ratings.get(videoId) ?? "none"));
+  }
+
+  /** Marks the store as the one in use until the returned cleanup runs. */
+  attach = (): (() => void) => {
+    this.#live = true;
+    return () => {
+      this.#live = false;
+    };
+  };
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.#listeners.add(listener);
+    return () => void this.#listeners.delete(listener);
+  };
+
+  /** The current `ratingOf`, for `useSyncExternalStore`. */
+  getRatingOf = (): ((videoId: VideoId) => Rating | null) => this.#ratingOf;
 
   /** Taken before asking YouTube for a rating, and passed to `learn` with the answer. */
-  const now = useCallback(() => store.current!.clock, []);
+  now = (): number => this.#clock;
 
   /**
    * Records a rating. Moving it to the end keeps the recent ones when trimming.
    * With `asked`, from `now`, an answer is dropped if a rating given here was
    * on its way or settled since: YouTube may have read it before that landed.
    */
-  const learn = useCallback((videoId: VideoId, rating: Rating, asked?: number) => {
-    const { account: owner, ratings, given } = store.current!;
-    if (owner === null || ratings === null) return;
-    const mine = given.get(videoId);
+  learn = (videoId: VideoId, rating: Rating, asked?: number): void => {
+    const owner = this.account;
+    const ratings = this.#ratings;
+    if (owner === null || ratings === null || !this.#live) return;
+    const mine = this.#given.get(videoId);
     if (asked !== undefined && mine && (mine.pending > 0 || mine.settled > asked)) return;
     const before = ratings.get(videoId) ?? "none";
     // Most songs are unrated: nothing to move or save.
@@ -95,38 +117,40 @@ export function useRatings(account: string | null) {
       ratings.delete(old);
     }
     save(owner, ratings);
-    if (before !== rating) setVersion((v) => v + 1);
-  }, []);
-
-  /** Null when signed out: the song can't be rated. */
-  const ratingOf = useCallback((videoId: VideoId): Rating | null => {
-    const { ratings } = store.current!;
-    return ratings === null ? null : (ratings.get(videoId) ?? "none");
-  }, []);
+    if (before === rating) return;
+    this.#ratingOf = this.#reader();
+    for (const listener of this.#listeners) listener();
+  };
 
   /** Shown at once, and put back if YouTube refuses it and no newer one was given. */
-  const rate = useCallback(
-    async (videoId: VideoId, rating: Rating) => {
-      const current = store.current!;
-      const before = ratingOf(videoId) ?? "none";
-      const mine = current.given.get(videoId) ?? { last: 0, settled: 0, pending: 0 };
-      current.given.set(videoId, mine);
-      const stamp = ++current.clock;
-      mine.last = stamp;
-      mine.pending++;
-      learn(videoId, rating);
-      try {
-        await youtube.rate(videoId, rating);
-      } catch (error) {
-        if (store.current === current && mine.last === stamp) learn(videoId, before);
-        throw error;
-      } finally {
-        mine.pending--;
-        mine.settled = ++current.clock;
-      }
-    },
-    [learn, ratingOf],
-  );
+  rate = async (videoId: VideoId, rating: Rating): Promise<void> => {
+    const before = this.#ratingOf(videoId) ?? "none";
+    const mine = this.#given.get(videoId) ?? { last: 0, settled: 0, pending: 0 };
+    this.#given.set(videoId, mine);
+    const stamp = ++this.#clock;
+    mine.last = stamp;
+    mine.pending++;
+    this.learn(videoId, rating);
+    try {
+      await youtube.rate(videoId, rating);
+    } catch (error) {
+      if (mine.last === stamp) this.learn(videoId, before);
+      throw error;
+    } finally {
+      mine.pending--;
+      mine.settled = ++this.#clock;
+    }
+  };
+}
 
-  return { ratingOf, learn, now, rate };
+/**
+ * Ratings for the signed-in account: what is known, a way to record what
+ * YouTube says, and a way to rate. Signed out there is nothing to know.
+ */
+export function useRatings(account: string | null) {
+  const [store, setStore] = useState(() => new RatingStore(account));
+  if (store.account !== account) setStore(new RatingStore(account));
+  useEffect(() => store.attach(), [store]);
+  const ratingOf = useSyncExternalStore(store.subscribe, store.getRatingOf);
+  return { ratingOf, learn: store.learn, now: store.now, rate: store.rate };
 }

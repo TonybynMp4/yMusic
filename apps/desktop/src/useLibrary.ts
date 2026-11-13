@@ -32,6 +32,8 @@ export interface LibraryState {
 
 export type Library = ReturnType<typeof useLibrary>;
 
+const NOT_DESKTOP = "Local files need the desktop app.";
+
 export function useLibrary(query: string) {
   const [state, setState] = useState<LibraryState>({
     all: [],
@@ -40,15 +42,15 @@ export function useLibrary(query: string) {
     covers: {},
     loading: isTauri,
     report: null,
-    error: null,
+    error: isTauri ? null : NOT_DESKTOP,
   });
 
+  /** Reads the library again. `loading` is already set. */
   const reload = useCallback(async () => {
     if (!isTauri) {
-      setState((s) => ({ ...s, loading: false, error: "Local files need the desktop app." }));
+      setState((s) => ({ ...s, loading: false, error: NOT_DESKTOP }));
       return;
     }
-    setState((s) => ({ ...s, loading: true }));
     try {
       // A blank search is everything, matching the Rust side.
       const [all, folders] = await Promise.all([librarySearch(""), libraryFolders()]);
@@ -65,21 +67,24 @@ export function useLibrary(query: string) {
       const covers = Object.fromEntries(found.filter(([, thumbnails]) => thumbnails.length > 0));
       setState((s) => ({ ...s, covers }));
     } catch (error) {
-      setState((s) => ({ ...s, loading: false, error: String(error) }));
+      const message = String(error);
+      setState((s) => ({ ...s, loading: false, error: message }));
     }
   }, []);
 
-  useEffect(() => void reload(), [reload]);
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- reload sets state only after it awaits
+    if (isTauri) void reload();
+  }, [reload]);
 
   // Debounced so typing does not fire a query per keystroke; the Rust side is
   // fast enough that 150ms is imperceptible but collapses a burst into one.
   const [version, setVersion] = useState(0);
+  const searching = isTauri && query.trim().length > 0;
+  if (!searching && state.matches.length > 0) setState((s) => ({ ...s, matches: [] }));
   useEffect(() => {
     const trimmed = query.trim();
-    if (!isTauri || trimmed.length === 0) {
-      setState((s) => (s.matches.length === 0 ? s : { ...s, matches: [] }));
-      return;
-    }
+    if (!isTauri || trimmed.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       librarySearch(trimmed).then(
@@ -95,32 +100,27 @@ export function useLibrary(query: string) {
   }, [query, version]);
 
   /** Runs a change to the library, then reloads it and any search showing. */
-  const change = useCallback(
-    async (run: () => Promise<ScanReport | void>) => {
-      setState((s) => ({ ...s, loading: true }));
-      try {
-        const report = await run();
-        if (report) setState((s) => ({ ...s, report }));
-      } catch (error) {
-        setState((s) => ({ ...s, error: String(error) }));
-      }
-      await reload();
-      setVersion((v) => v + 1);
-    },
-    [reload],
-  );
+  const change = async (run: () => Promise<ScanReport | void>) => {
+    setState((s) => ({ ...s, loading: true }));
+    try {
+      const report = await run();
+      if (report) setState((s) => ({ ...s, report }));
+    } catch (error) {
+      const message = String(error);
+      setState((s) => ({ ...s, error: message }));
+    }
+    await reload();
+    setVersion((v) => v + 1);
+  };
 
-  const addFolder = useCallback(async () => {
+  const addFolder = async () => {
     const chosen = await pickMusicFolder();
     if (chosen !== null) await change(() => libraryAddFolder(chosen));
-  }, [change]);
+  };
 
-  const removeFolder = useCallback(
-    (path: string) => change(() => libraryRemoveFolder(path)),
-    [change],
-  );
+  const removeFolder = (path: string) => change(() => libraryRemoveFolder(path));
 
-  const rescan = useCallback(() => change(libraryScan), [change]);
+  const rescan = () => change(libraryScan);
 
   return { ...state, addFolder, removeFolder, rescan };
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -313,13 +313,10 @@ export function useBrowse(route: Route): BrowseState {
     },
     [entry, route.kind, route.id],
   );
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      entry.listeners.add(listener);
-      return () => void entry.listeners.delete(listener);
-    },
-    [entry],
-  );
+  const subscribe = (listener: () => void) => {
+    entry.listeners.add(listener);
+    return () => void entry.listeners.delete(listener);
+  };
   // Read through the cache rather than `entry`, so a page refreshed in place
   // shows the new copy. A page forgotten keeps its last copy, not refetched.
   return useSyncExternalStore(

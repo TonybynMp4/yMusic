@@ -18,7 +18,7 @@ import type {
   TrackId,
 } from "@ymusic/core";
 
-import { useCallback, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { Art } from "@/components/Art";
 import { Button } from "@/components/ui/button";
@@ -327,13 +327,13 @@ function Description({ text }: { text: string }) {
 
   // Measured while the clamped paragraph is mounted, and again as its width
   // changes. Keyed by the text, so a new description is measured afresh.
-  const clamp = useCallback((el: HTMLParagraphElement) => {
+  const clamp = (el: HTMLParagraphElement) => {
     const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  };
 
   return (
     <div className="typography max-w-2xl text-muted-foreground">

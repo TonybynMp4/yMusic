@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { isTauri, settingsGet, settingsSet, type Settings } from "@ymusic/ipc";
 
 export interface SettingsState {
@@ -16,7 +16,7 @@ export interface SettingsState {
  */
 export function useSettings(initial: Settings): SettingsState {
   const [settings, setSettings] = useState(initial);
-  const update = useCallback((patch: Partial<Settings>) => {
+  const update = (patch: Partial<Settings>) => {
     setSettings((current) => ({ ...current, ...patch }));
     // A plain browser has no file to save to; the change lasts until reload.
     if (!isTauri) return;
@@ -24,6 +24,6 @@ export function useSettings(initial: Settings): SettingsState {
       console.error("could not save settings", error);
       void settingsGet().then(setSettings);
     });
-  }, []);
+  };
   return { settings, update };
 }

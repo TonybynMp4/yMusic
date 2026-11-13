@@ -13,7 +13,9 @@ fn bindings_are_current() {
         export_bindings(committed).expect("export bindings");
         return;
     }
-    let fresh = std::env::temp_dir().join(format!("ymusic-bindings-{}.ts", std::process::id()));
+    // Cargo's scratch directory for integration tests, fixed when the test is
+    // built rather than read from the environment at run time.
+    let fresh = Path::new(env!("CARGO_TARGET_TMPDIR")).join("bindings.ts");
     export_bindings(&fresh).expect("export bindings");
     let fresh_text = std::fs::read_to_string(&fresh).expect("read fresh bindings");
     let _ = std::fs::remove_file(&fresh);

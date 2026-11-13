@@ -8,14 +8,14 @@ Settings is a full page, opened from the account menu (signed in or not), like a
 
 ### Loading a file from another build
 
-`read` parses the file as a JSON object and `Settings::from_fields` lays its keys over the defaults one at a time. Each key is kept only if the settings still parse with it in place.
+`read` parses the file as a JSON object and `Saved::from_fields` lays its keys over the defaults. Usually the whole file parses at once. When it doesn't, the keys are tried one at a time to find the bad ones.
 
 - A key the file lacks, as in a file from an older build, gets its default.
 - A key this build doesn't know, as in a file from a newer build, is ignored.
 - A value that doesn't parse for its field gets that field's default, and the key and the serde error go to the log as a warning. The other settings load as saved. This covers a downgrade: a newer build may save an `audioQuality` this one doesn't have, and only Audio quality goes back to High.
 - A file that isn't a JSON object at all (corrupt, truncated, an array) is logged as an error and every setting takes its default.
 
-The file is rewritten in full on the next save, so a defaulted value replaces the one this build couldn't read.
+Unknown keys and unreadable values are kept beside the settings and written back on every save, so going back to the newer build finds them where it left them. A value is dropped only when the setting is changed in this build, since the new choice replaces it. Keys from a setting that was later removed stay in the file for the same reason. They do no harm, because no build reads them.
 
 ### Migrations
 
@@ -67,7 +67,7 @@ The meters start again with each song and whenever the setting or stable volume 
 
 YouTube's own pause is an account setting the app can't reach, which is why the other two use the cookieless client for every search. The trade-off is that results aren't personalised, and the setting says so. Signed out there is no account to record on: *YouTube* is disabled in the menu and a saved *YouTube* behaves as *On this device*.
 
-Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins.
+Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins if this build can read it. One it can't, from a newer build, gives way to a paused switch, so paused history never turns back on.
 
 **Library** lists the music folders with add, remove and rescan, using the same `useLibrary` actions as the sidebar.
 

@@ -20,8 +20,9 @@ fn bindings_are_current() {
     let fresh_text = std::fs::read_to_string(&fresh).expect("read fresh bindings");
     let _ = std::fs::remove_file(&fresh);
     let committed_text = std::fs::read_to_string(committed).unwrap_or_default();
+    // A Windows checkout with `core.autocrlf` has CRLF in the committed copy.
     assert!(
-        fresh_text == committed_text,
+        fresh_text.replace("\r\n", "\n") == committed_text.replace("\r\n", "\n"),
         "packages/ipc/src/bindings.ts is stale: run `pnpm bindings` and commit the result"
     );
 }

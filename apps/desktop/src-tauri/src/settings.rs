@@ -236,6 +236,36 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// A setting added to `Settings` and not to `SettingsPatch` would compile,
+    /// and the frontend could never change it.
+    #[test]
+    fn a_patch_can_set_every_setting() {
+        let d = Settings::default();
+        let every = SettingsPatch {
+            autoplay: Some(d.autoplay),
+            audio_quality: Some(d.audio_quality),
+            stable_volume: Some(d.stable_volume),
+            audio_device: Some(d.audio_device.clone()),
+            skip_disliked: Some(d.skip_disliked),
+            pause_watch_history: Some(d.pause_watch_history),
+            search_history: Some(d.search_history),
+            close_to_tray: Some(d.close_to_tray),
+            check_for_updates: Some(d.check_for_updates),
+            include_prereleases: Some(d.include_prereleases),
+            stats_for_nerds: Some(d.stats_for_nerds),
+        };
+        let keys = |value: serde_json::Value| -> Vec<String> {
+            let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            keys(every.to_json()),
+            keys(serde_json::to_value(&d).unwrap())
+        );
+        assert_eq!(d.merge(every.to_json()), Ok(d));
+    }
+
     fn temp_path(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("ymusic-settings-{name}-{}", std::process::id()));

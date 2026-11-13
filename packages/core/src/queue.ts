@@ -1,4 +1,5 @@
 import type { Track, TrackId } from "./domain.ts";
+import { type TrackWeight, weightedInsert, weightedOrder } from "./fewer-repeats.ts";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -35,8 +36,18 @@ export const emptyQueue: QueueState = {
 /** What of a queue is saved across restarts. Suggestions are asked for again. */
 export type SavedQueueState = Pick<QueueState, "items" | "order" | "cursor" | "repeat" | "shuffle">;
 
+/**
+ * Actions that shuffle take an optional `rng` (for tests) and `weight`, which
+ * turns on fewer repeats: tracks with a lower weight tend to come later.
+ */
 export type QueueAction =
-  | { type: "setQueue"; tracks: readonly Track[]; startIndex?: number }
+  | {
+      type: "setQueue";
+      tracks: readonly Track[];
+      startIndex?: number;
+      rng?: () => number;
+      weight?: TrackWeight;
+    }
   /** A queue saved by an earlier run. Ignored unless it is whole and consistent. */
   | { type: "restore"; queue: SavedQueueState }
   | { type: "jumpTo"; trackId: TrackId }
@@ -48,7 +59,7 @@ export type QueueAction =
    * More of what is already queued, such as the rest of a playlist that is
    * still loading. Shuffled in among the tracks still to come when shuffle is on.
    */
-  | { type: "extend"; tracks: readonly Track[]; rng?: () => number }
+  | { type: "extend"; tracks: readonly Track[]; rng?: () => number; weight?: TrackWeight }
   | { type: "setSuggestions"; tracks: readonly Track[] }
   | { type: "remove"; trackId: TrackId }
   /**
@@ -63,7 +74,7 @@ export type QueueAction =
    */
   | { type: "clear" }
   | { type: "setRepeat"; repeat: RepeatMode }
-  | { type: "setShuffle"; shuffle: boolean; rng?: () => number };
+  | { type: "setShuffle"; shuffle: boolean; rng?: () => number; weight?: TrackWeight };
 
 export function queueReducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
@@ -71,11 +82,17 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       const items = [...action.tracks];
       const identity = items.map((_, i) => i);
       const startIndex = action.startIndex ?? 0;
+      const weight = action.weight;
       if (items.length === 0) {
         return { ...state, items: [], order: [], cursor: null, suggestions: [] };
       }
       const order = state.shuffle
-        ? shuffledOrderStartingAt(identity, startIndex, Math.random)
+        ? shuffledOrderStartingAt(
+            identity,
+            startIndex,
+            action.rng ?? Math.random,
+            weight && ((i) => weight(items[i]!)),
+          )
         : identity;
       const cursor = order.indexOf(startIndex);
       return { ...state, items, order, cursor, suggestions: [] };
@@ -141,11 +158,16 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       const items = [...state.items, ...action.tracks];
       const newIndices = action.tracks.map((_, i) => state.items.length + i);
       if (!state.shuffle) return { ...state, items, order: [...state.order, ...newIndices] };
+      const rng = action.rng ?? Math.random;
+      const start = state.cursor === null ? 0 : state.cursor + 1;
+      if (action.weight) {
+        const weight = action.weight;
+        const order = weightedInsert(state.order, start, newIndices, (i) => weight(items[i]!), rng);
+        return { ...state, items, order };
+      }
       // Each new track lands at a uniformly random place among those still to
       // come, which keeps the upcoming order a uniform shuffle.
-      const rng = action.rng ?? Math.random;
       const order = [...state.order];
-      const start = state.cursor === null ? 0 : state.cursor + 1;
       for (const index of newIndices) {
         const at = start + Math.floor(rng() * (order.length - start + 1));
         order.splice(at, 0, index);
@@ -226,7 +248,13 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
         };
       }
       const currentItem = currentItemIndex(state);
-      const order = shuffledOrderStartingAt(identity, currentItem ?? 0, action.rng ?? Math.random);
+      const weight = action.weight;
+      const order = shuffledOrderStartingAt(
+        identity,
+        currentItem ?? 0,
+        action.rng ?? Math.random,
+        weight && ((i) => weight(state.items[i]!)),
+      );
       return {
         ...state,
         shuffle: true,
@@ -305,19 +333,23 @@ export function peekNext(state: QueueState): Track | null {
 
 /**
  * Fisher-Yates over everything except the current track, which is moved to the
- * front so enabling shuffle never interrupts what is already playing.
+ * front so enabling shuffle never interrupts what is already playing. With
+ * `weightOf`, a weighted random order instead (fewer repeats).
  */
 function shuffledOrderStartingAt(
   indices: readonly number[],
   first: number,
   rng: () => number,
+  weightOf?: (index: number) => number,
 ): number[] {
   const rest = indices.filter((i) => i !== first);
+  const withFirst = (order: number[]) => (indices.includes(first) ? [first, ...order] : order);
+  if (weightOf) return withFirst(weightedOrder(rest, weightOf, rng));
   for (let i = rest.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     const a = rest[i]!;
     rest[i] = rest[j]!;
     rest[j] = a;
   }
-  return indices.includes(first) ? [first, ...rest] : rest;
+  return withFirst(rest);
 }

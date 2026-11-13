@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Track, TrackId } from "./domain.ts";
 import {
+  PLAY_HISTORY_MAX_AGE_MS,
+  PLAY_HISTORY_MAX_ENTRIES,
+  playHistoryWeight,
+  recencyWeight,
+  recordPlay,
+} from "./fewer-repeats.ts";
+import {
   currentTrack,
   emptyQueue,
   peekNext,
@@ -288,5 +295,145 @@ describe("restoring a saved queue", () => {
     ]) {
       expect(queueReducer(emptyQueue, { type: "restore", queue: broken })).toBe(emptyQueue);
     }
+  });
+});
+
+/** mulberry32: a small seeded generator, so weighted orders are repeatable. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe("fewer repeats", () => {
+  const NOW = Date.UTC(2026, 9, 29);
+  const ten = "abcdefghij".split("").map(track);
+  // "b" played a minute ago, "c" a week ago, the rest never.
+  const history = { "local:b": NOW - 60_000, "local:c": NOW - 7 * 24 * 3600_000 };
+  const weight = playHistoryWeight(history, NOW);
+  const RUNS = 2000;
+
+  /** Mean position of each track over many seeded shuffles. */
+  function meanPositions(shuffle: (rng: () => number) => QueueState): Map<string, number> {
+    const sums = new Map<string, number>();
+    for (let seed = 1; seed <= RUNS; seed++) {
+      titles(shuffle(seeded(seed))).forEach((id, at) => sums.set(id, (sums.get(id) ?? 0) + at));
+    }
+    return new Map([...sums].map(([id, sum]) => [id, sum / RUNS]));
+  }
+
+  it("weighs a track by how long ago it played", () => {
+    expect(recencyWeight(undefined, NOW)).toBe(1);
+    expect(recencyWeight(NOW, NOW)).toBeCloseTo(0.05);
+    expect(recencyWeight(NOW - 7 * 24 * 3600_000, NOW)).toBeCloseTo(0.65, 2);
+    expect(recencyWeight(NOW - 30 * 24 * 3600_000, NOW)).toBeGreaterThan(0.98);
+  });
+
+  it("puts recently played tracks later when shuffle goes on, keeping the current one first", () => {
+    const start = queueReducer(emptyQueue, { type: "setQueue", tracks: ten, startIndex: 0 });
+    const means = meanPositions((rng) =>
+      queueReducer(start, { type: "setShuffle", shuffle: true, rng, weight }),
+    );
+    expect(means.get("a")).toBe(0);
+    const never = ["d", "e", "f", "g", "h", "i", "j"].map((id) => means.get(id)!);
+    const neverMean = never.reduce((a, b) => a + b) / never.length;
+    expect(means.get("b")!).toBeGreaterThan(8);
+    expect(means.get("c")!).toBeGreaterThan(neverMean);
+    expect(means.get("c")!).toBeLessThan(means.get("b")!);
+  });
+
+  it("stays random rather than sorting", () => {
+    const start = queueReducer(emptyQueue, { type: "setQueue", tracks: ten, startIndex: 0 });
+    const orders = new Set<string>();
+    const lastOf = new Set<string>();
+    for (let seed = 1; seed <= 200; seed++) {
+      const ids = titles(
+        queueReducer(start, { type: "setShuffle", shuffle: true, rng: seeded(seed), weight }),
+      );
+      orders.add(ids.join(""));
+      lastOf.add(ids.at(-1)!);
+    }
+    expect(orders.size).toBeGreaterThan(150);
+    expect(lastOf.size).toBeGreaterThan(1);
+  });
+
+  it("weights a shuffled new queue the same way, starting at the picked track", () => {
+    const shuffleOn = { ...emptyQueue, shuffle: true };
+    const means = meanPositions((rng) =>
+      queueReducer(shuffleOn, { type: "setQueue", tracks: ten, startIndex: 4, rng, weight }),
+    );
+    expect(means.get("e")).toBe(0);
+    expect(means.get("b")!).toBeGreaterThan(8);
+  });
+
+  it("puts recently played tracks later when they arrive after the queue started", () => {
+    const shuffleOn = { ...emptyQueue, shuffle: true };
+    const firstPage = ten.slice(0, 5);
+    const secondPage = ten.slice(5).concat(track("z"));
+    const zHistory = { ...history, "local:z": NOW - 60_000 };
+    const zWeight = playHistoryWeight(zHistory, NOW);
+    let zSum = 0;
+    let otherSum = 0;
+    for (let seed = 1; seed <= RUNS; seed++) {
+      const rng = seeded(seed);
+      const before = apply(
+        shuffleOn,
+        { type: "setQueue", tracks: firstPage, startIndex: 0, rng, weight: zWeight },
+        { type: "next", reason: "user" },
+      );
+      const after = queueReducer(before, {
+        type: "extend",
+        tracks: secondPage,
+        rng,
+        weight: zWeight,
+      });
+      // What was already there keeps its order, and nothing lands before the cursor.
+      expect(titles(after).filter((id) => firstPage.some((t) => t.id === `local:${id}`))).toEqual(
+        titles(before),
+      );
+      expect(after.order.slice(0, 2)).toEqual(before.order.slice(0, 2));
+      const ids = titles(after);
+      zSum += ids.indexOf("z");
+      otherSum += ["f", "g", "h", "i", "j"].reduce((sum, id) => sum + ids.indexOf(id), 0) / 5;
+    }
+    expect(zSum / RUNS).toBeGreaterThan(otherSum / RUNS + 2);
+  });
+
+  it("splices with equal weights into a uniformly random slot", () => {
+    const shuffleOn = { ...emptyQueue, shuffle: true };
+    const counts = [0, 0, 0, 0, 0];
+    for (let seed = 1; seed <= RUNS; seed++) {
+      const rng = seeded(seed);
+      const before = queueReducer(shuffleOn, {
+        type: "setQueue",
+        tracks: tracks,
+        startIndex: 0,
+        rng,
+        weight: () => 1,
+      });
+      const after = queueReducer(before, { type: "extend", tracks: [track("z")], rng, weight: () => 1 });
+      counts[titles(after).indexOf("z")]! += 1;
+    }
+    expect(counts[0]).toBe(0);
+    for (const count of counts.slice(1)) expect(count / RUNS).toBeCloseTo(0.25, 1);
+  });
+
+  it("keeps the play history bounded", () => {
+    expect(recordPlay({ "local:old": NOW - PLAY_HISTORY_MAX_AGE_MS }, "local:a", NOW)).toEqual({
+      "local:a": NOW,
+    });
+    const full = Object.fromEntries(
+      Array.from({ length: PLAY_HISTORY_MAX_ENTRIES }, (_, i) => [`local:${i}`, NOW - 1000 - i]),
+    );
+    const bounded = recordPlay(full, "local:a", NOW);
+    expect(Object.keys(bounded)).toHaveLength(PLAY_HISTORY_MAX_ENTRIES);
+    expect(bounded["local:a"]).toBe(NOW);
+    // The oldest goes to make room.
+    expect(bounded[`local:${PLAY_HISTORY_MAX_ENTRIES - 1}`]).toBeUndefined();
   });
 });

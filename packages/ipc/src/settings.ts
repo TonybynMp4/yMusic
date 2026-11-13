@@ -25,6 +25,8 @@ export const Settings = z.object({
   /** An mpv `audio-device` name; `auto` follows the system's default output. */
   audioDevice: z.string().default("auto"),
   skipDisliked: z.boolean().default(false),
+  /** Local shuffle puts songs played recently on this device later. */
+  fewerRepeats: z.boolean().default(true),
   pauseWatchHistory: z.boolean().default(false),
   searchHistory: SearchHistory.default("youtube"),
   closeToTray: z.boolean().default(false),

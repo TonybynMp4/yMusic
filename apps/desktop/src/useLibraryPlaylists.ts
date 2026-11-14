@@ -53,7 +53,9 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     () => void queryClient.invalidateQueries({ queryKey: ["library-playlists"] }),
     [],
   );
-  // New playlists YouTube's list does not have yet.
+  // New playlists YouTube's list does not have yet. Once the list has one it
+  // stops being pending, so removing it elsewhere later does not bring the
+  // placeholder back.
   const missing = useMemo(
     () =>
       pending.account === accountKey
@@ -61,6 +63,9 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
         : [],
     [pending, accountKey, listed],
   );
+  if (pending.account === accountKey && missing.length < pending.cards.length) {
+    setPending({ account: accountKey, cards: missing });
+  }
   // A new playlist reaches YouTube's library list a while after it exists, so
   // the list is fetched again, further apart each time, until it has it. Its
   // entry then swaps the placeholder for YouTube's, with its art.

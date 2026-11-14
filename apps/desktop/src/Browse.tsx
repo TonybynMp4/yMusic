@@ -35,7 +35,7 @@ import {
 } from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
-import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
+import { LIKED_MUSIC } from "./libraryPlaylists.ts";
 import type { PlayFrom } from "./usePlayer.ts";
 
 /** What a browse page needs of the player and the navigation stack. */

@@ -54,18 +54,21 @@ interface Given {
  * store. `ratingOf` is replaced on every change, so React sees the change in
  * its identity and anything memoized on it updates.
  */
-class RatingStore {
+export class RatingStore {
   readonly account: string | null;
   readonly #ratings: Map<VideoId, Rating> | null;
   readonly #given = new Map<VideoId, Given>();
   /** Counts ratings given and settled, to order them against answers. */
   #clock = 0;
   #ratingOf: (videoId: VideoId) => Rating | null;
-  /**
-   * React listens for as long as the store is the one in use, so a store with
-   * no listener has been replaced by another account's and drops late answers.
-   */
   readonly #listeners = new Set<() => void>();
+  /**
+   * React listens for as long as the store is the one in use, so a store whose
+   * last listener has left was replaced by another account's and drops late
+   * answers. A new store is not retired: React subscribes after the commit,
+   * and an answer may come before that.
+   */
+  #retired = false;
 
   constructor(account: string | null) {
     this.account = account;
@@ -81,7 +84,11 @@ class RatingStore {
 
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
-    return () => void this.#listeners.delete(listener);
+    this.#retired = false;
+    return () => {
+      this.#listeners.delete(listener);
+      this.#retired = this.#listeners.size === 0;
+    };
   };
 
   /** The current `ratingOf`, for `useSyncExternalStore`. */
@@ -98,7 +105,7 @@ class RatingStore {
   learn = (videoId: VideoId, rating: Rating, asked?: number): void => {
     const owner = this.account;
     const ratings = this.#ratings;
-    if (owner === null || ratings === null || this.#listeners.size === 0) return;
+    if (owner === null || ratings === null || this.#retired) return;
     const mine = this.#given.get(videoId);
     if (asked !== undefined && mine && (mine.pending > 0 || mine.settled > asked)) return;
     const before = ratings.get(videoId) ?? "none";

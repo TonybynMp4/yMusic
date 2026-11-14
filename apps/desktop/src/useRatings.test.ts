@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { VideoId } from "@ymusic/core";
 
 import type { engine as realEngine } from "./engine.ts";
-import { useRatings } from "./useRatings.ts";
+import { RatingStore, useRatings } from "./useRatings.ts";
 
 type Engine = typeof realEngine;
 const engine = vi.hoisted(() => ({ rate: vi.fn<Engine["rate"]>() }));
@@ -44,6 +44,12 @@ describe("useRatings", () => {
     expect(result.current.ratingOf(song)).toBe("none");
     rerender({ account: "a" });
     expect(result.current.ratingOf(song)).toBe("none");
+  });
+
+  it("keeps an answer that comes before React subscribes", () => {
+    const store = new RatingStore("a");
+    store.learn(song, "dislike");
+    expect(store.getRatingOf()(song)).toBe("dislike");
   });
 
   it("puts a rating back when YouTube refuses it", async () => {

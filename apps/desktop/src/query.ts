@@ -1,4 +1,4 @@
-import { QueryClient, type Query, type QueryKey } from "@tanstack/react-query";
+import { hashKey, QueryClient, type Query, type QueryKey } from "@tanstack/react-query";
 
 /** When this run started. Data from before it came from a persister. */
 const launched = Date.now();
@@ -38,7 +38,8 @@ export function inUse(query: Query): boolean {
 /**
  * Keeps at most `max` queries under `prefix`, dropping those that come first
  * in `order` (oldest first) and are not in use. Runs whenever one is added,
- * and the one just added stays.
+ * and the one just added stays. Calling it again for the same prefix replaces
+ * the cap, so a module reloaded in development does not stack them.
  */
 export function capQueries(
   prefix: QueryKey,
@@ -46,7 +47,9 @@ export function capQueries(
   order: (queries: Query[]) => Query[] = (queries) => queries,
 ): void {
   const cache = queryClient.getQueryCache();
-  cache.subscribe((event) => {
+  const id = hashKey(prefix);
+  caps.get(id)?.();
+  caps.set(id, cache.subscribe((event) => {
     if (event.type !== "added" || !under(event.query.queryKey, prefix)) return;
     const all = cache.findAll({ queryKey: prefix });
     let over = all.length - max;
@@ -56,8 +59,11 @@ export function capQueries(
       cache.remove(query);
       over--;
     }
-  });
+  }));
 }
+
+/** Each cap's unsubscribe, by its prefix's hash. */
+const caps = new Map<string, () => void>();
 
 function under(key: QueryKey, prefix: QueryKey): boolean {
   return prefix.every((part, i) => key[i] === part);

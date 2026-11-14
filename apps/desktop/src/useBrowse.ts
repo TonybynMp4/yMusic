@@ -87,12 +87,12 @@ function touch(route: Route): void {
 }
 
 capQueries(["browse"], CACHE_LIMIT, (queries) => {
+  // Pages already dropped leave the order here.
+  const kept = new Set(queries.map((query) => query.queryHash));
+  for (const hash of recency) if (!kept.has(hash)) recency.delete(hash);
   const rank = new Map([...recency].map((hash, i) => [hash, i]));
   const at = (query: Query) => rank.get(query.queryHash) ?? Infinity;
   return [...queries].sort((a, b) => at(a) - at(b));
-});
-queryClient.getQueryCache().subscribe((event) => {
-  if (event.type === "removed") recency.delete(event.query.queryHash);
 });
 
 function browseOptions(route: Route) {

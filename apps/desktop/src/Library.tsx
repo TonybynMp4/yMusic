@@ -38,7 +38,7 @@ import {
 import { useRecentlyPlayed } from "./recent.ts";
 import { TrackList } from "./TrackList.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
-import { folderName, tracksIn } from "./useLibrary.ts";
+import { folderName, tracksIn } from "./useLocalLibrary.ts";
 import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 import { useSaved, type SavedState } from "./useSavedLibrary.ts";
 

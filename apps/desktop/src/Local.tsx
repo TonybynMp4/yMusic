@@ -5,7 +5,7 @@ import type { LocalTrack } from "@ymusic/ipc";
 import { Header, type BrowseActions } from "./Browse.tsx";
 import { formatTotal } from "./format.ts";
 import { TrackList } from "./TrackList.tsx";
-import { folderName, tracksIn } from "./useLibrary.ts";
+import { folderName, tracksIn } from "./useLocalLibrary.ts";
 
 /** Local files as a page like a playlist: every one, or one folder's. */
 export function LocalView(props: {

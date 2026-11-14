@@ -13,7 +13,7 @@ import {
   type ScanReport,
 } from "@ymusic/ipc";
 
-export interface LibraryState {
+export interface LocalLibraryState {
   /** Every local track, for the folder pages. */
   all: LocalTrack[];
   /** Local tracks matching the search, empty for a blank one. */
@@ -30,10 +30,10 @@ export interface LibraryState {
   error: string | null;
 }
 
-export type Library = ReturnType<typeof useLibrary>;
+export type LocalLibrary = ReturnType<typeof useLocalLibrary>;
 
-export function useLibrary(query: string) {
-  const [state, setState] = useState<LibraryState>({
+export function useLocalLibrary(query: string) {
+  const [state, setState] = useState<LocalLibraryState>({
     all: [],
     matches: [],
     folders: [],

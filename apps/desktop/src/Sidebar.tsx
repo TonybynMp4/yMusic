@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
-import { folderName } from "./useLibrary.ts";
+import { folderName } from "./useLocalLibrary.ts";
 import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
 
 const LIBRARY: View = { kind: "library", id: "" };

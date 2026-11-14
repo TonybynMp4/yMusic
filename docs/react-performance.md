@@ -27,7 +27,7 @@ Render reads no refs and writes none, and effects don't set state just to reset 
 - An effect that needs the latest props or state without re-running reads them through `useEffectEvent` (`usePlayer`, `useResume`, `useMediaSession`, `CoverCropper`).
 - A handler given to a memoized row comes from `useStableHandler`. A `useEffectEvent` function can't be passed to children. Never call either one during render.
 - State that follows a prop is adjusted during render, guarded by a comparison so it settles (`useLocalLibrary`, the sort menus in `Library`).
-- Ratings live in a `RatingStore` read through `useSyncExternalStore`. `ratingOf` gets a new identity when a rating changes and only then, so rows that show the dislike state re-render on rating changes instead of on every `App` render.
+- Ratings live in a `RatingStore` read through `useSyncExternalStore`. `ratingOf` gets a new identity when a rating changes and only then. `InteractionsProvider` passes it down in a context of its own, because the interactions are a new object on every `App` render. Rows read it there through `useDisliked`, so they re-render on rating changes instead of on every `App` render.
 
 When a rule flags something that is fine, silence that line with `// oxlint-disable-next-line <rule> -- <reason>`. One common case is `react/immutability` on a local that an effect reassigns in its own callbacks. Don't turn a rule off in `.oxlintrc.json`.
 

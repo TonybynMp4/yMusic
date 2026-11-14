@@ -152,6 +152,13 @@ interface MenuRequest {
 
 const OpenMenuContext = createContext<((request: MenuRequest) => void) | null>(null);
 
+/**
+ * `ratingOf` on its own, for rows. The interactions are a new object on every
+ * `App` render, while `ratingOf` changes only with a rating, so a row reading
+ * it from here re-renders only then.
+ */
+const RatingOfContext = createContext<((videoId: VideoId) => Rating | null) | null>(null);
+
 const SHARED_TRIGGER = "interactions-menu-trigger";
 
 /**
@@ -191,28 +198,32 @@ export function InteractionsProvider({
   };
   return (
     <OpenMenuContext.Provider value={openMenu}>
-      <InteractionsContext.Provider value={context}>
-        {children}
-        <DropdownMenu
-          open={open}
-          onOpenChange={setOpen}
-          triggerId={SHARED_TRIGGER}
-          // Kept until the menu has faded out, so it does not empty as it goes.
-          onOpenChangeComplete={(isOpen) => isOpen || setMenu(null)}
-        >
-          {/* Never seen or pressed. Base UI links a submenu to its menu
+      <RatingOfContext.Provider value={value.ratingOf}>
+        <InteractionsContext.Provider value={context}>
+          {children}
+          <DropdownMenu
+            open={open}
+            onOpenChange={setOpen}
+            triggerId={SHARED_TRIGGER}
+            // Kept until the menu has faded out, so it does not empty as it goes.
+            onOpenChangeComplete={(isOpen) => isOpen || setMenu(null)}
+          >
+            {/* Never seen or pressed. Base UI links a submenu to its menu
               through the trigger, so a menu without one breaks its submenus. */}
-          <DropdownMenuTrigger
-            id={SHARED_TRIGGER}
-            nativeButton={false}
-            render={<span aria-hidden tabIndex={-1} className="pointer-events-none fixed size-0" />}
-          />
-          {menu && <SharedMenu menu={menu} />}
-        </DropdownMenu>
-        <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
-        <EditPlaylistDialog page={editing} onClose={() => setEditing(null)} />
-        <DeletePlaylistDialog page={deleting} onClose={() => setDeleting(null)} />
-      </InteractionsContext.Provider>
+            <DropdownMenuTrigger
+              id={SHARED_TRIGGER}
+              nativeButton={false}
+              render={
+                <span aria-hidden tabIndex={-1} className="pointer-events-none fixed size-0" />
+              }
+            />
+            {menu && <SharedMenu menu={menu} />}
+          </DropdownMenu>
+          <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
+          <EditPlaylistDialog page={editing} onClose={() => setEditing(null)} />
+          <DeletePlaylistDialog page={deleting} onClose={() => setDeleting(null)} />
+        </InteractionsContext.Provider>
+      </RatingOfContext.Provider>
     </OpenMenuContext.Provider>
   );
 }
@@ -348,9 +359,10 @@ export function usePlaylistEditing(page: PlaylistPage): PlaylistEditing | null {
  * it, as YouTube Music dims disliked songs in a list.
  */
 export function useDisliked(track: Track): boolean {
-  const x = useInteractions();
+  const ratingOf = useContext(RatingOfContext);
+  if (ratingOf === null) throw new Error("ratings read outside InteractionsProvider");
   const videoId = videoIdFromTrackId(track.id);
-  return videoId !== null && x.ratingOf(videoId) === "dislike";
+  return videoId !== null && ratingOf(videoId) === "dislike";
 }
 
 /**

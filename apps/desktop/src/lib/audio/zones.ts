@@ -13,10 +13,7 @@ export const CLIP_THRESHOLD_DB = -1;
 export const CLIP_HOLD_MS = 1500;
 
 /** The zone a level falls in. */
-export const zoneForDb = (
-  db: number,
-  zones: MeterZone[] = DEFAULT_ZONES
-): MeterZoneName => {
+export const zoneForDb = (db: number, zones: MeterZone[] = DEFAULT_ZONES): MeterZoneName => {
   let current: MeterZoneName = "ok";
   for (const zone of zones) {
     if (db >= zone.fromDb) {

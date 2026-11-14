@@ -46,7 +46,9 @@ describe("the account's recent searches", () => {
     expect(engine.searchHistory).not.toHaveBeenCalled();
 
     rerender({ setting: "youtube", open: true });
-    await waitFor(() => expect(queries(result.current.recent)).toEqual(["daft punk", "boards of canada"]));
+    await waitFor(() =>
+      expect(queries(result.current.recent)).toEqual(["daft punk", "boards of canada"]),
+    );
 
     rerender({ setting: "youtube", open: false });
     rerender({ setting: "youtube", open: true });

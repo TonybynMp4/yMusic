@@ -204,7 +204,10 @@ export class YouTubeEngine {
    */
   async search(
     query: string,
-    { signedOut = false, filter = null }: { signedOut?: boolean; filter?: SearchFilter | null } = {},
+    {
+      signedOut = false,
+      filter = null,
+    }: { signedOut?: boolean; filter?: SearchFilter | null } = {},
   ): Promise<{ results: SearchResults; more: string | null }> {
     const youtube = signedOut ? await this.#anonymousClient() : await this.#browseClient();
     const { results, more } = await searchMusic(youtube, query, filter);
@@ -282,10 +285,7 @@ export class YouTubeEngine {
    * Makes `image` (a square JPEG, at least 360 pixels a side) the playlist's
    * cover. Answers with the cover as YouTube now serves it.
    */
-  async setPlaylistCover(
-    playlistId: string,
-    image: Uint8Array<ArrayBuffer>,
-  ): Promise<Thumbnail[]> {
+  async setPlaylistCover(playlistId: string, image: Uint8Array<ArrayBuffer>): Promise<Thumbnail[]> {
     const youtube = await this.#signedIn();
     const blobId = await uploadCover(youtube, image);
     return coverOf(await editPlaylist(youtube, playlistId, [coverAction(blobId)]));
@@ -293,9 +293,7 @@ export class YouTubeEngine {
 
   /** Drops a custom cover. Answers with the one YouTube serves instead. */
   async removePlaylistCover(playlistId: string): Promise<Thumbnail[]> {
-    return coverOf(
-      await editPlaylist(await this.#signedIn(), playlistId, [removeCoverAction()]),
-    );
+    return coverOf(await editPlaylist(await this.#signedIn(), playlistId, [removeCoverAction()]));
   }
 
   async removeFromPlaylist(playlistId: string, items: PlaylistItem[]): Promise<void> {
@@ -303,7 +301,11 @@ export class YouTubeEngine {
   }
 
   /** Moves the row `itemId` to just before `beforeItemId`, or to the end when that is null. */
-  async moveInPlaylist(playlistId: string, itemId: string, beforeItemId: string | null): Promise<void> {
+  async moveInPlaylist(
+    playlistId: string,
+    itemId: string,
+    beforeItemId: string | null,
+  ): Promise<void> {
     await editPlaylist(await this.#signedIn(), playlistId, [moveAction(itemId, beforeItemId)]);
   }
 
@@ -618,8 +620,7 @@ export class YouTubeEngine {
    */
   #analysedPlayerScript(): Promise<PlayerScript> {
     this.#playerScript ??= retryable(
-      (async () =>
-        this.#playerScriptSource(await currentPlayerId(this.#fetch), LIBRARY_VERSION))(),
+      (async () => this.#playerScriptSource(await currentPlayerId(this.#fetch), LIBRARY_VERSION))(),
       () => {
         this.#playerScript = null;
       },

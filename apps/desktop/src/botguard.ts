@@ -41,9 +41,13 @@ const pending = new Map<number, { resolve(value: unknown): void; reject(error: E
 function openFrame(): Promise<Frame> {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    iframe.style.cssText =
+      "position:fixed;left:0;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
     iframe.title = "BotGuard";
-    const timer = setTimeout(() => fail(new Error("the BotGuard frame never loaded")), CALL_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => fail(new Error("the BotGuard frame never loaded")),
+      CALL_TIMEOUT_MS,
+    );
 
     const fail = (error: Error) => {
       clearTimeout(timer);

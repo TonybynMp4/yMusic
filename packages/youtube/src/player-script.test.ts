@@ -38,7 +38,9 @@ describe("deciphering with an analysed player script", () => {
   Platform.shim.eval = playerEvaluator();
 
   it("transforms n", async () => {
-    const url = await playerFrom(script).decipher("https://rr1.googlevideo.com/videoplayback?n=abc");
+    const url = await playerFrom(script).decipher(
+      "https://rr1.googlevideo.com/videoplayback?n=abc",
+    );
     expect(new URL(url).searchParams.get("n")).toBe("cba");
   });
 
@@ -50,7 +52,9 @@ describe("deciphering with an analysed player script", () => {
   });
 
   it("adds the PO token of the client it belongs to", async () => {
-    const url = await playerFrom(script, "token").decipher("https://rr1.googlevideo.com/videoplayback?n=abc");
+    const url = await playerFrom(script, "token").decipher(
+      "https://rr1.googlevideo.com/videoplayback?n=abc",
+    );
     expect(new URL(url).searchParams.get("pot")).toBe("token");
   });
 });

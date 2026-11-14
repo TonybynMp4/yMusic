@@ -174,9 +174,7 @@ export function LibraryView(props: {
               items={cards.map(cardItem)}
               layout={prefs.layout}
               onOpen={props.onNavigate}
-              lead={
-                newPlaylist && <NewPlaylistItem layout={prefs.layout} onClick={newPlaylist} />
-              }
+              lead={newPlaylist && <NewPlaylistItem layout={prefs.layout} onClick={newPlaylist} />}
               empty="Playlists you save or make show here."
             />
           )}
@@ -232,9 +230,7 @@ export function LibraryView(props: {
   }
 
   const sorts =
-    chip === "local"
-      ? SORTS
-      : (menu?.sorts ?? []).map((title) => ({ value: title, label: title }));
+    chip === "local" ? SORTS : (menu?.sorts ?? []).map((title) => ({ value: title, label: title }));
   const sort = chip === "local" ? prefs.sort : (menu?.sort ?? null);
 
   return (

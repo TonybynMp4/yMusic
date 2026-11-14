@@ -187,7 +187,8 @@ export function usePlayer(
 
   /** A cached lease while it is still usable, otherwise a fresh one. */
   const leaseFor = useCallback(
-    (id: TrackId): Promise<StreamLease> => queryClient.fetchQuery(leaseOptions(quality.current, id)),
+    (id: TrackId): Promise<StreamLease> =>
+      queryClient.fetchQuery(leaseOptions(quality.current, id)),
     [],
   );
 
@@ -475,8 +476,7 @@ export function usePlayer(
       cameUp.current = false;
       dispatch({ type: "restore", queue: saved });
       cued.current = first.id;
-      resumeAt.current =
-        at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
+      resumeAt.current = at?.trackId === first.id ? { trackId: first.id, ms: at.positionMs } : null;
       source.current = saved.source
         ? { playlistId: saved.source.playlistId, ids: new Set(saved.source.ids) }
         : null;

@@ -11,7 +11,7 @@ How the built parts work, and why, is in `docs/`, one file per area. What is pla
 
 ## Formatting
 
-oxfmt formats TypeScript, JSON, CSS and Markdown, with its settings in `.oxfmtrc.json`. Run `pnpm format` before committing. Rust goes through `cargo fmt`.
+oxfmt formats TypeScript, JSON, CSS and Markdown, with its settings in `.oxfmtrc.json`. Run `pnpm format` before committing: CI runs `pnpm format:check` and fails on any unformatted file. Rust goes through `cargo fmt`.
 
 ## UI
 

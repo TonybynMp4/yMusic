@@ -54,7 +54,7 @@ they can add them. Don't commit screenshots or recordings. Drop the table for
 changes with nothing to see. -->
 
 | Before | After |
-| --- | --- |
-|  |  |
+| ------ | ----- |
+|        |       |
 
 <!-- If an agent did the work, end with its model and harness. -->

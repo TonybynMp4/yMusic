@@ -27,6 +27,7 @@ jobs:
           cache: true
           require-lockfile: true
       - run: pnpm lint --format github
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @ymusic/desktop build

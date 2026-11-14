@@ -30,7 +30,10 @@ export function usePlaylistOverlays(
 ): PlaylistOverlays {
   const [pending, setPending] = useState<Scoped<BrowseCard>>(unscoped);
   const [gone, setGone] = useState<Scoped<string>>(unscoped);
-  const pruned = useMemo(() => prunePending(pending, accountKey, listed), [pending, accountKey, listed]);
+  const pruned = useMemo(
+    () => prunePending(pending, accountKey, listed),
+    [pending, accountKey, listed],
+  );
   if (pruned !== pending) setPending(pruned);
   const created = useCallback(
     (card: BrowseCard) => setPending((current) => addPending(current, accountKey, card)),

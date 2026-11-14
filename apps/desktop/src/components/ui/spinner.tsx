@@ -1,6 +1,6 @@
-import { IconLoader2 } from "@tabler/icons-react"
+import { IconLoader2 } from "@tabler/icons-react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * The app's one loading glyph, from Kibo UI's spinner with Tabler's loader.
@@ -14,9 +14,9 @@ function Spinner({
   label,
   className,
 }: {
-  size?: number
-  label?: string
-  className?: string
+  size?: number;
+  label?: string;
+  className?: string;
 }) {
   return (
     <IconLoader2
@@ -27,7 +27,7 @@ function Spinner({
       aria-hidden={label ? undefined : true}
       className={cn("shrink-0 animate-spin", className)}
     />
-  )
+  );
 }
 
-export { Spinner }
+export { Spinner };

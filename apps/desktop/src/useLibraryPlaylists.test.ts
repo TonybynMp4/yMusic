@@ -60,9 +60,12 @@ describe("the account's playlists", () => {
   });
 
   it("fetches the list again when the account comes back", async () => {
-    const { result, rerender } = renderWithQuery((account: string | null) => useLibraryPlaylists(account), {
-      initialProps: "me" as string | null,
-    });
+    const { result, rerender } = renderWithQuery(
+      (account: string | null) => useLibraryPlaylists(account),
+      {
+        initialProps: "me" as string | null,
+      },
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
     rerender(null);
     expect(result.current.playlists).toEqual([]);
@@ -73,9 +76,12 @@ describe("the account's playlists", () => {
   });
 
   it("drops a new and a deleted playlist when the account changes", async () => {
-    const { result, rerender } = renderWithQuery((account: string) => useLibraryPlaylists(account), {
-      initialProps: "me",
-    });
+    const { result, rerender } = renderWithQuery(
+      (account: string) => useLibraryPlaylists(account),
+      {
+        initialProps: "me",
+      },
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.created(card("PLnew")));
     act(() => result.current.deleted("PLold"));

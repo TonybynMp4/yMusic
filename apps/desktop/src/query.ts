@@ -49,17 +49,20 @@ export function capQueries(
   const cache = queryClient.getQueryCache();
   const id = hashKey(prefix);
   capListeners.get(id)?.();
-  capListeners.set(id, cache.subscribe((event) => {
-    if (event.type !== "added" || !hasPrefix(event.query.queryKey, prefix)) return;
-    const all = cache.findAll({ queryKey: prefix });
-    let over = all.length - max;
-    for (const query of order(all)) {
-      if (over <= 0) return;
-      if (query === event.query || inUse(query)) continue;
-      cache.remove(query);
-      over--;
-    }
-  }));
+  capListeners.set(
+    id,
+    cache.subscribe((event) => {
+      if (event.type !== "added" || !hasPrefix(event.query.queryKey, prefix)) return;
+      const all = cache.findAll({ queryKey: prefix });
+      let over = all.length - max;
+      for (const query of order(all)) {
+        if (over <= 0) return;
+        if (query === event.query || inUse(query)) continue;
+        cache.remove(query);
+        over--;
+      }
+    }),
+  );
 }
 
 /** Each cap's unsubscribe, by its prefix's hash. */

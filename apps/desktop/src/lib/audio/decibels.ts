@@ -31,7 +31,7 @@ export const gainToDb = (gain: number): number => {
 export const dbToLevel = (
   db: number,
   minDb: number = DEFAULT_MIN_DB,
-  maxDb: number = DEFAULT_MAX_DB
+  maxDb: number = DEFAULT_MAX_DB,
 ): number => {
   if (!(db > minDb)) {
     return 0;
@@ -43,7 +43,7 @@ export const dbToLevel = (
 export const levelToDb = (
   level: number,
   minDb: number = DEFAULT_MIN_DB,
-  maxDb: number = DEFAULT_MAX_DB
+  maxDb: number = DEFAULT_MAX_DB,
 ): number => minDb + clamp(level, 0, 1) * (maxDb - minDb);
 
 /**
@@ -54,7 +54,7 @@ export const clampDb = (
   db: number,
   minDb: number,
   maxDb: number,
-  options: { allowSilence?: boolean } = {}
+  options: { allowSilence?: boolean } = {},
 ): number => {
   if (db === SILENCE_DB && options.allowSilence) {
     return SILENCE_DB;
@@ -81,12 +81,7 @@ export interface FormatDbOptions {
 
 /** Formats decibels for display: "−12.3 dB", "+3.0 dB", "−∞ dB". */
 export const formatDb = (db: number, options: FormatDbOptions = {}): string => {
-  const {
-    decimals = 1,
-    unit = true,
-    sign = "auto",
-    floorDb = SILENCE_DB,
-  } = options;
+  const { decimals = 1, unit = true, sign = "auto", floorDb = SILENCE_DB } = options;
   const suffix = unit ? " dB" : "";
 
   // No reading yet. Two hyphens rather than a dash: hosts such as Videorc ban

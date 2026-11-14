@@ -73,5 +73,12 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     [listed, overlays.pending, overlays.gone],
   );
   const error = accountKey !== null && list.error ? errorMessage(list.error) : null;
-  return { playlists, loading: accountKey !== null && loading, error, reload: refetch, created, deleted };
+  return {
+    playlists,
+    loading: accountKey !== null && loading,
+    error,
+    reload: refetch,
+    created,
+    deleted,
+  };
 }

@@ -27,9 +27,11 @@ const render = (query = "daft punk") =>
 
 beforeEach(() => {
   queryClient.clear();
-  engine.search.mockReset().mockImplementation((_query, { filter } = {}) =>
-    Promise.resolve(answer(filter ? [] : CHIPS, filter ? "next" : null)),
-  );
+  engine.search
+    .mockReset()
+    .mockImplementation((_query, { filter } = {}) =>
+      Promise.resolve(answer(filter ? [] : CHIPS, filter ? "next" : null)),
+    );
   engine.searchMore.mockReset().mockResolvedValue(answer([]));
 });
 
@@ -42,7 +44,10 @@ describe("YouTube Music search", () => {
 
     act(() => result.current.setFilter("songs"));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(engine.search).toHaveBeenLastCalledWith("daft punk", { signedOut: true, filter: "songs" });
+    expect(engine.search).toHaveBeenLastCalledWith("daft punk", {
+      signedOut: true,
+      filter: "songs",
+    });
     expect(result.current.filters).toEqual(CHIPS);
   });
 
@@ -55,7 +60,10 @@ describe("YouTube Music search", () => {
     act(() => result.current.submit("daft punk"));
     expect(result.current.filters).toEqual(CHIPS);
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(engine.search).toHaveBeenLastCalledWith("daft punk", { signedOut: false, filter: "songs" });
+    expect(engine.search).toHaveBeenLastCalledWith("daft punk", {
+      signedOut: false,
+      filter: "songs",
+    });
     expect(result.current.filters).toEqual(CHIPS);
   });
 

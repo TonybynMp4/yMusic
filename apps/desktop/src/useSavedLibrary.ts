@@ -75,7 +75,7 @@ async function load(account: string, kind: SavedKind, sort: string): Promise<Loa
   const show = () =>
     !reload && !dropped() && queryClient.setQueryData<Loaded>(key, { ...loaded(), partial: true });
   if (first.more !== null) show();
-  for (let more = first.more; more !== null && !dropped(); ) {
+  for (let more = first.more; more !== null && !dropped();) {
     try {
       const next = await engine.playlistMore(more);
       tracks = [...tracks, ...next.tracks];

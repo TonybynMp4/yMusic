@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLocalLibrary.ts";
-import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
+import { LIKED_MUSIC } from "./libraryPlaylists.ts";
 
 const LIBRARY: View = { kind: "library", id: "" };
 

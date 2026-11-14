@@ -39,7 +39,7 @@ import { useRecentlyPlayed } from "./recent.ts";
 import { TrackList } from "./TrackList.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName, tracksIn } from "./useLocalLibrary.ts";
-import { LIKED_MUSIC } from "./useLibraryPlaylists.ts";
+import { LIKED_MUSIC } from "./libraryPlaylists.ts";
 import { useSaved, type SavedState } from "./useSavedLibrary.ts";
 
 export type Chip = "playlists" | "songs" | "albums" | "artists" | "local";

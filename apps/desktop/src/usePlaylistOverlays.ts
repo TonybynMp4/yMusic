@@ -12,10 +12,10 @@ import {
 } from "./libraryPlaylists.ts";
 
 export interface PlaylistOverlays {
-  /** New playlists the fetched list does not have yet. */
-  missing: readonly BrowseCard[];
-  /** Deleted playlists the fetched list may still have. */
-  hidden: readonly string[];
+  /** This account's new playlists the fetched list does not have yet. */
+  pending: readonly BrowseCard[];
+  /** This account's deleted playlists, which the fetched list may still have. */
+  gone: readonly string[];
   created: (card: BrowseCard) => void;
   deleted: (id: string) => void;
 }
@@ -44,8 +44,8 @@ export function usePlaylistOverlays(
     [accountKey],
   );
   return {
-    missing: itemsFor(pruned, accountKey),
-    hidden: itemsFor(gone, accountKey),
+    pending: itemsFor(pruned, accountKey),
+    gone: itemsFor(gone, accountKey),
     created,
     deleted,
   };

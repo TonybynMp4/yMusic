@@ -9,7 +9,6 @@ import {
   LIKED_MUSIC,
   mergePlaylists,
   prunePending,
-  retryDelay,
   unscoped,
   type Scoped,
 } from "./libraryPlaylists.ts";
@@ -102,11 +101,5 @@ describe("addGone", () => {
   it("drops another account's deleted playlists", () => {
     const gone = addGone(addGone(unscoped(), "them", "a"), "me", "b");
     expect(gone).toEqual({ account: "me", items: ["b"] });
-  });
-});
-
-describe("retryDelay", () => {
-  it("waits 2 s longer each time", () => {
-    expect([0, 1, 2, 3, 4].map(retryDelay)).toEqual([2000, 4000, 6000, 8000, 10000]);
   });
 });

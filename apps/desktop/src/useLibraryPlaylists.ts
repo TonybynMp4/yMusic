@@ -9,8 +9,6 @@ import { queryClient } from "./query.ts";
 import { useListRetries } from "./useListRetries.ts";
 import { usePlaylistOverlays } from "./usePlaylistOverlays.ts";
 
-export { LIKED_MUSIC } from "./libraryPlaylists.ts";
-
 export interface LibraryPlaylistsState {
   playlists: BrowseCard[];
   loading: boolean;
@@ -53,7 +51,7 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
   );
   const overlays = usePlaylistOverlays(accountKey, listed);
   const loading = list.isFetching;
-  const restartRetries = useListRetries(overlays.missing.length > 0, loading, refetch);
+  const restartRetries = useListRetries(overlays.pending.length > 0, loading, refetch);
   const { created: addCreated, deleted: addDeleted } = overlays;
   const created = useCallback(
     (card: BrowseCard) => {
@@ -71,8 +69,8 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     [addDeleted, refetch],
   );
   const playlists = useMemo(
-    () => mergePlaylists(listed, overlays.missing, overlays.hidden),
-    [listed, overlays.missing, overlays.hidden],
+    () => mergePlaylists(listed, overlays.pending, overlays.gone),
+    [listed, overlays.pending, overlays.gone],
   );
   const error = accountKey !== null && list.error ? errorMessage(list.error) : null;
   return { playlists, loading: accountKey !== null && loading, error, reload: refetch, created, deleted };

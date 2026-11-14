@@ -2,14 +2,6 @@ import type { BrowseCard } from "@ymusic/core";
 
 export const LIKED_MUSIC = "LM";
 
-/** How many times the list is fetched again while a new playlist is missing from it. */
-export const LIST_RETRIES = 5;
-
-/** How long to wait before fetching the list again for the `attempt`th time, from 0. */
-export function retryDelay(attempt: number): number {
-  return (attempt + 1) * 2000;
-}
-
 /**
  * Overlay entries kept with the account they were made under, so switching
  * accounts drops them.
@@ -66,17 +58,18 @@ export function prunePending(
 }
 
 /**
- * The list to show: the fetched one without deleted playlists, and the new
- * playlists it lacks where YouTube Music puts them, first after Liked Music.
+ * The list to show: the fetched one without the `gone` playlists, and the
+ * `pending` ones where YouTube Music puts new playlists, first after Liked
+ * Music. `pending` is already pruned, so the fetched list has none of them.
  */
 export function mergePlaylists(
   listed: readonly BrowseCard[],
-  missing: readonly BrowseCard[],
-  hidden: readonly string[],
+  pending: readonly BrowseCard[],
+  gone: readonly string[],
 ): BrowseCard[] {
-  const kept = listed.filter((p) => !hidden.includes(p.id));
-  if (missing.length === 0) return kept;
+  const kept = listed.filter((p) => !gone.includes(p.id));
+  if (pending.length === 0) return kept;
   const liked = kept.filter((p) => p.id === LIKED_MUSIC);
   const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
-  return [...liked, ...missing, ...rest];
+  return [...liked, ...pending, ...rest];
 }

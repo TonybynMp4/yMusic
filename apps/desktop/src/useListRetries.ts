@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { LIST_RETRIES, retryDelay } from "./libraryPlaylists.ts";
+/** How many times the list is fetched again while a new playlist is missing from it. */
+const LIST_RETRIES = 5;
 
 /**
  * A new playlist reaches YouTube's library list a while after it exists, so
@@ -15,7 +16,7 @@ export function useListRetries(waiting: boolean, fetching: boolean, refetch: () 
     const timer = setTimeout(() => {
       retries.current += 1;
       refetch();
-    }, retryDelay(retries.current));
+    }, (retries.current + 1) * 2000);
     return () => clearTimeout(timer);
   }, [waiting, fetching, refetch]);
   return useCallback(() => {

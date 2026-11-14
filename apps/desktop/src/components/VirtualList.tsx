@@ -46,6 +46,7 @@ export function VirtualList({
     return () => observer.disconnect();
   }, [scroller]);
 
+  // oxlint-disable-next-line react/incompatible-library -- the React Compiler does not run on this app, so nothing caches it
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => scroller,

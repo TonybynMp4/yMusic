@@ -32,6 +32,8 @@ export interface LocalLibraryState {
 
 export type LocalLibrary = ReturnType<typeof useLocalLibrary>;
 
+const NOT_DESKTOP = "Local files need the desktop app.";
+
 export function useLocalLibrary(query: string) {
   const [state, setState] = useState<LocalLibraryState>({
     all: [],
@@ -40,15 +42,15 @@ export function useLocalLibrary(query: string) {
     covers: {},
     loading: isTauri,
     report: null,
-    error: null,
+    error: isTauri ? null : NOT_DESKTOP,
   });
 
+  /** Reads the library again. `loading` is already set. */
   const reload = useCallback(async () => {
     if (!isTauri) {
-      setState((s) => ({ ...s, loading: false, error: "Local files need the desktop app." }));
+      setState((s) => ({ ...s, loading: false, error: NOT_DESKTOP }));
       return;
     }
-    setState((s) => ({ ...s, loading: true }));
     try {
       // A blank search is everything, matching the Rust side.
       const [all, folders] = await Promise.all([librarySearch(""), libraryFolders()]);
@@ -65,21 +67,24 @@ export function useLocalLibrary(query: string) {
       const covers = Object.fromEntries(found.filter(([, thumbnails]) => thumbnails.length > 0));
       setState((s) => ({ ...s, covers }));
     } catch (error) {
-      setState((s) => ({ ...s, loading: false, error: String(error) }));
+      const message = String(error);
+      setState((s) => ({ ...s, loading: false, error: message }));
     }
   }, []);
 
-  useEffect(() => void reload(), [reload]);
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- reload sets state only after it awaits
+    if (isTauri) void reload();
+  }, [reload]);
 
   // Debounced so typing does not fire a query per keystroke; the Rust side is
   // fast enough that 150ms is imperceptible but collapses a burst into one.
   const [version, setVersion] = useState(0);
+  const searching = isTauri && query.trim().length > 0;
+  if (!searching && state.matches.length > 0) setState((s) => ({ ...s, matches: [] }));
   useEffect(() => {
     const trimmed = query.trim();
-    if (!isTauri || trimmed.length === 0) {
-      setState((s) => (s.matches.length === 0 ? s : { ...s, matches: [] }));
-      return;
-    }
+    if (!isTauri || trimmed.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       librarySearch(trimmed).then(

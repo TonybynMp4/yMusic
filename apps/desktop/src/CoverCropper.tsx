@@ -25,30 +25,17 @@ export function CoverCropper({
   onCrop: (crop: Crop) => void;
   onDone: () => void;
 }) {
-  const { file, width, height } = picked;
+  const { url, width, height } = picked;
   // Zoomed in no further than leaves the square at the smallest YouTube takes.
   const maxZoom = Math.min(width, height) / MIN_SIDE;
-  const [url, setUrl] = useState<string>();
-  const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // One state for both, as a move is clamped by the zoom: an update reads the
+  // latest of each, so events that come between renders add up.
+  const [{ position, zoom }, setView] = useState<View>(START);
   // Whether the square is on screen yet. It is what takes focus.
   const [drawn, setDrawn] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  // The listeners are added once, so they read the latest of these through a ref.
-  const latest = useRef({
-    position,
-    zoom,
-    media: null as Size | null,
-    square: null as Size | null,
-  });
-  latest.current.position = position;
-  latest.current.zoom = zoom;
-
-  useEffect(() => {
-    const next = URL.createObjectURL(file);
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
-  }, [file]);
+  /** The image and the square as last laid out, in screen pixels. */
+  const sizes = useRef<{ media: Size | null; square: Size | null }>({ media: null, square: null });
 
   useEffect(() => {
     const element = box.current;
@@ -63,20 +50,21 @@ export function CoverCropper({
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
       // The image goes the other way to the square it replaces, whose sideways
       // direction was flipped to follow the fingers.
-      const next = moved(latest.current, event.deltaX * unit, -event.deltaY * unit);
-      if (next) setPosition(next);
+      const [dx, dy] = [event.deltaX * unit, -event.deltaY * unit];
+      // Copied here: an updater can run during render, which reads no refs.
+      const laid = { ...sizes.current };
+      setView((from) => movedBy(from, laid, dx, dy));
     };
     // On Linux a pinch comes from the app's shell instead, as the scale since
     // it began (platform/window.rs).
     let begun = 1;
     const pinch = (event: Event) => {
       const spread = (event as CustomEvent<number>).detail;
+      // oxlint-disable-next-line react/immutability -- a local of the effect, never read in render
       if (spread === 1) begun = 1;
-      const now = latest.current;
-      const next = Math.min(Math.max(now.zoom * (spread / begun), 1), maxZoom);
+      const ratio = spread / begun;
       begun = spread;
-      now.zoom = next;
-      setZoom(next);
+      setView((from) => ({ ...from, zoom: Math.min(Math.max(from.zoom * ratio, 1), maxZoom) }));
     };
     element.addEventListener("wheel", wheel, { passive: false });
     window.addEventListener("touchpadpinch", pinch);
@@ -90,24 +78,24 @@ export function CoverCropper({
     if (drawn) box.current?.querySelector<HTMLElement>(".reactEasyCrop_CropArea")?.focus();
   }, [drawn]);
 
-  const zoomTo = (next: number) => setZoom(Math.min(Math.max(next, 1), maxZoom));
+  const setPosition = (next: Point) => setView((from) => ({ ...from, position: next }));
+  const zoomTo = (next: number) =>
+    setView((from) => ({ ...from, zoom: Math.min(Math.max(next, 1), maxZoom) }));
   // In place of the cropper's own, which moves the image the way the arrow
   // points and so the square the other way.
   const keys = (event: KeyboardEvent) => {
     const step = event.shiftKey ? 2 : 10;
     const arrow = ARROWS[event.key];
     if (arrow) {
-      const next = moved(latest.current, -arrow[0] * step, -arrow[1] * step);
-      if (next) setPosition(next);
+      const laid = { ...sizes.current };
+      setView((from) => movedBy(from, laid, -arrow[0] * step, -arrow[1] * step));
     } else if (event.key === "Enter") {
       // Held down, it would finish the crop again on every repeat.
       if (!event.repeat) onDone();
     } else if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
     else if (event.key === "-") zoomTo(zoom / 1.1);
-    else if (event.key === "0") {
-      setZoom(1);
-      setPosition({ x: 0, y: 0 });
-    } else return;
+    else if (event.key === "0") setView(START);
+    else return;
     event.preventDefault();
   };
 
@@ -117,46 +105,44 @@ export function CoverCropper({
         ref={box}
         className="relative h-[28rem] w-full overflow-hidden rounded-md has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
       >
-        {url && (
-          <Cropper
-            image={url}
-            crop={position}
-            zoom={zoom}
-            aspect={1}
-            minZoom={1}
-            maxZoom={maxZoom}
-            onCropChange={setPosition}
-            onZoomChange={setZoom}
-            onWheelRequest={(event) => event.ctrlKey}
-            // On every layout, not only on load: the dialog widens once the
-            // cropper is in it, and the image is shown larger after.
-            setMediaSize={(media) => (latest.current.media = media)}
-            onCropSizeChange={(square) => {
-              latest.current.square = square;
-              setDrawn(true);
-            }}
-            // Moving it only reports the change; zooming reports it complete.
-            onCropAreaChange={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
-            onCropComplete={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
-            {...(initial && {
-              initialCroppedAreaPixels: {
-                x: initial.x,
-                y: initial.y,
-                width: initial.size,
-                height: initial.size,
-              },
-            })}
-            classes={{ cropAreaClassName: "outline-none" }}
-            cropperProps={{ "aria-label": "Image crop", onKeyDown: keys }}
-            // Inline, as the cropper's own stylesheet outranks Tailwind's layers.
-            style={{
-              cropAreaStyle: {
-                border: "3px solid white",
-                boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.3)",
-              },
-            }}
-          />
-        )}
+        <Cropper
+          image={url}
+          crop={position}
+          zoom={zoom}
+          aspect={1}
+          minZoom={1}
+          maxZoom={maxZoom}
+          onCropChange={setPosition}
+          onZoomChange={zoomTo}
+          onWheelRequest={(event) => event.ctrlKey}
+          // On every layout, not only on load: the dialog widens once the
+          // cropper is in it, and the image is shown larger after.
+          setMediaSize={(media) => (sizes.current.media = media)}
+          onCropSizeChange={(square) => {
+            sizes.current.square = square;
+            setDrawn(true);
+          }}
+          // Moving it only reports the change; zooming reports it complete.
+          onCropAreaChange={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
+          onCropComplete={(_, area) => onCrop({ x: area.x, y: area.y, size: area.width })}
+          {...(initial && {
+            initialCroppedAreaPixels: {
+              x: initial.x,
+              y: initial.y,
+              width: initial.size,
+              height: initial.size,
+            },
+          })}
+          classes={{ cropAreaClassName: "outline-none" }}
+          cropperProps={{ "aria-label": "Image crop", onKeyDown: keys }}
+          // Inline, as the cropper's own stylesheet outranks Tailwind's layers.
+          style={{
+            cropAreaStyle: {
+              border: "3px solid white",
+              boxShadow: "0 0 0 9999px rgb(0 0 0 / 0.3)",
+            },
+          }}
+        />
       </div>
       <div className="flex items-center gap-3 px-1 text-muted-foreground">
         <IconZoomOut className="size-4 shrink-0" aria-hidden />
@@ -182,24 +168,33 @@ const ARROWS: Record<string, [number, number]> = {
   ArrowDown: [0, 1],
 };
 
+/** Where the image sits under the square, and how far it is zoomed in. */
+interface View {
+  position: Point;
+  zoom: number;
+}
+
+const START: View = { position: { x: 0, y: 0 }, zoom: 1 };
+
 /**
- * The image's position moved by `dx`, `dy`, kept covering the square, or
- * nothing before the image has loaded. Stored back at once, as several moves
- * can come before a render and each builds on the last.
+ * The view with the image moved by `dx`, `dy`, kept covering the square.
+ * Unchanged before the image has loaded.
  */
-function moved(
-  now: { position: Point; zoom: number; media: Size | null; square: Size | null },
+function movedBy(
+  view: View,
+  { media, square }: { media: Size | null; square: Size | null },
   dx: number,
   dy: number,
-): Point | undefined {
-  const { media, square } = now;
-  if (!media || !square) return undefined;
-  const reach = (side: number, inner: number) => Math.max(0, (side * now.zoom - inner) / 2);
-  now.position = {
-    x: clamp(now.position.x + dx, reach(media.width, square.width)),
-    y: clamp(now.position.y + dy, reach(media.height, square.height)),
+): View {
+  if (!media || !square) return view;
+  const reach = (side: number, inner: number) => Math.max(0, (side * view.zoom - inner) / 2);
+  return {
+    ...view,
+    position: {
+      x: clamp(view.position.x + dx, reach(media.width, square.width)),
+      y: clamp(view.position.y + dy, reach(media.height, square.height)),
+    },
   };
-  return now.position;
 }
 
 function clamp(value: number, reach: number): number {

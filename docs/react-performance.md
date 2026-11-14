@@ -11,7 +11,7 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 
 ## Common causes
 
-- **New props every render.** An inline arrow, an object literal or a `cn(...)` built by the parent gives a memoized child new props each time, so `memo` does nothing. Pass handlers that never change and read the latest props from a ref (`TrackList.tsx` and `Queue.tsx` do this), and pass booleans instead of class names.
+- **New props every render.** An inline arrow, an object literal or a `cn(...)` built by the parent gives a memoized child new props each time, so `memo` does nothing. Pass handlers from `useStableHandler`, which keep one identity and call the latest props (`TrackList.tsx` and `Queue.tsx` do this), and pass booleans instead of class names.
 - **Context values rebuilt each render.** Every consumer re-renders whenever the provider's value is a new object.
 - **Fast-changing state high in the tree.** Playback position, scroll position or a drag held in `App` re-renders everything under it.
 - **Heavy components per row.** A Base UI Menu, ContextMenu, Popover or Tooltip root in each row costs far more than the row itself. Share one instance and have rows ask it to open.
@@ -19,6 +19,18 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 - **Long lists drawn in full.** Virtualize from about 60 rows, with a fixed row height and keys that stay stable when rows move.
 - **Style changes on a big ancestor.** Setting a CSS variable, class or attribute on an element restyles everything inside it. On a scroll container, that happens on every scroll event.
 - **Forced synchronous renders** (`flushSync`) inside scroll or pointer handlers.
+
+## Pure renders
+
+Render reads no refs and writes none, and effects don't set state just to reset it. The oxlint rules `react/set-state-in-effect`, `react/refs`, `react/immutability`, `react/use-memo` and `react/incompatible-library` enforce this. They come from the React Compiler, which this app doesn't run. They're on because the patterns they catch break under concurrent rendering anyway. The patterns that replace them:
+
+- An effect that needs the latest props or state without re-running reads them through `useEffectEvent` (`usePlayer`, `useResume`, `useMediaSession`).
+- A handler given to a memoized row comes from `useStableHandler`. A `useEffectEvent` function can't be passed to children. Never call either one during render.
+- State that follows a prop is adjusted during render, guarded by a comparison so it settles (`useLocalLibrary`, the sort menus in `Library`, the unmute level in `NowPlaying`).
+- A fix that adds an effect is the last choice. State that must stay in step goes in one `useState` updated through its updater, as the cropper's position and zoom do, and a store learns whether it is in use from its `useSyncExternalStore` listeners.
+- Ratings live in a `RatingStore` read through `useSyncExternalStore`. `ratingOf` gets a new identity when a rating changes and only then. `InteractionsProvider` passes it down in a context of its own, because the interactions are a new object on every `App` render. Rows read it there through `useDisliked`, so they re-render on rating changes instead of on every `App` render.
+
+When a rule flags something that is fine, silence that line with `// oxlint-disable-next-line <rule> -- <reason>`. One common case is `react/immutability` on a local that an effect reassigns in its own callbacks. Don't turn a rule off in `.oxlintrc.json`.
 
 ## What #72 found
 
@@ -33,7 +45,6 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 
 ## Not looked at yet
 
-- `InteractionsProvider` builds a new context value on every `App` render, so every row using `useDisliked` re-renders with it. Rating changes rely on that today, so a fix needs a store or a version number that changes only with ratings.
 - Which `App` state changes during playback, and what re-renders when it does: the player bar, `NowPlaying`, `FullPlayer`.
 - Browse pages: shelves and cards, which are not virtualized.
 - Search results, the sidebar and `Art`.

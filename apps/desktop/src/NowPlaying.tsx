@@ -102,9 +102,9 @@ export function NowPlaying(props: Props) {
    * zero. It is held while the slider is dragged, so a drag down to zero
    * restores the level from before the drag, not the last step on the way.
    */
-  const unmuted = useRef(props.unmutedVolume);
-  const draggingVolume = useRef(false);
-  if (volume > 0 && !draggingVolume.current) unmuted.current = props.volume;
+  const [unmuted, setUnmuted] = useState(props.unmutedVolume);
+  const [draggingVolume, setDraggingVolume] = useState(false);
+  if (volume > 0 && !draggingVolume && unmuted !== props.volume) setUnmuted(props.volume);
   // Shared by the inline slider and the vertical one in the narrow popup.
   const volumeSlider = {
     min: 0,
@@ -113,17 +113,10 @@ export function NowPlaying(props: Props) {
     // The position is sent as a fraction; the perceptual curve is applied
     // downstream, by mpv, and pinned by tests on both sides.
     onValueChange: (value: number | readonly number[]) => props.onVolume((value as number) / 100),
-    onPointerDownCapture: (event: PointerEvent) => {
-      draggingVolume.current = event.button === 0;
-    },
+    onPointerDownCapture: (event: PointerEvent) => setDraggingVolume(event.button === 0),
     // A press that leaves the value unchanged commits nothing.
-    onPointerUpCapture: () => {
-      draggingVolume.current = false;
-    },
-    onValueCommitted: (value: number | readonly number[]) => {
-      draggingVolume.current = false;
-      if ((value as number) > 0) unmuted.current = (value as number) / 100;
-    },
+    onPointerUpCapture: () => setDraggingVolume(false),
+    onValueCommitted: () => setDraggingVolume(false),
   };
 
   return (
@@ -271,7 +264,7 @@ export function NowPlaying(props: Props) {
           <div className="group relative">
             <IconButton
               label={volume === 0 ? "Unmute" : "Mute"}
-              onClick={() => props.onVolume(volume === 0 ? unmuted.current : 0)}
+              onClick={() => props.onVolume(volume === 0 ? unmuted : 0)}
             >
               <VolumeIcon volume={volume} />
             </IconButton>

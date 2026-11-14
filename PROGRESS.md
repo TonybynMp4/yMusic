@@ -142,8 +142,6 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Library page with chips, sort and grid or list
 - [x] Playlist details and editing: rename, description, privacy, cover, reorder, remove, delete
 - [ ] React performance pass (see `docs/react-performance.md`)
-  - [x] Pure renders, with the oxlint rules that check them
-  - [x] Rows re-render on rating changes only
 - [x] The queue saved across restarts
 - [x] The volume saved across restarts
 - [x] Search history, local or the account's

@@ -24,9 +24,10 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 
 Render reads no refs and writes none, and effects don't set state just to reset it. The oxlint rules `react/set-state-in-effect`, `react/refs`, `react/immutability`, `react/use-memo` and `react/incompatible-library` enforce this. They come from the React Compiler, which this app doesn't run. They're on because the patterns they catch break under concurrent rendering anyway. The patterns that replace them:
 
-- An effect that needs the latest props or state without re-running reads them through `useEffectEvent` (`usePlayer`, `useResume`, `useMediaSession`, `CoverCropper`).
+- An effect that needs the latest props or state without re-running reads them through `useEffectEvent` (`usePlayer`, `useResume`, `useMediaSession`).
 - A handler given to a memoized row comes from `useStableHandler`. A `useEffectEvent` function can't be passed to children. Never call either one during render.
-- State that follows a prop is adjusted during render, guarded by a comparison so it settles (`useLocalLibrary`, the sort menus in `Library`).
+- State that follows a prop is adjusted during render, guarded by a comparison so it settles (`useLocalLibrary`, the sort menus in `Library`, the unmute level in `NowPlaying`).
+- A fix that adds an effect is the last choice. State that must stay in step goes in one `useState` updated through its updater, as the cropper's position and zoom do, and a store learns whether it is in use from its `useSyncExternalStore` listeners.
 - Ratings live in a `RatingStore` read through `useSyncExternalStore`. `ratingOf` gets a new identity when a rating changes and only then. `InteractionsProvider` passes it down in a context of its own, because the interactions are a new object on every `App` render. Rows read it there through `useDisliked`, so they re-render on rating changes instead of on every `App` render.
 
 When a rule flags something that is fine, silence that line with `// oxlint-disable-next-line <rule> -- <reason>`. One common case is `react/immutability` on a local that an effect reassigns in its own callbacks. Don't turn a rule off in `.oxlintrc.json`.

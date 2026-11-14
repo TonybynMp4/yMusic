@@ -9,7 +9,7 @@ The engine resolves an audio-only stream URL and mpv streams it over HTTP range 
 Two details that each cost a day if missed:
 
 - The lease's `headers` go to mpv through `http-header-fields`. YouTube's leases carry none: every URL the player clients below hand out plays for any client that asks, and gapless depends on that (see below).
-- Stream URLs expire after about six hours, so the player re-resolves a track whose lease is stale.
+- Stream URLs expire after about six hours, so the player re-resolves a track whose lease is stale. Leases are kept in the Query client per quality and track (`leases.ts`), fresh until five minutes before they expire, so going back to a song and the gapless pre-resolve of the next one share one request. A change of quality is another key, so a lease resolved for the old one is never handed out.
 
 ## Player clients
 

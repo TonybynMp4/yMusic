@@ -52,7 +52,7 @@ Sign release assets with the updater's minisign key so the download is verified 
 
 ## Later
 
-- **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background.
+- **Faster loading.** Cache playlist, album and artist pages in SQLite, show the cached copy at once and refresh in the background. Pages already go through the Query client, which treats data from an earlier run as stale ([Browse](docs/browse.md#the-cache)), so this is a persister that restores into it.
 - **Downloads.** The premium stream saved to disk from Rust, with resumable range requests. XDG directories on Linux, known folders on Windows.
 - **Linking local files to YouTube tracks.** One `links` table mapping a `local:` id to a `yt:` id, so a downloaded track plays from disk while artist pages, radio and plugin panels still point at YouTube. The grade of each link is stored with it:
   - *Exact, from tags.* yt-dlp's `--embed-metadata` writes the source URL into `PURL`, and ripped libraries often carry `MusicBrainzRecordingId`. The scanner reads neither yet.

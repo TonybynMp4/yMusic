@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { SearchHistory } from "@ymusic/ipc";
 
 import { engine } from "./engine.ts";
+import { queryClient } from "./query.ts";
 
 const LOCAL_KEY = "ymusic.search-history";
+const ACCOUNT_KEY = ["search-history"] as const;
+
+type AccountSearch = Awaited<ReturnType<typeof engine.searchHistory>>[number];
 /** How many searches the list on this device keeps. */
 const LOCAL_LIMIT = 20;
 
@@ -32,7 +37,7 @@ export function searchHistoryIn(setting: SearchHistory, signedIn: boolean): Sear
  * Recent searches, from wherever the setting keeps them. Signed out there is
  * no account to read, so "youtube" uses the list on this device. The
  * account's list is fetched each time `open` turns true, so a search made
- * since shows.
+ * since shows, with the last one up meanwhile.
  */
 export function useSearchHistory(
   setting: SearchHistory,
@@ -41,30 +46,23 @@ export function useSearchHistory(
 ): SearchHistoryState {
   const where = searchHistoryIn(setting, signedIn);
   const [local, setLocal] = useState<string[]>(readLocal);
-  const [account, setAccount] = useState<{ query: string; feedbackToken: string | null }[]>([]);
-
-  useEffect(() => {
-    // Dropped when the account's list stops applying, so signing in as
-    // someone else never shows the last account's searches.
-    if (where !== "youtube") {
-      setAccount([]);
-      return;
-    }
-    if (!open) return;
-    let cancelled = false;
-    engine.searchHistory().then(
-      (entries) => {
-        if (!cancelled) setAccount(entries);
-      },
-      (error: unknown) => {
-        if (!cancelled) setAccount([]);
+  const history = useQuery({
+    queryKey: ACCOUNT_KEY,
+    queryFn: () =>
+      engine.searchHistory().catch((error: unknown) => {
         console.error("could not read the search history", error);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [where, open]);
+        throw error;
+      }),
+    enabled: where === "youtube" && open,
+    staleTime: 0,
+  });
+  const account: AccountSearch[] = history.data ?? [];
+
+  // Dropped when the account's list stops applying, so signing in as someone
+  // else never shows the last account's searches.
+  useEffect(() => {
+    if (where !== "youtube") queryClient.removeQueries({ queryKey: ACCOUNT_KEY });
+  }, [where]);
 
   const saveLocal = useCallback((update: (queries: string[]) => string[]) => {
     setLocal((queries) => {
@@ -99,7 +97,9 @@ export function useSearchHistory(
         feedbackToken === null
           ? null
           : () => {
-              setAccount((entries) => entries.filter((e) => e.feedbackToken !== feedbackToken));
+              queryClient.setQueryData<AccountSearch[]>(ACCOUNT_KEY, (entries) =>
+                entries?.filter((e) => e.feedbackToken !== feedbackToken),
+              );
               engine
                 .removeSearchHistory(feedbackToken)
                 .catch((error: unknown) => console.error("could not remove a search", error));

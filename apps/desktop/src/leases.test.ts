@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { STREAM_LEASE_SAFETY_MARGIN_MS, type StreamLease, type TrackId } from "@ymusic/core";
 
-import { keepLease } from "./leases.ts";
+import { leaseOptions, leaseStaleTime } from "./leases.ts";
+import { queryClient } from "./query.ts";
+
+const resolveTrack = vi.hoisted(() => vi.fn<() => Promise<StreamLease>>());
+vi.mock("./engine.ts", () => ({ engine: {} }));
+vi.mock("./resolve.ts", () => ({ resolveTrack }));
 
 const NOW = 1_800_000_000_000;
 const HOUR = 60 * 60 * 1000;
@@ -22,45 +27,44 @@ function lease(id: string, expiresAt: number | null): StreamLease {
   };
 }
 
-const yt = (id: string) => `yt:${id}` as TrackId;
-
-describe("keepLease", () => {
-  it("stores a lease that will expire", () => {
-    const leases = new Map<TrackId, StreamLease>();
-    keepLease(leases, yt("a"), lease("yt:a", NOW + 6 * HOUR), NOW);
-    expect([...leases.keys()]).toEqual([yt("a")]);
+describe("leaseStaleTime", () => {
+  it("keeps a lease until the safety margin before it expires", () => {
+    expect(leaseStaleTime(lease("yt:a", NOW + 6 * HOUR), NOW)).toBe(
+      6 * HOUR - STREAM_LEASE_SAFETY_MARGIN_MS,
+    );
   });
 
-  it("drops the leases that are no longer usable as a new one arrives", () => {
-    const leases = new Map<TrackId, StreamLease>([
-      [yt("expired"), lease("yt:expired", NOW - HOUR)],
-      [yt("in-margin"), lease("yt:in-margin", NOW + STREAM_LEASE_SAFETY_MARGIN_MS)],
-      [yt("fresh"), lease("yt:fresh", NOW + 2 * HOUR)],
-    ]);
-    keepLease(leases, yt("new"), lease("yt:new", NOW + 6 * HOUR), NOW);
-    expect([...leases.keys()]).toEqual([yt("fresh"), yt("new")]);
+  it("treats a lease inside the margin as stale", () => {
+    expect(leaseStaleTime(lease("yt:a", NOW + STREAM_LEASE_SAFETY_MARGIN_MS / 2), NOW)).toBe(0);
   });
 
-  it("does not store a lease that never expires, which pruning could never drop", () => {
-    const leases = new Map<TrackId, StreamLease>();
-    const local = "local:/music/song.flac" as TrackId;
-    keepLease(leases, local, lease(local, null), NOW);
-    expect(leases.size).toBe(0);
+  it("never expires a local file's lease", () => {
+    expect(leaseStaleTime(lease("local:a", null), NOW)).toBe(Infinity);
   });
 
-  it("still prunes when the new lease is not stored", () => {
-    const leases = new Map<TrackId, StreamLease>([[yt("old"), lease("yt:old", NOW - HOUR)]]);
-    const local = "local:/music/song.flac" as TrackId;
-    keepLease(leases, local, lease(local, null), NOW);
-    expect(leases.size).toBe(0);
+  it("fetches when there is no lease yet", () => {
+    expect(leaseStaleTime(undefined, NOW)).toBe(0);
+  });
+});
+
+describe("a lease in the cache", () => {
+  const id = "yt:a" as TrackId;
+
+  it("is handed out again while usable, per quality", async () => {
+    resolveTrack.mockImplementation(async () => lease("yt:a", Date.now() + 6 * HOUR));
+    await queryClient.fetchQuery(leaseOptions("high", id));
+    await queryClient.fetchQuery(leaseOptions("high", id));
+    expect(resolveTrack).toHaveBeenCalledTimes(1);
+    await queryClient.fetchQuery(leaseOptions("low", id));
+    expect(resolveTrack).toHaveBeenCalledTimes(2);
   });
 
-  it("replaces what was stored for the song", () => {
-    const leases = new Map<TrackId, StreamLease>([[yt("a"), lease("yt:a", NOW + HOUR)]]);
-    keepLease(leases, yt("a"), lease("yt:a", NOW + 6 * HOUR), NOW);
-    expect(leases.get(yt("a"))?.expiresAt).toBe(NOW + 6 * HOUR);
-
-    keepLease(leases, yt("a"), lease("yt:a", null), NOW);
-    expect(leases.has(yt("a"))).toBe(false);
+  it("is resolved again once it is about to expire", async () => {
+    queryClient.clear();
+    resolveTrack.mockReset();
+    resolveTrack.mockImplementation(async () => lease("yt:a", Date.now() + 60_000));
+    await queryClient.fetchQuery(leaseOptions("high", id));
+    await queryClient.fetchQuery(leaseOptions("high", id));
+    expect(resolveTrack).toHaveBeenCalledTimes(2);
   });
 });

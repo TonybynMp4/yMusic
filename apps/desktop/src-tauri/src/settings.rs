@@ -1,10 +1,16 @@
 //! The user's settings, kept as `settings.json` beside the app's other data.
 //!
-//! Every field has a default and the file is laid over the defaults, so a file
-//! written by an older build (missing a field) or a newer one (with a field
-//! this build does not know) still loads. A file that will not parse at
-//! all is logged and replaced by the defaults: losing a preference is a much
-//! better outcome than a player that refuses to start.
+//! Every field has a default and the file is laid over the defaults one field
+//! at a time, so a file written by an older build (missing a field) or a newer
+//! one (with a field this build does not know, or a value it cannot read)
+//! still loads. A value that does not parse is logged and that one setting
+//! keeps its default. What this build cannot use is written back on save, so
+//! the newer build gets it back. A file that is not a JSON object at all is
+//! logged and replaced by the defaults: losing a preference is a much better
+//! outcome than a player that refuses to start.
+//!
+//! There is no version number. When a setting changes its name or meaning,
+//! `read` gets a small migration for that one change: see the comment there.
 
 use std::{fs, io::ErrorKind, path::PathBuf, sync::Mutex};
 
@@ -75,7 +81,8 @@ macro_rules! settings {
 
         // By hand, through a private struct, because `deserialize_with` on
         // the public one makes specta export a separate type per direction.
-        // `Serialize` is derived only to give specta the field names.
+        // `Serialize` gives specta the field names, and the store the
+        // names of the fields a patch sets.
         impl<'de> Deserialize<'de> for SettingsPatch {
             fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
                 #[derive(Deserialize)]
@@ -132,42 +139,109 @@ where
     T::deserialize(deserializer).map(Some)
 }
 
-impl Settings {
-    /// The fields of a settings file, with the defaults for fields it lacks,
-    /// as one written before a setting existed does, and unknown fields
-    /// ignored, as one written by a newer version may have.
-    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> serde_json::Result<Self> {
-        let mut json = serde_json::to_value(Self::default()).expect("settings serialize");
-        let fields = json.as_object_mut().expect("settings are an object");
-        for (key, value) in file {
-            if fields.contains_key(&key) {
-                fields.insert(key, value);
+/// The settings, and what the file held that this build could not use: keys
+/// it does not know and values it cannot read, from a newer build or a hand
+/// edit. Those go back into the file on every save, so a downgrade followed
+/// by an upgrade finds the newer build's settings where it left them.
+#[derive(Debug, Default)]
+struct Saved {
+    settings: Settings,
+    kept: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Saved {
+    /// A file's fields laid over the defaults: a missing key gets its
+    /// default, as in a file written before the setting existed, and an
+    /// unknown one is kept but not used, as in a file from a newer build. A
+    /// value that does not parse for its field is logged and kept, and that
+    /// field takes its default while the rest load.
+    fn from_fields(file: serde_json::Map<String, serde_json::Value>) -> Self {
+        let defaults = serde_json::to_value(Settings::default()).expect("settings serialize");
+        let defaults = defaults.as_object().expect("settings are an object");
+        let (known, kept): (serde_json::Map<_, _>, _) = file
+            .into_iter()
+            .partition(|(key, _)| defaults.contains_key(key));
+
+        let mut all = defaults.clone();
+        all.extend(known.clone());
+        if let Ok(settings) = serde_json::from_value(all.into()) {
+            return Self { settings, kept };
+        }
+
+        // Something in the file does not parse: try its values one at a time
+        // to find which, and keep the rest.
+        let mut saved = Self {
+            settings: Settings::default(),
+            kept,
+        };
+        for (key, value) in known {
+            let mut next = serde_json::to_value(&saved.settings).expect("settings serialize");
+            next[&key] = value.clone();
+            match serde_json::from_value(next) {
+                Ok(settings) => saved.settings = settings,
+                Err(error) => {
+                    log::warn!("ignoring saved setting `{key}`: {error}");
+                    saved.kept.insert(key, value);
+                }
             }
         }
-        serde_json::from_value(json)
+        saved
+    }
+
+    /// A saved file, or the defaults, with the reason logged, when it is not
+    /// a JSON object.
+    fn load(bytes: &[u8], path: &std::path::Path) -> Self {
+        read(bytes).unwrap_or_else(|error| {
+            log::error!(
+                "ignoring unreadable settings in {}: {error}",
+                path.display()
+            );
+            Self::default()
+        })
+    }
+
+    /// Applies `patch`. A setting it changes no longer keeps the value this
+    /// build could not read.
+    fn apply(&self, patch: SettingsPatch) -> Self {
+        let mut kept = self.kept.clone();
+        if let serde_json::Value::Object(fields) =
+            serde_json::to_value(&patch).expect("settings patch serialize")
+        {
+            for (key, value) in fields {
+                if !value.is_null() {
+                    kept.remove(&key);
+                }
+            }
+        }
+        Self {
+            settings: self.settings.apply(patch),
+            kept,
+        }
+    }
+
+    /// The file's contents: the settings, with the kept entries over them.
+    fn to_json(&self) -> Vec<u8> {
+        let mut json = serde_json::to_value(&self.settings).expect("settings serialize");
+        let fields = json.as_object_mut().expect("settings are an object");
+        fields.extend(self.kept.clone());
+        serde_json::to_vec_pretty(&json).expect("settings serialize")
     }
 }
 
 /// The settings in memory and the file they persist to.
 pub struct SettingsStore {
     path: Option<PathBuf>,
-    current: Mutex<Settings>,
+    current: Mutex<Saved>,
 }
 
 impl SettingsStore {
     pub fn open(path: PathBuf) -> Self {
         let current = match fs::read(&path) {
-            Ok(bytes) => read(&bytes).unwrap_or_else(|error| {
-                log::error!(
-                    "ignoring unreadable settings in {}: {error}",
-                    path.display()
-                );
-                Settings::default()
-            }),
-            Err(error) if error.kind() == ErrorKind::NotFound => Settings::default(),
+            Ok(bytes) => Saved::load(&bytes, &path),
+            Err(error) if error.kind() == ErrorKind::NotFound => Saved::default(),
             Err(error) => {
                 log::error!("could not read {}: {error}", path.display());
-                Settings::default()
+                Saved::default()
             }
         };
         Self {
@@ -180,12 +254,16 @@ impl SettingsStore {
     pub fn in_memory() -> Self {
         Self {
             path: None,
-            current: Mutex::new(Settings::default()),
+            current: Mutex::new(Saved::default()),
         }
     }
 
     pub fn get(&self) -> Settings {
-        self.current.lock().expect("settings mutex").clone()
+        self.current
+            .lock()
+            .expect("settings mutex")
+            .settings
+            .clone()
     }
 
     /// Applies `patch`, saves, and returns the result. Nothing changes if the
@@ -194,33 +272,42 @@ impl SettingsStore {
         let mut current = self.current.lock().expect("settings mutex");
         let next = current.apply(patch);
         if let Some(path) = &self.path {
-            save(path, &next)?;
+            crate::files::write_atomically(path, &next.to_json())
+                .map_err(|error| format!("could not save settings: {error}"))?;
         }
-        *current = next.clone();
-        Ok(next)
+        *current = next;
+        Ok(current.settings.clone())
     }
 }
 
 /// Parses a saved file, moving settings an older build wrote under another
-/// name to where this one reads them.
-fn read(bytes: &[u8]) -> serde_json::Result<Settings> {
+/// name to where this one reads them. Only a file that is not a JSON object
+/// fails; a bad value inside one costs that setting alone.
+///
+/// There is no version number. Migrations live here, one block per change,
+/// oldest first. When a setting is renamed or its values change meaning, add
+/// a block that rewrites the old key or value into the new one before
+/// `from_fields` runs, and leave the blocks before it alone: a file can come
+/// from any older build. A new setting, or a new value for an enum, needs no
+/// migration, because a missing key gets its default and an older build
+/// defaults a value it cannot read.
+fn read(bytes: &[u8]) -> serde_json::Result<Saved> {
     let mut fields: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(bytes)?;
+
     // The search history switch was once a pause, on or off. Paused meant
-    // nothing recorded anywhere, which is Off now.
+    // nothing recorded anywhere, which is Off now. A `searchHistory` this
+    // build can read wins; one it cannot gives way to the pause, so history
+    // someone paused is never turned back on.
     let paused = fields.remove("pauseSearchHistory");
-    if let (Some(serde_json::Value::Bool(paused)), false) =
-        (paused, fields.contains_key("searchHistory"))
-    {
+    let chosen = fields
+        .get("searchHistory")
+        .is_some_and(|value| SearchHistory::deserialize(value).is_ok());
+    if let (Some(serde_json::Value::Bool(paused)), false) = (paused, chosen) {
         let history = if paused { "off" } else { "youtube" };
         fields.insert("searchHistory".into(), history.into());
     }
-    Settings::from_fields(fields)
-}
 
-fn save(path: &std::path::Path, settings: &Settings) -> Result<(), String> {
-    let json = serde_json::to_vec_pretty(settings).expect("settings serialize");
-    crate::files::write_atomically(path, &json)
-        .map_err(|error| format!("could not save settings: {error}"))
+    Ok(Saved::from_fields(fields))
 }
 
 #[cfg(test)]
@@ -275,7 +362,7 @@ mod tests {
 
     #[test]
     fn a_saved_pause_on_search_history_becomes_off() {
-        let history = |json: &str| read(json.as_bytes()).unwrap().search_history;
+        let history = |json: &str| read(json.as_bytes()).unwrap().settings.search_history;
         assert_eq!(
             history(r#"{ "pauseSearchHistory": true }"#),
             SearchHistory::Off
@@ -290,6 +377,65 @@ mod tests {
             SearchHistory::Device,
             "a choice already made wins over the old switch"
         );
+        assert_eq!(
+            history(r#"{ "pauseSearchHistory": true, "searchHistory": "fromTheFuture" }"#),
+            SearchHistory::Off,
+            "a choice this build cannot read does not undo the pause"
+        );
+    }
+
+    #[test]
+    fn a_bad_value_defaults_only_that_setting() {
+        let settings = read(
+            br#"{
+                "audioQuality": "lossless",
+                "autoplay": "yes",
+                "stableVolume": "loudOnly",
+                "closeToTray": true,
+                "audioDevice": "pipewire/speakers"
+            }"#,
+        )
+        .unwrap()
+        .settings;
+        assert_eq!(
+            settings.audio_quality,
+            AudioQuality::High,
+            "an enum value from a newer build"
+        );
+        assert!(settings.autoplay, "a value of the wrong type");
+        assert_eq!(settings.stable_volume, StableVolume::LoudOnly);
+        assert!(settings.close_to_tray);
+        assert_eq!(settings.audio_device, "pipewire/speakers");
+    }
+
+    #[test]
+    fn a_save_keeps_what_this_build_could_not_use() {
+        let saved =
+            read(br#"{ "audioQuality": "lossless", "fromTheFuture": 1, "autoplay": true }"#)
+                .unwrap()
+                .apply(patch(json!({ "autoplay": false })));
+        let file: serde_json::Value = serde_json::from_slice(&saved.to_json()).unwrap();
+        assert_eq!(file["audioQuality"], "lossless");
+        assert_eq!(file["fromTheFuture"], 1);
+        assert_eq!(file["autoplay"], false);
+        assert_eq!(saved.settings.audio_quality, AudioQuality::High);
+
+        let changed = saved.apply(patch(json!({ "audioQuality": "low" })));
+        let file: serde_json::Value = serde_json::from_slice(&changed.to_json()).unwrap();
+        assert_eq!(
+            file["audioQuality"], "low",
+            "a setting changed here replaces it"
+        );
+        assert_eq!(file["fromTheFuture"], 1);
+    }
+
+    #[test]
+    fn a_file_that_is_not_an_object_gives_the_defaults() {
+        for json in ["[]", "true", r#""settings""#, "null", "{ not json"] {
+            let saved = Saved::load(json.as_bytes(), std::path::Path::new("settings.json"));
+            assert_eq!(saved.settings, Settings::default(), "{json}");
+            assert!(saved.kept.is_empty(), "{json}");
+        }
     }
 
     #[test]

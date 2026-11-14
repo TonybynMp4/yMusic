@@ -4,7 +4,22 @@ Settings is a full page, opened from the account menu (signed in or not), like a
 
 ## Storage
 
-`src-tauri/src/settings.rs` keeps the settings as `settings.json` in the app data directory, next to `library.sqlite3` and `account.bin`. Every field has a default and the struct is read with `#[serde(default)]`, so a file from an older build (missing a field) or a newer one (with a field this build doesn't know) still loads. A file that won't parse is logged and replaced by the defaults. Writes go to `settings.json.partial` and are renamed over the old file, so a crash mid-write keeps the previous settings.
+`src-tauri/src/settings.rs` keeps the settings as `settings.json` in the app data directory, next to `library.sqlite3` and `account.bin`. Writes go to `settings.json.partial` and are renamed over the old file, so a crash mid-write keeps the previous settings.
+
+### Loading a file from another build
+
+`read` parses the file as a JSON object and `Saved::from_fields` lays its keys over the defaults. Usually the whole file parses at once. When it doesn't, the keys are tried one at a time to find the bad ones.
+
+- A key the file lacks, as in a file from an older build, gets its default.
+- A key this build doesn't know, as in a file from a newer build, is ignored.
+- A value that doesn't parse for its field gets that field's default, and the key and the serde error go to the log as a warning. The other settings load as saved. This covers a downgrade: a newer build may save an `audioQuality` this one doesn't have, and only Audio quality goes back to High.
+- A file that isn't a JSON object at all (corrupt, truncated, an array) is logged as an error and every setting takes its default.
+
+Unknown keys and unreadable values are kept beside the settings and written back on every save, so going back to the newer build finds them where it left them. A value is dropped only when the setting is changed in this build, since the new choice replaces it. Keys from a setting that was later removed stay in the file for the same reason. They do no harm, because no build reads them.
+
+### Migrations
+
+There is no version number in the file. When a setting is renamed or its values change meaning, `read` gets a small hand-written block that rewrites the old key or value into the new one before `from_fields` runs. Blocks go oldest first, and old ones stay, since a file can come from any earlier build. The `pauseSearchHistory` block, described under Search history below, is the one to copy. A new setting or a new enum value needs no migration: older files lack the key and get the default, and an older build defaults the value it can't read.
 
 Two commands:
 
@@ -52,7 +67,7 @@ The meters start again with each song and whenever the setting or stable volume 
 
 YouTube's own pause is an account setting the app can't reach, which is why the other two use the cookieless client for every search. The trade-off is that results aren't personalised, and the setting says so. Signed out there is no account to record on: *YouTube* is disabled in the menu and a saved *YouTube* behaves as *On this device*.
 
-Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins.
+Earlier builds had a *Pause search history* switch, saved as `pauseSearchHistory`. `settings.rs` maps it when it reads the file: true becomes *Off* and false *YouTube*, so nobody's search changes on update. A `searchHistory` already in the file wins if this build can read it. One it can't, from a newer build, gives way to a paused switch, so paused history never turns back on.
 
 **Library** lists the music folders with add, remove and rescan, using the same `useLibrary` actions as the sidebar.
 

@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
+import { mergePlaylists } from "./libraryPlaylists.ts";
 import { queryClient } from "./query.ts";
+import { useListRetries } from "./useListRetries.ts";
+import { usePlaylistOverlays } from "./usePlaylistOverlays.ts";
+
+export { LIKED_MUSIC } from "./libraryPlaylists.ts";
 
 export interface LibraryPlaylistsState {
   playlists: BrowseCard[];
@@ -22,10 +27,7 @@ export interface LibraryPlaylistsState {
   deleted: (id: string) => void;
 }
 
-export const LIKED_MUSIC = "LM";
-
-/** How many times the list is fetched again while a new playlist is missing from it. */
-const LIST_RETRIES = 5;
+const NO_PLAYLISTS: BrowseCard[] = [];
 
 /**
  * The signed-in account's YouTube Music playlists, Liked Music first. Keyed
@@ -44,84 +46,34 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     // shows meanwhile.
     staleTime: 0,
   });
-  const listed = useMemo(() => (accountKey === null ? [] : (list.data ?? [])), [accountKey, list.data]);
-  // Kept with the account that created them, so switching accounts drops them.
-  const [pending, setPending] = useState<{ account: string | null; cards: BrowseCard[] }>({
-    account: null,
-    cards: [],
-  });
-  const [gone, setGone] = useState<{ account: string | null; ids: string[] }>({
-    account: null,
-    ids: [],
-  });
+  const listed = accountKey === null ? NO_PLAYLISTS : (list.data ?? NO_PLAYLISTS);
   const refetch = useCallback(
     () => void queryClient.invalidateQueries({ queryKey: ["library-playlists"] }),
     [],
   );
-  // New playlists YouTube's list does not have yet. Once the list has one it
-  // stops being pending, so removing it elsewhere later does not bring the
-  // placeholder back.
-  const missing = useMemo(
-    () =>
-      pending.account === accountKey
-        ? pending.cards.filter((card) => !listed.some((p) => p.id === card.id))
-        : [],
-    [pending, accountKey, listed],
-  );
-  if (pending.account === accountKey && missing.length < pending.cards.length) {
-    setPending({ account: accountKey, cards: missing });
-  }
-  // A new playlist reaches YouTube's library list a while after it exists, so
-  // the list is fetched again, further apart each time, until it has it. Its
-  // entry then swaps the placeholder for YouTube's, with its art.
-  const retries = useRef(0);
-  const waiting = missing.length > 0;
+  const overlays = usePlaylistOverlays(accountKey, listed);
   const loading = list.isFetching;
-  useEffect(() => {
-    if (!waiting || loading || retries.current >= LIST_RETRIES) return;
-    const timer = setTimeout(
-      () => {
-        retries.current += 1;
-        refetch();
-      },
-      (retries.current + 1) * 2000,
-    );
-    return () => clearTimeout(timer);
-  }, [waiting, loading, refetch]);
+  const restartRetries = useListRetries(overlays.missing.length > 0, loading, refetch);
+  const { created: addCreated, deleted: addDeleted } = overlays;
   const created = useCallback(
     (card: BrowseCard) => {
-      retries.current = 0;
-      setPending(({ account, cards }) => ({
-        account: accountKey,
-        cards: [card, ...(account === accountKey ? cards.filter((c) => c.id !== card.id) : [])],
-      }));
+      restartRetries();
+      addCreated(card);
       refetch();
     },
-    [accountKey, refetch],
+    [restartRetries, addCreated, refetch],
   );
   const deleted = useCallback(
     (id: string) => {
-      setGone(({ account, ids }) => ({
-        account: accountKey,
-        ids: [id, ...(account === accountKey ? ids : [])],
-      }));
-      setPending(({ account, cards }) => ({
-        account,
-        cards: cards.filter((card) => card.id !== id),
-      }));
+      addDeleted(id);
       refetch();
     },
-    [accountKey, refetch],
+    [addDeleted, refetch],
   );
-  // New playlists go where YouTube Music puts them: first, after Liked Music.
-  const playlists = useMemo(() => {
-    const hidden = gone.account === accountKey ? gone.ids : [];
-    const kept = listed.filter((p) => !hidden.includes(p.id));
-    if (missing.length === 0) return kept;
-    const liked = kept.filter((p) => p.id === LIKED_MUSIC);
-    const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
-    return [...liked, ...missing, ...rest];
-  }, [missing, gone, accountKey, listed]);
+  const playlists = useMemo(
+    () => mergePlaylists(listed, overlays.missing, overlays.hidden),
+    [listed, overlays.missing, overlays.hidden],
+  );
   const error = accountKey !== null && list.error ? errorMessage(list.error) : null;
   return { playlists, loading: accountKey !== null && loading, error, reload: refetch, created, deleted };
 }

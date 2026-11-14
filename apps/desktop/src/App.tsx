@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AccountMenu } from "./AccountMenu.tsx";
 import { BrowseView, ShelfHeader, type BrowseActions } from "./Browse.tsx";
+import { errorMessage } from "./errors.ts";
 import { FullPlayer } from "./FullPlayer.tsx";
 import { InteractionsProvider, type Interactions } from "./Interactions.tsx";
 import { LibraryView } from "./Library.tsx";
@@ -196,7 +197,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
         if (value === "like" || before === "like") forgetSaved("songs");
       })
       .catch((error: unknown) =>
-        notice.show(error instanceof Error ? error.message : String(error)),
+        notice.show(errorMessage(error)),
       );
   };
   // Null for a local file or while signed out: the rating is the account's.

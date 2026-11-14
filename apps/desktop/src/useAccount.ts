@@ -10,6 +10,7 @@ import {
 import type { AccountSummary } from "@ymusic/youtube";
 
 import { engine, onSessionExpired } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 
 export interface AccountState {
   account: AccountSummary | null;
@@ -169,6 +170,5 @@ export function useAccount(): AccountState {
 const ROTATE_EVERY = 10 * 60 * 1000;
 
 function describe(prefix: string, error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return `${prefix}: ${message}`;
+  return `${prefix}: ${errorMessage(error)}`;
 }

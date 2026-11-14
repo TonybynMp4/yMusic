@@ -3,6 +3,7 @@ import { useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 import type { SearchFilter, SearchResults } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 
 export interface YouTubeSearchState {
@@ -222,6 +223,5 @@ function appended(results: SearchResults, next: SearchResults): SearchResults {
 }
 
 function describe(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return `YouTube search failed: ${message}`;
+  return `YouTube search failed: ${errorMessage(error)}`;
 }

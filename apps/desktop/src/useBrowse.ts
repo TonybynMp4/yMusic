@@ -12,6 +12,7 @@ import {
 import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { capQueries, queryClient } from "./query.ts";
 
 /** A browse page, by what opens it. The app's navigation stack holds these. */
@@ -324,7 +325,7 @@ async function stream(
 
 /** The engine's answer for a continuation it no longer holds (`playlistMore`). */
 function expired(error: unknown): boolean {
-  return message(error).includes("expired");
+  return errorMessage(error).includes("expired");
 }
 
 /**
@@ -341,10 +342,6 @@ export function newPlaylistRoute(id: string, tracks: number): Route {
   return route;
 }
 
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** The parts of a query's state a page's state comes from. */
 type Snapshot = Pick<QueryState<Loaded | undefined>, "data" | "status" | "fetchStatus" | "error">;
 
@@ -352,7 +349,7 @@ function stateOf(route: Route, state: Snapshot): BrowseState {
   const { data } = state;
   if (data === undefined) {
     return state.status === "error" && state.fetchStatus === "idle"
-      ? { status: "error", error: message(state.error) }
+      ? { status: "error", error: errorMessage(state.error) }
       : { status: "loading" };
   }
   const fetching = state.fetchStatus !== "idle";
@@ -437,7 +434,7 @@ export function settledPage(route: Route): Promise<Page> {
       // Deferred: the first answer can come before `observe` returns.
       queueMicrotask(() => stop?.());
       if (data !== undefined) resolve(data.page);
-      else reject(error instanceof Error ? error : new Error(message(error)));
+      else reject(error instanceof Error ? error : new Error(errorMessage(error)));
     });
     if (done) stop();
   });

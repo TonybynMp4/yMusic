@@ -3,6 +3,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { BrowseCard, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 
 /**
@@ -145,7 +146,7 @@ export function useSaved(
       return { ...ready, loadingMore: isFetching && partial === true };
     }
     if (status === "error" && !isFetching) {
-      return { status: "error", error: error instanceof Error ? error.message : String(error) };
+      return { status: "error", error: errorMessage(error) };
     }
     return { status: "loading" };
   }, [enabled, data, status, error, isFetching]);

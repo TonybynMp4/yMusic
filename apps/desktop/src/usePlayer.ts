@@ -19,6 +19,7 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
 import { queryClient } from "./query.ts";
 import { resolveTrack } from "./resolve.ts";
@@ -232,7 +233,7 @@ export function usePlayer(
       logPlaybackFailure(error);
       // Resolution happens before mpv is involved, so its failures have no
       // event stream to arrive on. Put them where the player's errors go.
-      if (!cancelled) reportError(error instanceof Error ? error.message : String(error));
+      if (!cancelled) reportError(errorMessage(error));
     });
 
     return () => {
@@ -315,7 +316,7 @@ export function usePlayer(
         })().catch((error: unknown) => {
           logPlaybackFailure(error);
           if (loadedId.current === failed) {
-            reportError(error instanceof Error ? error.message : String(error));
+            reportError(errorMessage(error));
           }
         });
       }),

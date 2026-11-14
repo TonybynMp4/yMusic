@@ -91,6 +91,7 @@ import {
 } from "./cover.ts";
 import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 import { toggled } from "./Rating.tsx";
 import {
@@ -286,7 +287,7 @@ export function usePlaylistEditing(page: PlaylistPage): PlaylistEditing | null {
     action.then(
       () => x.notify(done),
       (error: unknown) => {
-        x.notify(error instanceof Error ? error.message : String(error));
+        x.notify(errorMessage(error));
         refreshPage(route);
       },
     );
@@ -461,7 +462,7 @@ function Items({ subject }: { subject: Subject }) {
 function reporting(x: Context, action: () => Promise<void>) {
   return () => {
     action().catch((error: unknown) =>
-      x.notify(error instanceof Error ? error.message : String(error)),
+      x.notify(errorMessage(error)),
     );
   };
 }
@@ -576,7 +577,7 @@ function CollectionItems({ route }: { route: Route }) {
       try {
         await action(await settledPage(route));
       } catch (error) {
-        x.notify(error instanceof Error ? error.message : String(error));
+        x.notify(errorMessage(error));
       }
     })();
   };
@@ -758,7 +759,7 @@ function PlaylistTargets({
     load().then(
       (ids) => live && setSongs(ids.length > 0 ? { ids } : { error: "There are no songs to add" }),
       (error: unknown) =>
-        live && setSongs({ error: error instanceof Error ? error.message : String(error) }),
+        live && setSongs({ error: errorMessage(error) }),
     );
     return () => {
       live = false;
@@ -775,7 +776,7 @@ function PlaylistTargets({
     const { error } = list;
     return (
       <DropdownMenuItem disabled>
-        {error instanceof Error ? error.message : String(error)}
+        {errorMessage(error)}
       </DropdownMenuItem>
     );
   }
@@ -805,7 +806,7 @@ function PlaylistTargets({
             x.notify(`Saved to ${target.title}`);
           },
           (error: unknown) =>
-            x.notify(error instanceof Error ? error.message : String(error)),
+            x.notify(errorMessage(error)),
         );
       }}
     >
@@ -1128,7 +1129,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       const image = await openImage(file);
       setCropping({ picked: image, crop: centredCrop(image.width, image.height) });
     } catch (e) {
-      setImageError(e instanceof Error ? e.message : String(e));
+      setImageError(errorMessage(e));
     }
   };
 
@@ -1139,7 +1140,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       const image = await openImage(cover.source.file);
       setCropping({ picked: image, crop: cover.source.crop, initial: cover.source.crop });
     } catch (e) {
-      setImageError(e instanceof Error ? e.message : String(e));
+      setImageError(errorMessage(e));
     }
   };
 
@@ -1152,7 +1153,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     try {
       setCover({ ...(await cropCover(from, area)), source: { file: from.file, crop: area } });
     } catch (e) {
-      setImageError(e instanceof Error ? e.message : String(e));
+      setImageError(errorMessage(e));
     }
     drawing.current = false;
     setCropping(null);

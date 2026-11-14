@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { BrowseCard } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
+import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 
 export interface LibraryPlaylistsState {
@@ -121,10 +122,6 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     const rest = kept.filter((p) => p.id !== LIKED_MUSIC);
     return [...liked, ...missing, ...rest];
   }, [missing, gone, accountKey, listed]);
-  const error = accountKey !== null && list.error ? message(list.error) : null;
+  const error = accountKey !== null && list.error ? errorMessage(list.error) : null;
   return { playlists, loading: accountKey !== null && loading, error, reload: refetch, created, deleted };
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

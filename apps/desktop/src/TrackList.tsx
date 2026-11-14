@@ -51,8 +51,8 @@ export function TrackList(props: Props) {
   const { tracks, currentId, playing, hideAlbum } = props;
   // Rows get handlers that never change and call the latest props, so a
   // memoized row re-renders only when its own song or state does.
-  const onPlay = useStableHandler((id: TrackId) => props.onPlay(id));
-  const onToggle = useStableHandler(() => props.onToggle());
+  const onPlay = useStableHandler(props.onPlay);
+  const onToggle = useStableHandler(props.onToggle);
   const open = useStableHandler((route: Route) => props.onOpen?.(route));
   const onOpen = props.onOpen === undefined ? undefined : open;
   const move = useStableHandler((from: number, to: number) => props.editing?.onMove(from, to));

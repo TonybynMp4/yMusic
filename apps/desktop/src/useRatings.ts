@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { VideoId } from "@ymusic/core";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -61,9 +61,11 @@ class RatingStore {
   /** Counts ratings given and settled, to order them against answers. */
   #clock = 0;
   #ratingOf: (videoId: VideoId) => Rating | null;
+  /**
+   * React listens for as long as the store is the one in use, so a store with
+   * no listener has been replaced by another account's and drops late answers.
+   */
   readonly #listeners = new Set<() => void>();
-  /** Cleared once another account's store replaces it, so late answers are dropped. */
-  #live = true;
 
   constructor(account: string | null) {
     this.account = account;
@@ -76,14 +78,6 @@ class RatingStore {
     const ratings = this.#ratings;
     return (videoId) => (ratings === null ? null : (ratings.get(videoId) ?? "none"));
   }
-
-  /** Marks the store as the one in use until the returned cleanup runs. */
-  attach = (): (() => void) => {
-    this.#live = true;
-    return () => {
-      this.#live = false;
-    };
-  };
 
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
@@ -104,7 +98,7 @@ class RatingStore {
   learn = (videoId: VideoId, rating: Rating, asked?: number): void => {
     const owner = this.account;
     const ratings = this.#ratings;
-    if (owner === null || ratings === null || !this.#live) return;
+    if (owner === null || ratings === null || this.#listeners.size === 0) return;
     const mine = this.#given.get(videoId);
     if (asked !== undefined && mine && (mine.pending > 0 || mine.settled > asked)) return;
     const before = ratings.get(videoId) ?? "none";
@@ -150,7 +144,6 @@ class RatingStore {
 export function useRatings(account: string | null) {
   const [store, setStore] = useState(() => new RatingStore(account));
   if (store.account !== account) setStore(new RatingStore(account));
-  useEffect(() => store.attach(), [store]);
   const ratingOf = useSyncExternalStore(store.subscribe, store.getRatingOf);
   return { ratingOf, learn: store.learn, now: store.now, rate: store.rate };
 }

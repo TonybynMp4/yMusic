@@ -1,5 +1,5 @@
 import { IconZoomIn, IconZoomOut } from "@tabler/icons-react";
-import { useEffect, useEffectEvent, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Cropper, { type Point, type Size } from "react-easy-crop";
 
 import { Slider } from "@/components/ui/slider";
@@ -28,18 +28,14 @@ export function CoverCropper({
   const { url, width, height } = picked;
   // Zoomed in no further than leaves the square at the smallest YouTube takes.
   const maxZoom = Math.min(width, height) / MIN_SIDE;
-  const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // One state for both, as a move is clamped by the zoom: an update reads the
+  // latest of each, so events that come between renders add up.
+  const [{ position, zoom }, setView] = useState<View>(START);
   // Whether the square is on screen yet. It is what takes focus.
   const [drawn, setDrawn] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   /** The image and the square as last laid out, in screen pixels. */
   const sizes = useRef<{ media: Size | null; square: Size | null }>({ media: null, square: null });
-  /** Moves the image, if it is laid out yet. From the latest position, so events between renders add up. */
-  const moveBy = (dx: number, dy: number) =>
-    setPosition((from) => moved(from, zoom, sizes.current, dx, dy) ?? from);
-  // The wheel listener is added once, and reads the zoom through this.
-  const onWheel = useEffectEvent(moveBy);
 
   useEffect(() => {
     const element = box.current;
@@ -54,7 +50,8 @@ export function CoverCropper({
       const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
       // The image goes the other way to the square it replaces, whose sideways
       // direction was flipped to follow the fingers.
-      onWheel(event.deltaX * unit, -event.deltaY * unit);
+      const [dx, dy] = [event.deltaX * unit, -event.deltaY * unit];
+      setView((from) => movedBy(from, sizes.current, dx, dy));
     };
     // On Linux a pinch comes from the app's shell instead, as the scale since
     // it began (platform/window.rs).
@@ -65,7 +62,7 @@ export function CoverCropper({
       if (spread === 1) begun = 1;
       const ratio = spread / begun;
       begun = spread;
-      setZoom((from) => Math.min(Math.max(from * ratio, 1), maxZoom));
+      setView((from) => ({ ...from, zoom: Math.min(Math.max(from.zoom * ratio, 1), maxZoom) }));
     };
     element.addEventListener("wheel", wheel, { passive: false });
     window.addEventListener("touchpadpinch", pinch);
@@ -79,23 +76,23 @@ export function CoverCropper({
     if (drawn) box.current?.querySelector<HTMLElement>(".reactEasyCrop_CropArea")?.focus();
   }, [drawn]);
 
-  const zoomTo = (next: number) => setZoom(Math.min(Math.max(next, 1), maxZoom));
+  const setPosition = (next: Point) => setView((from) => ({ ...from, position: next }));
+  const zoomTo = (next: number) =>
+    setView((from) => ({ ...from, zoom: Math.min(Math.max(next, 1), maxZoom) }));
   // In place of the cropper's own, which moves the image the way the arrow
   // points and so the square the other way.
   const keys = (event: KeyboardEvent) => {
     const step = event.shiftKey ? 2 : 10;
     const arrow = ARROWS[event.key];
     if (arrow) {
-      moveBy(-arrow[0] * step, -arrow[1] * step);
+      setView((from) => movedBy(from, sizes.current, -arrow[0] * step, -arrow[1] * step));
     } else if (event.key === "Enter") {
       // Held down, it would finish the crop again on every repeat.
       if (!event.repeat) onDone();
     } else if (event.key === "+" || event.key === "=") zoomTo(zoom * 1.1);
     else if (event.key === "-") zoomTo(zoom / 1.1);
-    else if (event.key === "0") {
-      setZoom(1);
-      setPosition({ x: 0, y: 0 });
-    } else return;
+    else if (event.key === "0") setView(START);
+    else return;
     event.preventDefault();
   };
 
@@ -113,7 +110,7 @@ export function CoverCropper({
           minZoom={1}
           maxZoom={maxZoom}
           onCropChange={setPosition}
-          onZoomChange={setZoom}
+          onZoomChange={zoomTo}
           onWheelRequest={(event) => event.ctrlKey}
           // On every layout, not only on load: the dialog widens once the
           // cropper is in it, and the image is shown larger after.
@@ -168,22 +165,32 @@ const ARROWS: Record<string, [number, number]> = {
   ArrowDown: [0, 1],
 };
 
+/** Where the image sits under the square, and how far it is zoomed in. */
+interface View {
+  position: Point;
+  zoom: number;
+}
+
+const START: View = { position: { x: 0, y: 0 }, zoom: 1 };
+
 /**
- * The image's position moved by `dx`, `dy`, kept covering the square, or
- * nothing before the image has loaded.
+ * The view with the image moved by `dx`, `dy`, kept covering the square.
+ * Unchanged before the image has loaded.
  */
-function moved(
-  position: Point,
-  zoom: number,
+function movedBy(
+  view: View,
   { media, square }: { media: Size | null; square: Size | null },
   dx: number,
   dy: number,
-): Point | undefined {
-  if (!media || !square) return undefined;
-  const reach = (side: number, inner: number) => Math.max(0, (side * zoom - inner) / 2);
+): View {
+  if (!media || !square) return view;
+  const reach = (side: number, inner: number) => Math.max(0, (side * view.zoom - inner) / 2);
   return {
-    x: clamp(position.x + dx, reach(media.width, square.width)),
-    y: clamp(position.y + dy, reach(media.height, square.height)),
+    ...view,
+    position: {
+      x: clamp(view.position.x + dx, reach(media.width, square.width)),
+      y: clamp(view.position.y + dy, reach(media.height, square.height)),
+    },
   };
 }
 

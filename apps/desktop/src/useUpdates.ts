@@ -23,8 +23,8 @@ export function useUpdates(automatic: boolean): UpdatesState {
   const [status, setStatus] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
-  /** Asks for the latest release, with `checking` already set. */
-  const ask = useCallback(
+  /** Fetches the latest release, with `checking` already set. */
+  const fetchLatest = useCallback(
     () =>
       updateCheck()
         .then(
@@ -44,12 +44,12 @@ export function useUpdates(automatic: boolean): UpdatesState {
   const check = useCallback(async () => {
     if (!isTauri) return;
     setChecking(true);
-    await ask();
-  }, [ask]);
+    await fetchLatest();
+  }, [fetchLatest]);
 
   useEffect(() => {
-    if (startup) void ask();
-  }, [startup, ask]);
+    if (startup) void fetchLatest();
+  }, [startup, fetchLatest]);
 
   return { update, checking, status, dismissed, check, dismiss: () => setDismissed(true) };
 }

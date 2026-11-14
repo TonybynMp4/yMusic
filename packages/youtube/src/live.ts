@@ -24,7 +24,11 @@ export async function unlessBotChecked<T>(context: TestContext, work: Promise<T>
   try {
     return await work;
   } catch (error) {
-    if (error instanceof Error && error.name === NotPlayableError.name && /not a bot/i.test(error.message)) {
+    if (
+      error instanceof Error &&
+      error.name === NotPlayableError.name &&
+      /not a bot/i.test(error.message)
+    ) {
       context.skip(`YouTube bot-checked this machine: ${error.message}`);
     }
     throw error;

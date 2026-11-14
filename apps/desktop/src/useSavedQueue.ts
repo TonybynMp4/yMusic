@@ -28,7 +28,16 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
       const saved =
         cursor === null
           ? null
-          : { items, order, cursor, repeat, shuffle, source: savedSource(), from: playingFrom, shared };
+          : {
+              items,
+              order,
+              cursor,
+              repeat,
+              shuffle,
+              source: savedSource(),
+              from: playingFrom,
+              shared,
+            };
       void queueSave(saved).catch(logSaveFailure);
     }, QUEUE_DEBOUNCE_MS);
     return () => clearTimeout(timer);

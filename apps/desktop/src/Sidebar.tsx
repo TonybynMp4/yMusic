@@ -70,24 +70,22 @@ export function Sidebar(props: Props) {
       icon: <IconDeviceDesktop size={18} stroke={1.75} />,
     },
     ...props.playlists.filter((p) => p.id !== LIKED_MUSIC).map((p) => playlistEntry(p)),
-    ...props.folders.map(
-      (path): Entry => ({
-        view: { kind: "local", id: path },
-        title: folderName(path),
-        subtitle: "Folder",
-        tooltip: path,
-        icon: <IconFolder size={18} stroke={1.75} />,
-        art: props.covers[path] && (
-          <Art
-            thumbnails={props.covers[path]}
-            width={40}
-            className="size-10 rounded"
-            fallback={<IconFolder size={18} stroke={1.75} />}
-          />
-        ),
-        onRemove: () => props.onRemoveFolder(path),
-      }),
-    ),
+    ...props.folders.map((path): Entry => ({
+      view: { kind: "local", id: path },
+      title: folderName(path),
+      subtitle: "Folder",
+      tooltip: path,
+      icon: <IconFolder size={18} stroke={1.75} />,
+      art: props.covers[path] && (
+        <Art
+          thumbnails={props.covers[path]}
+          width={40}
+          className="size-10 rounded"
+          fallback={<IconFolder size={18} stroke={1.75} />}
+        />
+      ),
+      onRemove: () => props.onRemoveFolder(path),
+    })),
   ];
 
   return (
@@ -143,11 +141,7 @@ export function Sidebar(props: Props) {
               </IconButton>
             )}
             <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>
-              {props.loading ? (
-                <Spinner size={15} />
-              ) : (
-                <IconRefresh size={15} />
-              )}
+              {props.loading ? <Spinner size={15} /> : <IconRefresh size={15} />}
             </IconButton>
           </div>
         </div>

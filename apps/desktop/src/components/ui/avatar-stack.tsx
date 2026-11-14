@@ -1,6 +1,6 @@
-import { Children, type ReactNode } from "react"
+import { Children, type ReactNode } from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 /**
  * Overlapping round pictures, from Kibo UI's avatar stack: the collaborators
@@ -13,9 +13,9 @@ function AvatarStack({
   size = 24,
   className,
 }: {
-  children: ReactNode
-  size?: number
-  className?: string
+  children: ReactNode;
+  size?: number;
+  className?: string;
 }) {
   return (
     <div data-slot="avatar-stack" className={cn("flex items-center -space-x-1", className)}>
@@ -35,7 +35,7 @@ function AvatarStack({
         </div>
       ))}
     </div>
-  )
+  );
 }
 
-export { AvatarStack }
+export { AvatarStack };

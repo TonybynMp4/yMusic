@@ -30,11 +30,20 @@ import { Spinner } from "@/components/ui/spinner";
 import type { AccountState } from "./useAccount.ts";
 
 /** The avatar in the top-right corner, where YouTube Music keeps it. */
-export function AccountMenu({ state, onSettings }: { state: AccountState; onSettings: () => void }) {
+export function AccountMenu({
+  state,
+  onSettings,
+}: {
+  state: AccountState;
+  onSettings: () => void;
+}) {
   if (!isTauri) return null;
   if (state.busy) {
     return (
-      <span className="grid size-8 place-items-center text-muted-foreground" aria-label="Signing in">
+      <span
+        className="grid size-8 place-items-center text-muted-foreground"
+        aria-label="Signing in"
+      >
         <Spinner size={16} />
       </span>
     );
@@ -112,9 +121,7 @@ function SignInMenu({ state, onSettings }: { state: AccountState; onSettings: ()
   };
   return (
     <DropdownMenu onOpenChange={load}>
-      <DropdownMenuTrigger
-        render={<Button variant="outline" className="h-9 rounded-full" />}
-      >
+      <DropdownMenuTrigger render={<Button variant="outline" className="h-9 rounded-full" />}>
         <IconLogin2 size={16} stroke={1.75} />
         Sign in
       </DropdownMenuTrigger>

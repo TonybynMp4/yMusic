@@ -15,7 +15,10 @@ import {
 import { toTrack } from "./parse.ts";
 
 /** youtubei.js `Text`: a string with runs. Enough of one for the parsers. */
-function text(value: string, runs?: { text: string; endpoint?: { payload: { browseId: string } } }[]) {
+function text(
+  value: string,
+  runs?: { text: string; endpoint?: { payload: { browseId: string } } }[],
+) {
   return { toString: () => value, runs: runs ?? [{ text: value }] };
 }
 
@@ -147,7 +150,10 @@ describe("artistFrom", () => {
   it("crops a square avatar out of the banner", () => {
     const banner = "https://yt3.googleusercontent.com/abc=w1440-h600-p-l90-rj";
     const artist = artistFrom(BOC, {
-      header: { title: text("Thornhill"), thumbnail: { contents: [{ url: banner, width: 1440, height: 600 }] } },
+      header: {
+        title: text("Thornhill"),
+        thumbnail: { contents: [{ url: banner, width: 1440, height: 600 }] },
+      },
     });
     expect(artist.avatar[0]).toEqual({
       url: "https://yt3.googleusercontent.com/abc=w544-h544-p-l90-rj",
@@ -159,7 +165,9 @@ describe("artistFrom", () => {
 
 describe("toCard", () => {
   it("drops a card with no title or of a kind the app cannot open", () => {
-    expect(toCard({ item_type: "album", endpoint: { payload: { browseId: "MPREb_1" } } })).toBeNull();
+    expect(
+      toCard({ item_type: "album", endpoint: { payload: { browseId: "MPREb_1" } } }),
+    ).toBeNull();
     expect(toCard({ item_type: "episode", id: "x", title: "x" })).toBeNull();
   });
 });
@@ -168,7 +176,11 @@ describe("libraryFrom", () => {
   it("keeps the playlists, Liked Music included, and drops the New playlist tile", () => {
     const cards = libraryFrom([
       { item_type: "playlist", title: text("New playlist") },
-      { item_type: "playlist", title: text("Liked Music"), endpoint: { payload: { browseId: "VLLM" } } },
+      {
+        item_type: "playlist",
+        title: text("Liked Music"),
+        endpoint: { payload: { browseId: "VLLM" } },
+      },
       { item_type: "playlist", title: text("Mix"), endpoint: { payload: { browseId: "VLPLx" } } },
       { item_type: "album", title: text("Album"), endpoint: { payload: { browseId: "MPREb_1" } } },
     ]);
@@ -249,7 +261,9 @@ describe("playlistFrom", () => {
     title: text("Road trip"),
     subtitle: text("Playlist • 2024"),
     second_subtitle: text("2 tracks • 7 minutes"),
-    strapline_text_one: text("Tony", [{ text: "Tony", endpoint: { payload: { browseId: "UCme" } } }]),
+    strapline_text_one: text("Tony", [
+      { text: "Tony", endpoint: { payload: { browseId: "UCme" } } },
+    ]),
     description: { description: text("Songs for the car") },
   };
   const removable = (setVideoId: string, videoId: string) => ({
@@ -331,7 +345,9 @@ describe("toTrack album fallback", () => {
         { title: { runs: [{ text: "The Word Becomes Flesh" }] } },
         { title: { runs: [{ text: "Boards of Canada", endpoint: boc }] } },
         { title: { runs: [{ text: "1.1M plays" }] } },
-        { title: { runs: [{ text: "Inferno", endpoint: { payload: { browseId: "MPREb_inf" } } }] } },
+        {
+          title: { runs: [{ text: "Inferno", endpoint: { payload: { browseId: "MPREb_inf" } } }] },
+        },
       ],
     });
     expect(track).toMatchObject({ album: "Inferno", albumId: "MPREb_inf" });

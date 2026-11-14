@@ -40,7 +40,17 @@ const prerelease = tag.includes("-");
 const previous = (() => {
   try {
     const exclude = prerelease ? [] : ["--exclude", "*-*"];
-    return git("describe", "--tags", "--abbrev=0", "--match", "v*", "--exclude", tag, ...exclude, head);
+    return git(
+      "describe",
+      "--tags",
+      "--abbrev=0",
+      "--match",
+      "v*",
+      "--exclude",
+      tag,
+      ...exclude,
+      head,
+    );
   } catch {
     return null;
   }
@@ -48,7 +58,13 @@ const previous = (() => {
 
 const DEPENDENCIES = /^build\(deps(-dev)?\)/;
 
-const commits = git("log", "--no-merges", "--reverse", "--format=%H%x1f%s%x1f%an", previous ? `${previous}..${head}` : head)
+const commits = git(
+  "log",
+  "--no-merges",
+  "--reverse",
+  "--format=%H%x1f%s%x1f%an",
+  previous ? `${previous}..${head}` : head,
+)
   .split("\n")
   .filter(Boolean)
   .filter((line) => !line.split("\x1f")[1].startsWith("chore: release v"))
@@ -96,7 +112,11 @@ if (token && repository) {
 
 const server = process.env.GITHUB_SERVER_URL ?? "https://github.com";
 const link = (c) =>
-  c.pull ? `#${c.pull}` : repository ? `[${c.sha.slice(0, 7)}](${server}/${repository}/commit/${c.sha})` : c.sha.slice(0, 7);
+  c.pull
+    ? `#${c.pull}`
+    : repository
+      ? `[${c.sha.slice(0, 7)}](${server}/${repository}/commit/${c.sha})`
+      : c.sha.slice(0, 7);
 const people = (authors) => {
   const unique = [...new Set(authors)];
   return unique.length > 1 ? `${unique.slice(0, -1).join(", ")} and ${unique.at(-1)}` : unique[0];
@@ -114,7 +134,9 @@ for (const [type, heading] of SECTIONS) {
   }
   if (bumps.length) {
     const title = bumps.length > 1 ? `${bumps.length} dependency updates` : "1 dependency update";
-    lines.push(`- **${title}** by ${people(bumps.flatMap((c) => c.authors))} in ${bumps.map(link).join(", ")}`);
+    lines.push(
+      `- **${title}** by ${people(bumps.flatMap((c) => c.authors))} in ${bumps.map(link).join(", ")}`,
+    );
   }
 }
 if (previous && repository) {

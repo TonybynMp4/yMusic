@@ -42,10 +42,7 @@ const createTicker = (step: () => boolean, intervalMs: number) => {
   return { stop, wake };
 };
 
-export interface DbReadoutProps extends Omit<
-  ComponentProps<"span">,
-  "children"
-> {
+export interface DbReadoutProps extends Omit<ComponentProps<"span">, "children"> {
   /** A level in dB, for declarative use. */
   value?: number;
   /** A meter source; the readout updates itself without re-rendering React. */
@@ -74,7 +71,7 @@ export interface DbReadoutProps extends Omit<
 export const readChannel = (
   frame: MeterFrame,
   measure: "peak" | "rms",
-  channel: number | "max"
+  channel: number | "max",
 ) => {
   const read = (index: number) => {
     const level = frame.channels[index];
@@ -114,8 +111,7 @@ export const DbReadout = ({
   const peakAtRef = useRef(0);
   const shownRef = useRef<string | null>(null);
 
-  const render = (db: number) =>
-    format ? format(db) : formatDb(db, { decimals, floorDb, unit });
+  const render = (db: number) => (format ? format(db) : formatDb(db, { decimals, floorDb, unit }));
 
   const initialDb = value ?? SILENCE_DB;
   // Size for the widest text the readout can show, so it never changes width.
@@ -124,12 +120,9 @@ export const DbReadout = ({
     ? floorDb + 10 ** -decimals
     : -WIDEST_MAGNITUDE_DB;
   const widest = Math.max(
-    ...[
-      SILENCE_DB,
-      justAboveFloor,
-      -WIDEST_MAGNITUDE_DB,
-      WIDEST_MAGNITUDE_DB,
-    ].map((db) => render(db).length)
+    ...[SILENCE_DB, justAboveFloor, -WIDEST_MAGNITUDE_DB, WIDEST_MAGNITUDE_DB].map(
+      (db) => render(db).length,
+    ),
   );
 
   // Frames since the last tick, and the wake for a ticker that went quiet.
@@ -201,7 +194,7 @@ export const DbReadout = ({
       key={source ? "source" : "value"}
       className={cn(
         "inline-block min-w-(--db-readout-width) text-end font-mono tabular-nums",
-        className
+        className,
       )}
       data-silent={initialDb <= floorDb ? "" : undefined}
       data-slot="db-readout"

@@ -1,11 +1,11 @@
-import { IconX } from "@tabler/icons-react"
-import { createContext, use, type ComponentProps, type HTMLAttributes } from "react"
+import { IconX } from "@tabler/icons-react";
+import { createContext, use, type ComponentProps, type HTMLAttributes } from "react";
 
-import { IconButton } from "@/components/IconButton"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { IconButton } from "@/components/IconButton";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-const BannerContext = createContext<{ close: () => void }>({ close: () => {} })
+const BannerContext = createContext<{ close: () => void }>({ close: () => {} });
 
 /**
  * A strip with a message, an action and a close button, from Kibo UI's
@@ -29,24 +29,24 @@ function Banner({
         {...props}
       />
     </BannerContext>
-  )
+  );
 }
 
 function BannerTitle({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p data-slot="banner-title" className={cn("flex-1", className)} {...props} />
+  return <p data-slot="banner-title" className={cn("flex-1", className)} {...props} />;
 }
 
 function BannerAction({ size = "sm", ...props }: ComponentProps<typeof Button>) {
-  return <Button data-slot="banner-action" size={size} {...props} />
+  return <Button data-slot="banner-action" size={size} {...props} />;
 }
 
 function BannerClose({ label = "Dismiss" }: { label?: string }) {
-  const { close } = use(BannerContext)
+  const { close } = use(BannerContext);
   return (
     <IconButton label={label} onClick={close}>
       <IconX size={16} />
     </IconButton>
-  )
+  );
 }
 
-export { Banner, BannerAction, BannerClose, BannerTitle }
+export { Banner, BannerAction, BannerClose, BannerTitle };

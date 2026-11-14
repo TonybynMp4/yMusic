@@ -196,9 +196,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
         // A liked song is a saved one, so the library's Songs chip changes too.
         if (value === "like" || before === "like") forgetSaved("songs");
       })
-      .catch((error: unknown) =>
-        notice.show(errorMessage(error)),
-      );
+      .catch((error: unknown) => notice.show(errorMessage(error)));
   };
   // Null for a local file or while signed out: the rating is the account's.
   const playingId = player.track === null ? null : videoIdFromTrackId(player.track.id);
@@ -353,10 +351,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                   />
                 )}
               </div>
-              <AccountMenu
-                state={account}
-                onSettings={() => go({ kind: "settings", id: "" })}
-              />
+              <AccountMenu state={account} onSettings={() => go({ kind: "settings", id: "" })} />
             </div>
 
             <div className="relative flex min-h-0 flex-1">
@@ -537,10 +532,7 @@ function RecentSearches(props: {
  * library's "Recently played" sort of local files. YouTube orders the
  * account's lists itself.
  */
-function useRecordPlays(
-  player: ReturnType<typeof usePlayer>,
-  library: LocalLibrary,
-) {
+function useRecordPlays(player: ReturnType<typeof usePlayer>, library: LocalLibrary) {
   const playing = player.playback.status === "playing";
   const track = player.track;
   const recorded = useRef<TrackId | null>(null);

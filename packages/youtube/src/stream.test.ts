@@ -139,7 +139,12 @@ describe("bestAudioFormat with Premium formats", () => {
   });
 
   it("falls back to 141, then to the highest bitrate", () => {
-    expect(bestAudioFormat(formats.filter((f) => f.itag !== 774), "high")?.itag).toBe(141);
+    expect(
+      bestAudioFormat(
+        formats.filter((f) => f.itag !== 774),
+        "high",
+      )?.itag,
+    ).toBe(141);
     expect(bestAudioFormat(formats.filter((f) => f.itag !== 774 && f.itag !== 141))?.itag).toBe(
       251,
     );

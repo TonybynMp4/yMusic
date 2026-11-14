@@ -68,7 +68,10 @@ const botguard = (() => {
       mintCallback = null;
       return withTimeout(
         new Promise((resolve) =>
-          snapshot((response) => resolve(response), [undefined, undefined, signalOutput, undefined]),
+          snapshot(
+            (response) => resolve(response),
+            [undefined, undefined, signalOutput, undefined],
+          ),
         ),
         "snapshot",
       );

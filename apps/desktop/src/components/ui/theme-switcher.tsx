@@ -1,16 +1,16 @@
-import { Toggle } from "@base-ui/react/toggle"
-import { ToggleGroup } from "@base-ui/react/toggle-group"
-import { IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react"
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
-type Theme = "system" | "light" | "dark"
+type Theme = "system" | "light" | "dark";
 
 const themes = [
   { value: "system", icon: IconDeviceDesktop, label: "Follow the system" },
   { value: "light", icon: IconSun, label: "Light" },
   { value: "dark", icon: IconMoon, label: "Dark" },
-] as const
+] as const;
 
 /**
  * Kibo UI's three-way theme switch on Base UI's toggle group, for the
@@ -22,9 +22,9 @@ function ThemeSwitcher({
   onValueChange,
   className,
 }: {
-  value: Theme
-  onValueChange: (theme: Theme) => void
-  className?: string
+  value: Theme;
+  onValueChange: (theme: Theme) => void;
+  className?: string;
 }) {
   return (
     <ToggleGroup
@@ -33,8 +33,8 @@ function ThemeSwitcher({
       value={[value]}
       onValueChange={(next) => {
         // A press on the current theme would empty the group; keep it instead.
-        const [theme] = next
-        if (theme) onValueChange(theme)
+        const [theme] = next;
+        if (theme) onValueChange(theme);
       }}
       className={cn("inline-flex h-8 rounded-full bg-background p-1 ring-1 ring-border", className)}
     >
@@ -49,7 +49,7 @@ function ThemeSwitcher({
         </Toggle>
       ))}
     </ToggleGroup>
-  )
+  );
 }
 
-export { ThemeSwitcher, type Theme }
+export { ThemeSwitcher, type Theme };

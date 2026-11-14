@@ -186,11 +186,8 @@ export function useYouTubeSearch(
   return {
     results,
     loading:
-      asked !== trimmed ||
-      search.isPlaceholderData ||
-      (search.isFetching && !isFetchingNextPage),
-    error:
-      search.isError && search.data === undefined ? describe(search.error) : null,
+      asked !== trimmed || search.isPlaceholderData || (search.isFetching && !isFetchingNextPage),
+    error: search.isError && search.data === undefined ? describe(search.error) : null,
     filter,
     setFilter,
     filters,

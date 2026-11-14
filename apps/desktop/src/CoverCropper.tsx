@@ -35,7 +35,12 @@ export function CoverCropper({
   const [drawn, setDrawn] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   // The listeners are added once, so they read the latest of these through a ref.
-  const latest = useRef({ position, zoom, media: null as Size | null, square: null as Size | null });
+  const latest = useRef({
+    position,
+    zoom,
+    media: null as Size | null,
+    square: null as Size | null,
+  });
   latest.current.position = position;
   latest.current.zoom = zoom;
 

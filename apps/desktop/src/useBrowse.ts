@@ -17,7 +17,9 @@ import { capQueries, queryClient } from "./query.ts";
 
 /** A browse page, by what opens it. The app's navigation stack holds these. */
 export type Route =
-  { kind: "album"; id: string } | { kind: "artist"; id: string } | { kind: "playlist"; id: string };
+  | { kind: "album"; id: string }
+  | { kind: "artist"; id: string }
+  | { kind: "playlist"; id: string };
 
 /**
  * Anything the main area can show besides search: a YouTube Music page, local
@@ -177,7 +179,8 @@ function claim(key: QueryKey): () => boolean {
   const query = cache.get(hashKey(key));
   const run = {};
   if (query) runs.set(query, run);
-  return () => query !== undefined && cache.get(query.queryHash) === query && runs.get(query) === run;
+  return () =>
+    query !== undefined && cache.get(query.queryHash) === query && runs.get(query) === run;
 }
 
 /**
@@ -193,14 +196,19 @@ async function resume(
   const stopped: Loaded = { page: { kind: "playlist", page: shown }, more };
   try {
     const next = await engine.playlistMore(more);
-    return await stream(id, live, {
-      page: {
-        ...shown,
-        tracks: [...shown.tracks, ...next.tracks],
-        itemIds: [...shown.itemIds, ...next.itemIds],
+    return await stream(
+      id,
+      live,
+      {
+        page: {
+          ...shown,
+          tracks: [...shown.tracks, ...next.tracks],
+          itemIds: [...shown.itemIds, ...next.itemIds],
+        },
+        more: next.more,
       },
-      more: next.more,
-    }, null);
+      null,
+    );
   } catch (error) {
     if (!expired(error)) {
       console.error("could not load the rest of the playlist", error);
@@ -232,7 +240,8 @@ async function firstPage(id: string): Promise<FirstPage> {
   for (let attempt = 1; ; attempt++) {
     const first = await playlistStart(id);
     // A first page with more to come is full, so the songs are all there.
-    const served = first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
+    const served =
+      first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
     if (served || attempt === NEW_PLAYLIST_TRIES) {
       created.delete(id);
       return first;
@@ -280,7 +289,10 @@ async function stream(
     const current = queryClient.getQueryData<Loaded>(key);
     const base = current?.page.kind === "playlist" ? current.page.page : header;
     return {
-      page: { kind: "playlist", page: { ...base, tracks: [...rows.tracks], itemIds: [...rows.itemIds] } },
+      page: {
+        kind: "playlist",
+        page: { ...base, tracks: [...rows.tracks], itemIds: [...rows.itemIds] },
+      },
       more,
     };
   };
@@ -302,7 +314,7 @@ async function stream(
   if (first.more !== null && caughtUp()) publish(first.more);
   else last = Date.now();
 
-  for (let more = first.more; more !== null; ) {
+  for (let more = first.more; more !== null;) {
     if (!live()) break;
     const handle: string = more;
     try {
@@ -376,7 +388,12 @@ export function browseState(route: Route): BrowseState {
   return stateOf(route, queryClient.getQueryState<Loaded>(key) ?? pending);
 }
 
-const pending: Snapshot = { data: undefined, status: "pending", fetchStatus: "fetching", error: null };
+const pending: Snapshot = {
+  data: undefined,
+  status: "pending",
+  fetchStatus: "fetching",
+  error: null,
+};
 
 export function useBrowse(route: Route): BrowseState {
   touch(route);
@@ -389,7 +406,10 @@ export function useBrowse(route: Route): BrowseState {
 }
 
 /** Watches a page from outside React, fetching it if it needs to be. */
-function observe(route: Route, listener: (result: QueryObserverResult<Loaded>) => void): () => void {
+function observe(
+  route: Route,
+  listener: (result: QueryObserverResult<Loaded>) => void,
+): () => void {
   touch(route);
   const observer = new QueryObserver(queryClient, browseOptions(route));
   const stop = observer.subscribe(listener);
@@ -445,8 +465,9 @@ export function settledPage(route: Route): Promise<Page> {
  * (saving it to the library, say), so it shows without a refetch.
  */
 export function patchPage(route: Route, patch: (page: Page) => Page): void {
-  queryClient.setQueryData<Loaded>(keyOf(route), (loaded) =>
-    loaded && { ...loaded, page: patch(loaded.page) },
+  queryClient.setQueryData<Loaded>(
+    keyOf(route),
+    (loaded) => loaded && { ...loaded, page: patch(loaded.page) },
   );
 }
 

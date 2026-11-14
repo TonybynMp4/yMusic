@@ -30,7 +30,10 @@ export interface PlayerScript {
  * youtubei.js version asking: a cached script from another version may not
  * match how this one runs it.
  */
-export type PlayerScriptSource = (playerId: string, libraryVersion: string) => Promise<PlayerScript>;
+export type PlayerScriptSource = (
+  playerId: string,
+  libraryVersion: string,
+) => Promise<PlayerScript>;
 
 /** The id of the player script YouTube currently serves, from the iframe API. */
 export async function currentPlayerId(fetch: FetchLike): Promise<string> {

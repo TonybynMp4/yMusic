@@ -461,9 +461,7 @@ function Items({ subject }: { subject: Subject }) {
 /** Reports a failed action as a notice rather than letting it vanish. */
 function reporting(x: Context, action: () => Promise<void>) {
   return () => {
-    action().catch((error: unknown) =>
-      x.notify(errorMessage(error)),
-    );
+    action().catch((error: unknown) => x.notify(errorMessage(error)));
   };
 }
 
@@ -682,7 +680,11 @@ function Membership({
   // Your own playlists, and anything YouTube does not say, cannot be saved.
   if (saved === null) return null;
   const id =
-    page?.kind === "album" ? page.page.audioPlaylistId : page?.kind === "playlist" ? route.id : null;
+    page?.kind === "album"
+      ? page.page.audioPlaylistId
+      : page?.kind === "playlist"
+        ? route.id
+        : null;
   return (
     <DropdownMenuItem
       disabled={saved === undefined || id === null}
@@ -716,7 +718,10 @@ function SaveToPlaylist({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
           <IconPlaylistAdd />
           Save to playlist
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="flex max-h-80 w-56 flex-col overflow-hidden" {...contained}>
+        <DropdownMenuSubContent
+          className="flex max-h-80 w-56 flex-col overflow-hidden"
+          {...contained}
+        >
           <DropdownMenuInput placeholder="Search playlists" aria-label="Search playlists" />
           <DropdownMenuList>
             <NewPlaylistItem videoIds={videoIds} />
@@ -758,8 +763,7 @@ function PlaylistTargets({
     let live = true;
     load().then(
       (ids) => live && setSongs(ids.length > 0 ? { ids } : { error: "There are no songs to add" }),
-      (error: unknown) =>
-        live && setSongs({ error: errorMessage(error) }),
+      (error: unknown) => live && setSongs({ error: errorMessage(error) }),
     );
     return () => {
       live = false;
@@ -774,11 +778,7 @@ function PlaylistTargets({
   // A failed refresh keeps the list already shown; the error shows only with none.
   if (list.isError && list.data === undefined) {
     const { error } = list;
-    return (
-      <DropdownMenuItem disabled>
-        {errorMessage(error)}
-      </DropdownMenuItem>
-    );
+    return <DropdownMenuItem disabled>{errorMessage(error)}</DropdownMenuItem>;
   }
   if (songs === null || list.data === undefined) {
     return (
@@ -794,7 +794,8 @@ function PlaylistTargets({
   }
   const needle = query.trim();
   const targets = state.targets.filter((target) => filter.contains(target.title, needle));
-  if (targets.length === 0) return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
+  if (targets.length === 0)
+    return <DropdownMenuItem disabled>No matching playlists</DropdownMenuItem>;
   return targets.map((target) => (
     <DropdownMenuItem
       key={target.id}
@@ -805,8 +806,7 @@ function PlaylistTargets({
             void queryClient.invalidateQueries({ queryKey: ["playlist-targets"] });
             x.notify(`Saved to ${target.title}`);
           },
-          (error: unknown) =>
-            x.notify(errorMessage(error)),
+          (error: unknown) => x.notify(errorMessage(error)),
         );
       }}
     >
@@ -853,7 +853,10 @@ function NewPlaylistDialog({
     mutationFn: async (load: () => Promise<VideoId[]>) => {
       const name = title.trim();
       const ids = await load();
-      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
+      const id = await engine.createPlaylist(
+        { title: name, description: description.trim(), privacy },
+        ids,
+      );
       return { id, name, count: ids.length };
     },
     onSuccess: ({ id, name, count }) => {
@@ -1160,7 +1163,15 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   };
 
   const saving = useMutation({
-    mutationFn: async ({ name, text, details }: { name: string; text: string; details: PlaylistEdit }) => {
+    mutationFn: async ({
+      name,
+      text,
+      details,
+    }: {
+      name: string;
+      text: string;
+      details: PlaylistEdit;
+    }) => {
       const route: Route = { kind: "playlist", id: page.id };
       let stale = false;
       try {
@@ -1325,7 +1336,11 @@ function DeletePlaylistDialog({
           <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
             Cancel
           </DialogClose>
-          <Button variant="destructive" disabled={busy} onClick={() => page && deleting.mutate(page)}>
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={() => page && deleting.mutate(page)}
+          >
             {busy && <Spinner />}
             Delete
           </Button>

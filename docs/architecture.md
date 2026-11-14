@@ -4,12 +4,12 @@
 
 The tradeoff: Tauri gives us HTML, not real WinUI controls. We make up for it with platform integration:
 
-| | Windows | Linux |
-|---|---|---|
-| Webview | WebView2 (bootstrapper in the installer) | WebKitGTK 4.1 |
-| Window chrome | Custom titlebar with snap-layout hit-testing, Mica via `window-vibrancy` | Custom titlebar as CSD, flat themed surface |
-| Media controls | SMTC: volume flyout and media keys | MPRIS: GNOME/KDE media widgets and media keys |
-| Secrets | Windows Credential Manager | Secret Service (gnome-keyring, KWallet) |
+|                | Windows                                                                  | Linux                                         |
+| -------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
+| Webview        | WebView2 (bootstrapper in the installer)                                 | WebKitGTK 4.1                                 |
+| Window chrome  | Custom titlebar with snap-layout hit-testing, Mica via `window-vibrancy` | Custom titlebar as CSD, flat themed surface   |
+| Media controls | SMTC: volume flyout and media keys                                       | MPRIS: GNOME/KDE media widgets and media keys |
+| Secrets        | Windows Credential Manager                                               | Secret Service (gnome-keyring, KWallet)       |
 
 The colours are YouTube Music's own dark palette on both platforms, not the system theme, so the app reads as a companion to the service.
 

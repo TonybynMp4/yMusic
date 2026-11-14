@@ -129,7 +129,10 @@ describe("a page in the cache", () => {
     // Nothing shows it, so it is only marked stale and fetched on the next look.
     expect(albumFetches("a")).toBe(1);
     const next = browse.settledPage(route);
-    expect(browse.browseState(route)).toMatchObject({ status: "ready", page: { page: { title: "a" } } });
+    expect(browse.browseState(route)).toMatchObject({
+      status: "ready",
+      page: { page: { title: "a" } },
+    });
     arrive({ title: "renamed" } as AlbumPage);
     await expect(next).resolves.toMatchObject({ page: { title: "renamed" } });
     expect(albumFetches("a")).toBe(2);
@@ -143,7 +146,9 @@ describe("a page in the cache", () => {
       { updatedAt: 0 },
     );
     expect(browse.browseState(album("old"))).toMatchObject({ page: { page: { title: "stale" } } });
-    await expect(browse.settledPage(album("old"))).resolves.toMatchObject({ page: { title: "old" } });
+    await expect(browse.settledPage(album("old"))).resolves.toMatchObject({
+      page: { title: "old" },
+    });
     expect(albumFetches("old")).toBe(1);
   });
 });
@@ -186,7 +191,9 @@ function continuations(pages: number, ms: number) {
 /** Every update a queue following the playlist would get. */
 function follow(id: string) {
   const seen: { count: number; loading: boolean }[] = [];
-  const stop = browse.followPlaylist(id, (list, loading) => seen.push({ count: list.length, loading }));
+  const stop = browse.followPlaylist(id, (list, loading) =>
+    seen.push({ count: list.length, loading }),
+  );
   return { seen, stop };
 }
 

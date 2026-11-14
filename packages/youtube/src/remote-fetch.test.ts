@@ -40,7 +40,11 @@ describe("serializeRequest", () => {
 
   it("accepts a URL object and defaults to GET with no body", async () => {
     const request = await serializeRequest(new URL("https://www.youtube.com/sw.js"));
-    expect(request).toMatchObject({ url: "https://www.youtube.com/sw.js", method: "GET", body: null });
+    expect(request).toMatchObject({
+      url: "https://www.youtube.com/sw.js",
+      method: "GET",
+      body: null,
+    });
   });
 });
 

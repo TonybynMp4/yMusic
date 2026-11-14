@@ -37,7 +37,8 @@ export function inUse(query: Query): boolean {
 
 /**
  * Keeps at most `max` queries under `prefix`, dropping those that come first
- * in `order` (oldest first) and are not in use. The one just added stays. Runs whenever one is added.
+ * in `order` (oldest first) and are not in use. Runs whenever one is added,
+ * and the one just added stays.
  */
 export function capQueries(
   prefix: QueryKey,

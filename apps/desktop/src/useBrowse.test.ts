@@ -351,6 +351,34 @@ describe("a long playlist", () => {
     expect(seen.slice(1).every((update) => update.count >= 200)).toBe(true);
     expect(seen.at(-1)).toEqual({ count: 400, loading: false });
   });
+
+  it("keeps a whole copy on screen when its refresh fails before catching up", async () => {
+    const more = continuations(3, 10);
+    engine.playlist.mockResolvedValue(first("PL11", "1"));
+    engine.playlistMore
+      .mockImplementationOnce(more)
+      .mockImplementationOnce(more)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockImplementation(more);
+    const route = { kind: "playlist", id: "PL11" } as const;
+    const { seen, stop } = follow("PL11");
+    await vi.runAllTimersAsync();
+    browse.refreshPage(route);
+    await vi.runAllTimersAsync();
+
+    const failed = browse.browseState(route);
+    if (failed.status !== "ready" || failed.page.kind !== "playlist") throw new Error("not ready");
+    expect(failed.page.page.tracks).toHaveLength(300);
+    expect(failed.loadingMore).toBe(false);
+
+    // Retry reloads it, still never showing fewer rows.
+    failed.resume!();
+    await vi.runAllTimersAsync();
+    expect(engine.playlist).toHaveBeenCalledTimes(3);
+    expect(seen.slice(1).every((update) => update.count === 300)).toBe(true);
+    expect(browse.browseState(route)).not.toHaveProperty("resume");
+    stop();
+  });
 });
 
 describe("a playlist changed from outside its page", () => {

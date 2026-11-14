@@ -77,22 +77,22 @@ function keyOf(route: Route) {
  */
 const CACHE_LIMIT = 10;
 
-/** Query hashes, least recently used first. */
-const used = new Map<string, true>();
+/** Each page's query hash, least recently opened first. */
+const recency = new Set<string>();
 
 function touch(route: Route): void {
   const hash = hashKey(keyOf(route));
-  used.delete(hash);
-  used.set(hash, true);
+  recency.delete(hash);
+  recency.add(hash);
 }
 
 capQueries(["browse"], CACHE_LIMIT, (queries) => {
-  const rank = new Map([...used.keys()].map((hash, i) => [hash, i]));
+  const rank = new Map([...recency].map((hash, i) => [hash, i]));
   const at = (query: Query) => rank.get(query.queryHash) ?? Infinity;
   return [...queries].sort((a, b) => at(a) - at(b));
 });
 queryClient.getQueryCache().subscribe((event) => {
-  if (event.type === "removed") used.delete(event.query.queryHash);
+  if (event.type === "removed") recency.delete(event.query.queryHash);
 });
 
 function browseOptions(route: Route) {
@@ -101,15 +101,8 @@ function browseOptions(route: Route) {
     queryFn: () => load(route),
     // Dropped by `capQueries`, not by time.
     gcTime: Infinity,
-    // A playlist's first page is tried twice: a long playlist's first request
-    // is the slow one, and one that times out often succeeds straight after.
-    // Later pages never fail the query (see `stream`).
-    retry: route.kind === "playlist" ? 1 : 0,
-    retryDelay: FIRST_PAGE_RETRY_MS,
   });
 }
-
-const FIRST_PAGE_RETRY_MS = 500;
 
 /**
  * Forgets every page nothing shows or follows, so the next visit fetches it
@@ -142,16 +135,6 @@ interface Rows {
 }
 
 /**
- * Rows already on screen while a playlist reloads, kept there until as many
- * have arrived again. `more` is the handle for the rows after them, if any, so
- * a reload that fails before catching up leaves them as they were.
- */
-interface Held {
-  rows: Rows;
-  more: string | null;
-}
-
-/**
  * A playlist, from wherever its copy here stands. With no copy, from the
  * first page. With a copy that stopped short, a Retry: from the page that
  * failed. With a whole copy, invalidated or from an earlier run, a reload
@@ -163,7 +146,22 @@ async function loadPlaylist(id: string): Promise<Loaded> {
   const before = queryClient.getQueryData<Loaded>(key);
   if (before?.page.kind !== "playlist") return stream(id, live, await firstPage(id), null);
   if (before.more !== null) return resume(id, live, before.page.page, before.more);
-  return stream(id, live, await engine.playlist(id), { rows: before.page.page, more: null });
+  return stream(id, live, await playlistStart(id), before.page.page);
+}
+
+const FIRST_PAGE_RETRY_MS = 500;
+
+/**
+ * A playlist's first page, tried twice: a long playlist's first request is
+ * the slow one, and one that times out often succeeds straight after.
+ */
+async function playlistStart(id: string): Promise<FirstPage> {
+  try {
+    return await engine.playlist(id);
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, FIRST_PAGE_RETRY_MS));
+    return engine.playlist(id);
+  }
 }
 
 /** The fetch each query is running, so one superseded or dropped stops writing. */
@@ -209,7 +207,7 @@ async function resume(
     }
   }
   try {
-    return await stream(id, live, await engine.playlist(id), { rows: shown, more });
+    return await stream(id, live, await playlistStart(id), shown);
   } catch (error) {
     console.error("could not reload the playlist", error);
     return stopped;
@@ -229,9 +227,9 @@ const NEW_PLAYLIST_TRIES = 5;
  */
 async function firstPage(id: string): Promise<FirstPage> {
   const tracks = created.get(id);
-  if (tracks === undefined) return engine.playlist(id);
+  if (tracks === undefined) return playlistStart(id);
   for (let attempt = 1; ; attempt++) {
-    const first = await engine.playlist(id);
+    const first = await playlistStart(id);
     // A first page with more to come is full, so the songs are all there.
     const served = first.page.title !== "" && (first.more !== null || first.page.tracks.length >= tracks);
     if (served || attempt === NEW_PLAYLIST_TRIES) {
@@ -257,12 +255,16 @@ const PUBLISH_EVERY_MS = 250;
  * Each showing keeps the page as it stands apart from its rows, so an edit
  * made meanwhile (a rename, say) is kept. `live` turns false when a newer
  * fetch takes over, which stops this one.
+ *
+ * `held` are the rows already on screen when reloading, kept there until as
+ * many have arrived again. A reload that fails before then throws, leaving
+ * them and the copy's handle as they were.
  */
 async function stream(
   id: string,
   live: () => boolean,
   first: FirstPage,
-  held: Held | null,
+  held: Rows | null,
 ): Promise<Loaded> {
   const key = keyOf({ kind: "playlist", id });
 
@@ -272,7 +274,7 @@ async function stream(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = -Infinity;
 
-  const caughtUp = () => held === null || tracks.length >= held.rows.tracks.length;
+  const caughtUp = () => held === null || tracks.length >= held.tracks.length;
   const loaded = (rows: Rows, more: string | null): Loaded => {
     const current = queryClient.getQueryData<Loaded>(key);
     const base = current?.page.kind === "playlist" ? current.page.page : header;
@@ -310,8 +312,7 @@ async function stream(
     } catch (error) {
       console.error("could not load the rest of the playlist", error);
       clearTimeout(timer);
-      // Behind the rows held, those stay, with the handle that continues them.
-      if (held !== null && !caughtUp() && held.more !== null) return loaded(held.rows, held.more);
+      if (!caughtUp()) throw error;
       return loaded({ tracks, itemIds }, handle);
     }
     if (more !== null) progress(more);
@@ -355,13 +356,15 @@ function stateOf(route: Route, state: Snapshot): BrowseState {
       : { status: "loading" };
   }
   const fetching = state.fetchStatus !== "idle";
-  if (!fetching && data.more !== null) {
+  // Stopped short, or a reload failed and left the copy before it showing.
+  const stopped = data.more !== null || (route.kind === "playlist" && state.status === "error");
+  if (!fetching && stopped) {
     return { status: "ready", page: data.page, loadingMore: false, resume: () => retry(route) };
   }
   return { status: "ready", page: data.page, loadingMore: route.kind === "playlist" && fetching };
 }
 
-/** Fetches a playlist that stopped short again, from where it stopped. */
+/** Fetches a playlist that stopped short again, from where it stopped, or reloads it. */
 function retry(route: Route): void {
   queryClient.fetchQuery({ ...browseOptions(route), staleTime: 0 }).catch(() => {});
 }

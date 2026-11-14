@@ -19,6 +19,7 @@ A playlist is one query whose fetch streams: it writes the rows gathered so far 
 - **The first page** is tried twice, half a second apart, before the page shows an error. A long playlist's first request is the slow one, and one that timed out often works straight after.
 - **The rest** arrives in the background. Rows are gathered and shown at most every 250 ms, and at once when the last page lands, rather than once per page: each showing re-renders the page and updates a queue playing the playlist.
 - **A failed page** leaves the rows so far in place, and the end of the list says "Couldn't load the rest of this playlist" with a Retry button. Retry asks for the page that failed again: the engine drops a handle only once its page has arrived. If the handle is gone anyway (the engine keeps only the newest sixteen), Retry reloads the playlist from the start, and the rows already showing stay until as many have arrived again.
+- **A refresh that fails** before it has caught up with the rows on screen leaves them there, with the same Retry, which reloads.
 - **The queue** follows a playlist as it loads (`followPlaylist`), so playing a long playlist queues all of it. It stops following when loading stops, a failed page included, so rows a Retry brings in later are not added to a queue already playing.
 
 ## Track lists

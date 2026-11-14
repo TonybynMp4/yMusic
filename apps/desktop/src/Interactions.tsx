@@ -25,7 +25,7 @@ import {
   IconUserMinus,
   IconUserPlus,
 } from "@tabler/icons-react";
-import { queryOptions, skipToken, useQuery } from "@tanstack/react-query";
+import { queryOptions, skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
 import {
   sourceOf,
@@ -847,34 +847,34 @@ function NewPlaylistDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<PlaylistPrivacy>("PRIVATE");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const creating = useMutation({
+    mutationFn: async (load: () => Promise<VideoId[]>) => {
+      const name = title.trim();
+      const ids = await load();
+      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
+      return { id, name, count: ids.length };
+    },
+    onSuccess: ({ id, name, count }) => {
+      x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
+      x.notify(count > 0 ? `Saved to ${name}` : `Created ${name}`);
+      onClose();
+      reset();
+      // A new playlist opens, so you land on it. Adding songs to one later does not.
+      x.open(newPlaylistRoute(id, count));
+    },
+  });
+  const busy = creating.isPending;
+  const error = creating.error?.message ?? null;
 
   const reset = () => {
     setTitle("");
     setDescription("");
     setPrivacy("PRIVATE");
-    setError(null);
+    creating.reset();
   };
-  const create = async () => {
+  const create = () => {
     if (!songs || title.trim().length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const name = title.trim();
-      const ids = await songs();
-      const id = await engine.createPlaylist({ title: name, description: description.trim(), privacy }, ids);
-      x.playlistCreated({ kind: "playlist", id, title: name, subtitle: null, thumbnails: [] });
-      x.notify(ids.length > 0 ? `Saved to ${name}` : `Created ${name}`);
-      onClose();
-      reset();
-      // A new playlist opens, so you land on it. Adding songs to one later does not.
-      x.open(newPlaylistRoute(id, ids.length));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+    creating.mutate(songs);
   };
 
   return (
@@ -895,7 +895,7 @@ function NewPlaylistDialog({
           className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void create();
+            create();
           }}
         >
           <PlaylistFields
@@ -969,6 +969,8 @@ function PlaylistFields(props: {
     </>
   );
 }
+
+type PlaylistEdit = Parameters<typeof engine.editPlaylist>[1];
 
 /**
  * YouTube Music's "Edit playlist" dialog, the "New playlist" one filled in.
@@ -1108,8 +1110,8 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   const [cropping, setCropping] = useState<{ picked: Picked; crop: Crop; initial?: Crop } | null>(
     null,
   );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // An image that could not be opened or cropped. A failed save is `saving`'s.
+  const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (cover && cover !== "default") return () => URL.revokeObjectURL(cover.url);
@@ -1120,23 +1122,23 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
   }, [picked]);
 
   const pick = async (file: File) => {
-    setError(null);
+    clearError();
     try {
       const image = await openImage(file);
       setCropping({ picked: image, crop: centredCrop(image.width, image.height) });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setImageError(e instanceof Error ? e.message : String(e));
     }
   };
 
   const recrop = async () => {
     if (cover === null || cover === "default") return;
-    setError(null);
+    clearError();
     try {
       const image = await openImage(cover.source.file);
       setCropping({ picked: image, crop: cover.source.crop, initial: cover.source.crop });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setImageError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -1149,66 +1151,76 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
     try {
       setCover({ ...(await cropCover(from, area)), source: { file: from.file, crop: area } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setImageError(e instanceof Error ? e.message : String(e));
     }
     drawing.current = false;
     setCropping(null);
   };
 
-  const save = async () => {
+  const saving = useMutation({
+    mutationFn: async ({ name, text, details }: { name: string; text: string; details: PlaylistEdit }) => {
+      const route: Route = { kind: "playlist", id: page.id };
+      let stale = false;
+      try {
+        // Sent apart from the rest, as YouTube Music does, and first: once it
+        // is set, a failure below leaves it out of a second try.
+        if (cover) {
+          const thumbnails =
+            cover === "default"
+              ? await engine.removePlaylistCover(page.id)
+              : await engine.setPlaylistCover(page.id, cover.image);
+          setCover(null);
+          // Without the new art in the reply, the page is fetched once the rest is sent.
+          stale = thumbnails.length === 0;
+          if (!stale)
+            patchPage(route, (p) =>
+              p.kind === "playlist" ? { ...p, page: { ...p.page, thumbnails } } : p,
+            );
+          x.libraryChanged();
+        }
+        await engine.editPlaylist(page.id, details);
+        patchPage(route, (p) =>
+          p.kind === "playlist"
+            ? {
+                ...p,
+                page: {
+                  ...p.page,
+                  title: name,
+                  description: text || null,
+                  privacy: details.privacy ?? p.page.privacy,
+                },
+              }
+            : p,
+        );
+        if (details.title !== undefined) x.libraryChanged();
+      } finally {
+        if (stale) refreshPage(route);
+      }
+    },
+    onSuccess: () => {
+      x.notify("Playlist saved");
+      onClose();
+    },
+  });
+  const busy = saving.isPending;
+  const error = imageError ?? saving.error?.message ?? null;
+  const clearError = () => {
+    setImageError(null);
+    saving.reset();
+  };
+
+  const save = () => {
     const name = title.trim();
     if (name.length === 0) return;
     const text = description.trim();
-    const details = {
+    const details: PlaylistEdit = {
       ...(name !== page.title && { title: name }),
       ...(text !== (page.description ?? "") && { description: text }),
       ...(privacy !== startPrivacy && { privacy }),
     };
     if (Object.keys(details).length === 0 && !cover) return onClose();
-    setBusy(true);
-    setError(null);
-    const route: Route = { kind: "playlist", id: page.id };
-    let stale = false;
-    try {
-      // Sent apart from the rest, as YouTube Music does, and first: once it is
-      // set, a failure below leaves it out of a second try.
-      if (cover) {
-        const thumbnails =
-          cover === "default"
-            ? await engine.removePlaylistCover(page.id)
-            : await engine.setPlaylistCover(page.id, cover.image);
-        setCover(null);
-        // Without the new art in the reply, the page is fetched once the rest is sent.
-        stale = thumbnails.length === 0;
-        if (!stale)
-          patchPage(route, (p) =>
-            p.kind === "playlist" ? { ...p, page: { ...p.page, thumbnails } } : p,
-          );
-        x.libraryChanged();
-      }
-      await engine.editPlaylist(page.id, details);
-      patchPage(route, (p) =>
-        p.kind === "playlist"
-          ? {
-              ...p,
-              page: {
-                ...p.page,
-                title: name,
-                description: text || null,
-                privacy: details.privacy ?? p.page.privacy,
-              },
-            }
-          : p,
-      );
-      if (details.title !== undefined) x.libraryChanged();
-      x.notify("Playlist saved");
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-      if (stale) refreshPage(route);
-    }
+    clearError();
+    saving.mutate({ name, text, details });
   };
 
   if (cropping) {
@@ -1237,7 +1249,7 @@ function EditPlaylistForm({ page, onClose }: { page: PlaylistPage; onClose: () =
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        void save();
+        save();
       }}
     >
       <CoverPicker
@@ -1280,29 +1292,22 @@ function DeletePlaylistDialog({
   onClose: () => void;
 }) {
   const x = useInteractions();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const remove = async () => {
-    if (!page) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await engine.deletePlaylist(page.id);
+  const deleting = useMutation({
+    mutationFn: (doomed: PlaylistPage) => engine.deletePlaylist(doomed.id),
+    onSuccess: (_, doomed) => {
       onClose();
-      x.playlistDeleted(page.id, page.title);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+      x.playlistDeleted(doomed.id, doomed.title);
+    },
+  });
+  const busy = deleting.isPending;
+  const error = deleting.error?.message ?? null;
   return (
     <Dialog
       open={page !== null}
       onOpenChange={(open) => {
         if (!open && !busy) {
           onClose();
-          setError(null);
+          deleting.reset();
         }
       }}
     >
@@ -1318,7 +1323,7 @@ function DeletePlaylistDialog({
           <DialogClose render={<Button type="button" variant="ghost" disabled={busy} />}>
             Cancel
           </DialogClose>
-          <Button variant="destructive" disabled={busy} onClick={() => void remove()}>
+          <Button variant="destructive" disabled={busy} onClick={() => page && deleting.mutate(page)}>
             {busy && <Spinner />}
             Delete
           </Button>

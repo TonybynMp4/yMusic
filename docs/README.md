@@ -7,6 +7,7 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [The data engine](engine.md): youtubei.js in a worker, CORS, stream resolution, PO tokens, reporting plays, search history, resume, and the queue across restarts.
 - [Search](search.md): YouTube Music's results, chips and why one request covers All.
 - [Sign-in](sign-in.md): the cookie session, browser import and why OAuth is out.
+- [The IPC layer](ipc.md): the TypeScript bindings generated from the Rust commands, and where zod still parses.
 - [Settings](settings.md): the settings file, and how each setting reaches mpv, the engine or the window.
 - [Browse pages and long lists](browse.md): album, artist and playlist pages, loading long playlists, and virtualized track lists.
 - [Interactions](interactions.md): the menus on songs, albums, playlists and artists, editing your playlists, and liking songs.

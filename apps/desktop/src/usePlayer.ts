@@ -3,7 +3,6 @@ import {
   currentTrack,
   emptyQueue,
   sourceOf,
-  isLeaseUsable,
   peekNext,
   type QueueAction,
   queueReducer,
@@ -20,7 +19,8 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
-import { keepLease } from "./leases.ts";
+import { leaseKey, leaseOptions } from "./leases.ts";
+import { queryClient } from "./query.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
@@ -153,9 +153,6 @@ export function usePlayer(
    * produces the same current track would reload and restart it.
    */
   const loadedId = useRef<TrackId | null>(null);
-  const leases = useRef(new Map<TrackId, StreamLease>());
-  /** Resolutions in flight, so the load and the pre-resolve share one request. */
-  const resolving = useRef(new Map<TrackId, Promise<StreamLease>>());
   /** The track already given its fallback retry, so a second failure sticks. */
   const retried = useRef<TrackId | null>(null);
   /**
@@ -177,37 +174,21 @@ export function usePlayer(
   /** The lease mpv is playing, for the degraded badge and stats for nerds. */
   const [streaming, setStreaming] = useState<StreamLease | null>(null);
 
-  /** Read at resolve time, so a change reaches the next song without a reload. */
+  /**
+   * Read at resolve time, so a change reaches the next song without a reload.
+   * The song playing keeps its stream; the ones after it resolve again, since
+   * leases are kept per quality (`leases.ts`).
+   */
   const quality = useRef(settings.audioQuality);
   useEffect(() => {
-    if (quality.current === settings.audioQuality) return;
     quality.current = settings.audioQuality;
-    // Leases already resolved, or still resolving, are for the old quality.
-    // The song playing keeps its stream; the ones after it resolve again.
-    leases.current.clear();
-    resolving.current.clear();
   }, [settings.audioQuality]);
 
   /** A cached lease while it is still usable, otherwise a fresh one. */
-  const leaseFor = useCallback((id: TrackId): Promise<StreamLease> => {
-    const cached = leases.current.get(id);
-    if (cached && isLeaseUsable(cached, Date.now())) return Promise.resolve(cached);
-    const pending = resolving.current.get(id);
-    if (pending) return pending;
-    const requested = quality.current;
-    const request = resolveTrack(id, { quality: requested })
-      .then((lease) => {
-        // Not cached if the quality changed while it resolved; a load already
-        // waiting on it still gets it.
-        if (quality.current === requested) keepLease(leases.current, id, lease);
-        return lease;
-      })
-      .finally(() => {
-        if (resolving.current.get(id) === request) resolving.current.delete(id);
-      });
-    resolving.current.set(id, request);
-    return request;
-  }, []);
+  const leaseFor = useCallback(
+    (id: TrackId): Promise<StreamLease> => queryClient.fetchQuery(leaseOptions(quality.current, id)),
+    [],
+  );
 
   useEffect(() => {
     if (trackId === null) {
@@ -312,15 +293,16 @@ export function usePlayer(
         if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
         retried.current = failed;
         // The lease mpv refused: `streaming` may not have reached it yet.
-        const refused = leases.current.get(failed)?.playerClient ?? null;
-        leases.current.delete(failed);
+        const key = leaseKey(quality.current, failed);
+        const refused = queryClient.getQueryData<StreamLease>(key)?.playerClient ?? null;
+        queryClient.removeQueries({ queryKey: key, exact: true });
         void (async () => {
           const lease = await resolveTrack(failed, {
             refused,
             quality: quality.current,
           });
           if (loadedId.current !== failed) return;
-          keepLease(leases.current, failed, lease);
+          queryClient.setQueryData(key, lease);
           // A song paused by the user, or cued by a resumed queue, stays
           // paused; being refused once must not start it playing.
           const paused = wantsPaused.current;
@@ -366,7 +348,9 @@ export function usePlayer(
         if (inMpv.current !== currentId.current) return;
         inMpv.current = event.trackId;
         loadedId.current = event.trackId;
-        setStreaming(leases.current.get(event.trackId) ?? null);
+        setStreaming(
+          queryClient.getQueryData<StreamLease>(leaseKey(quality.current, event.trackId)) ?? null,
+        );
         retried.current = null;
         queued.current = null;
         cameUp.current = true;

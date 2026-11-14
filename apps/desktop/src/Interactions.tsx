@@ -770,7 +770,8 @@ function PlaylistTargets({
   if (songs !== null && "error" in songs) {
     return <DropdownMenuItem disabled>{songs.error}</DropdownMenuItem>;
   }
-  if (list.isError) {
+  // A failed refresh keeps the list already shown; the error shows only with none.
+  if (list.isError && list.data === undefined) {
     const { error } = list;
     return (
       <DropdownMenuItem disabled>

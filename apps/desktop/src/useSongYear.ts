@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, skipToken, useQuery } from "@tanstack/react-query";
 import { videoIdFromTrackId, type Track, type VideoId } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
@@ -14,10 +14,10 @@ const MAX_YEARS = 500;
 
 capQueries(["song-year"], MAX_YEARS);
 
-function yearOptions(videoId: VideoId) {
+function yearOptions(videoId: VideoId | null) {
   return queryOptions({
     queryKey: ["song-year", videoId],
-    queryFn: () => engine.songYear(videoId),
+    queryFn: videoId === null ? skipToken : () => engine.songYear(videoId),
     gcTime: Infinity,
   });
 }
@@ -38,10 +38,7 @@ export function clearSongYears(): void {
  */
 export function useSongYear(track: Track | null): number | null {
   const videoId = track && track.year === null ? videoIdFromTrackId(track.id) : null;
-  const { data } = useQuery({
-    ...yearOptions(videoId ?? ("" as VideoId)),
-    enabled: videoId !== null,
-  });
+  const { data } = useQuery(yearOptions(videoId));
   if (track === null) return null;
   return track.year ?? data ?? null;
 }

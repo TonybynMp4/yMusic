@@ -48,9 +48,9 @@ export function capQueries(
 ): void {
   const cache = queryClient.getQueryCache();
   const id = hashKey(prefix);
-  caps.get(id)?.();
-  caps.set(id, cache.subscribe((event) => {
-    if (event.type !== "added" || !under(event.query.queryKey, prefix)) return;
+  capListeners.get(id)?.();
+  capListeners.set(id, cache.subscribe((event) => {
+    if (event.type !== "added" || !hasPrefix(event.query.queryKey, prefix)) return;
     const all = cache.findAll({ queryKey: prefix });
     let over = all.length - max;
     for (const query of order(all)) {
@@ -63,8 +63,8 @@ export function capQueries(
 }
 
 /** Each cap's unsubscribe, by its prefix's hash. */
-const caps = new Map<string, () => void>();
+const capListeners = new Map<string, () => void>();
 
-function under(key: QueryKey, prefix: QueryKey): boolean {
+function hasPrefix(key: QueryKey, prefix: QueryKey): boolean {
   return prefix.every((part, i) => key[i] === part);
 }

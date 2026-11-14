@@ -39,7 +39,7 @@ function savedKey(account: string, kind: SavedKind, sort: string) {
  * Bumped by `forgetSaved` for each kind, which stops a list of that kind
  * still paging: the reload that follows owns the list from then on.
  */
-const forgets = new Map<SavedKind, number>();
+const generations = new Map<SavedKind, number>();
 
 function savedOptions(account: string, kind: SavedKind, sort: string) {
   return queryOptions({
@@ -61,17 +61,18 @@ async function load(account: string, kind: SavedKind, sort: string): Promise<Loa
     return { status: "ready", items: list.cards, sorts: list.sorts, sort: list.sort };
   }
   const key = savedKey(account, kind, sort);
-  const generation = forgets.get(kind) ?? 0;
-  const dropped = () => (forgets.get(kind) ?? 0) !== generation;
-  // A list already whole stays up until the reload is; a partial one keeps loading in view.
+  const generation = generations.get(kind) ?? 0;
+  const dropped = () => (generations.get(kind) ?? 0) !== generation;
+  // A list already whole stays up until its reload is; a partial one keeps
+  // loading in view.
   const before = queryClient.getQueryData<Loaded>(key);
-  const quiet = before !== undefined && before.partial !== true;
+  const reload = before !== undefined && before.partial !== true;
   const first = await engine.librarySongs(sort || undefined);
   const { sorts } = first;
   let tracks = first.tracks;
   const loaded = (): Loaded => ({ status: "ready", items: tracks, sorts, sort: first.sort });
   const show = () =>
-    !quiet && !dropped() && queryClient.setQueryData<Loaded>(key, { ...loaded(), partial: true });
+    !reload && !dropped() && queryClient.setQueryData<Loaded>(key, { ...loaded(), partial: true });
   if (first.more !== null) show();
   for (let more = first.more; more !== null && !dropped(); ) {
     try {
@@ -81,7 +82,7 @@ async function load(account: string, kind: SavedKind, sort: string): Promise<Loa
     } catch (error) {
       console.error("could not load the rest of the library's songs", error);
       // A reload keeps the old list rather than a shorter one.
-      if (quiet) throw error;
+      if (reload) throw error;
       more = null;
     }
     if (more !== null) show();
@@ -97,7 +98,7 @@ async function load(account: string, kind: SavedKind, sort: string): Promise<Loa
  */
 export function forgetSaved(kind?: SavedKind): void {
   for (const k of ["playlists", "albums", "artists", "songs"] as const) {
-    if (kind === undefined || kind === k) forgets.set(k, (forgets.get(k) ?? 0) + 1);
+    if (kind === undefined || kind === k) generations.set(k, (generations.get(k) ?? 0) + 1);
   }
   void queryClient.invalidateQueries({
     queryKey: ["saved"],

@@ -192,7 +192,7 @@ async function resume(
   const stopped: Loaded = { page: { kind: "playlist", page: shown }, more };
   try {
     const next = await engine.playlistMore(more);
-    return stream(id, live, {
+    return await stream(id, live, {
       page: {
         ...shown,
         tracks: [...shown.tracks, ...next.tracks],

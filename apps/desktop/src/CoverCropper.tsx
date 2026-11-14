@@ -51,7 +51,9 @@ export function CoverCropper({
       // The image goes the other way to the square it replaces, whose sideways
       // direction was flipped to follow the fingers.
       const [dx, dy] = [event.deltaX * unit, -event.deltaY * unit];
-      setView((from) => movedBy(from, sizes.current, dx, dy));
+      // Copied here: an updater can run during render, which reads no refs.
+      const laid = { ...sizes.current };
+      setView((from) => movedBy(from, laid, dx, dy));
     };
     // On Linux a pinch comes from the app's shell instead, as the scale since
     // it began (platform/window.rs).
@@ -85,7 +87,8 @@ export function CoverCropper({
     const step = event.shiftKey ? 2 : 10;
     const arrow = ARROWS[event.key];
     if (arrow) {
-      setView((from) => movedBy(from, sizes.current, -arrow[0] * step, -arrow[1] * step));
+      const laid = { ...sizes.current };
+      setView((from) => movedBy(from, laid, -arrow[0] * step, -arrow[1] * step));
     } else if (event.key === "Enter") {
       // Held down, it would finish the crop again on every repeat.
       if (!event.repeat) onDone();

@@ -38,6 +38,10 @@ export function useLibraryPlaylists(accountKey: string | null): LibraryPlaylists
     queryKey: ["library-playlists", accountKey],
     queryFn: () => engine.libraryPlaylists(),
     enabled: accountKey !== null,
+    // Fetched again each time an account's list comes up, signing back in
+    // included, since playlists change from other devices. The last list
+    // shows meanwhile.
+    staleTime: 0,
   });
   const listed = useMemo(() => (accountKey === null ? [] : (list.data ?? [])), [accountKey, list.data]);
   // Kept with the account that created them, so switching accounts drops them.

@@ -171,11 +171,17 @@ export function useYouTubeSearch(
     );
   }, [hasMore, isFetchingNextPage, fetchNextPage]);
 
-  // The chips come from the unfiltered answer, kept while one is selected.
+  // The chips come from the unfiltered answer, kept while one is selected,
+  // and kept for the text through a submit, which only fetches the chip.
   const unfiltered =
     filter === null
       ? results
       : combinedOrNull(queryClient.getQueryData<Pages>(searchKey(signedIn, asked, null)));
+  const [chips, setChips] = useState({ text: "", filters: [] as SearchFilter[] });
+  if (unfiltered && (chips.text !== asked || chips.filters !== unfiltered.filters)) {
+    setChips({ text: asked, filters: unfiltered.filters });
+  }
+  const filters = unfiltered?.filters ?? (chips.text === asked ? chips.filters : []);
   return {
     results,
     loading:
@@ -186,7 +192,7 @@ export function useYouTubeSearch(
       search.isError && search.data === undefined ? describe(search.error) : null,
     filter,
     setFilter,
-    filters: unfiltered?.filters ?? [],
+    filters,
     hasMore,
     loadingMore: isFetchingNextPage,
     loadMore,

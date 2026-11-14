@@ -63,7 +63,9 @@ async function load(account: string, kind: SavedKind, sort: string): Promise<Loa
   const key = savedKey(account, kind, sort);
   const generation = forgets.get(kind) ?? 0;
   const dropped = () => (forgets.get(kind) ?? 0) !== generation;
-  const quiet = queryClient.getQueryData(key) !== undefined;
+  // A list already whole stays up until the reload is; a partial one keeps loading in view.
+  const before = queryClient.getQueryData<Loaded>(key);
+  const quiet = before !== undefined && before.partial !== true;
   const first = await engine.librarySongs(sort || undefined);
   const { sorts } = first;
   let tracks = first.tracks;

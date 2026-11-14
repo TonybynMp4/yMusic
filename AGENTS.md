@@ -13,6 +13,8 @@ How the built parts work, and why, is in `docs/`, one file per area. What is pla
 
 oxfmt formats TypeScript, JSON, CSS and Markdown, with its settings in `.oxfmtrc.json`. Run `pnpm format` before committing: CI runs `pnpm format:check` and fails on any unformatted file. Rust goes through `cargo fmt`.
 
+GitHub skips the commits in `.git-blame-ignore-revs` when showing blame. For local `git blame` to skip them too, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once. Add the squash commit of any future bulk reformat there.
+
 ## UI
 
 - Follow YouTube Music, not Spotify, for layout and behaviour.

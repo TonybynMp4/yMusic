@@ -25,6 +25,7 @@ import {
   IconUserMinus,
   IconUserPlus,
 } from "@tabler/icons-react";
+import { queryOptions, skipToken, useQuery } from "@tanstack/react-query";
 import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
 import {
   sourceOf,
@@ -37,7 +38,7 @@ import {
   type TrackId,
   type VideoId,
 } from "@ymusic/core";
-import type { PlaylistTarget, Rating } from "@ymusic/youtube/host";
+import type { Rating } from "@ymusic/youtube/host";
 import {
   cloneElement,
   createContext,
@@ -90,6 +91,7 @@ import {
 } from "./cover.ts";
 import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
+import { queryClient } from "./query.ts";
 import { toggled } from "./Rating.tsx";
 import {
   newPlaylistRoute,
@@ -726,6 +728,19 @@ function SaveToPlaylist({ videoIds }: { videoIds: () => Promise<VideoId[]> }) {
   );
 }
 
+/**
+ * The playlists a song can be saved to. The last answer for the song shows at
+ * once when its menu opens again, and is fetched again behind it, since
+ * playlists are made and edited elsewhere too.
+ */
+function playlistTargetsOptions(videoId: VideoId | null) {
+  return queryOptions({
+    queryKey: ["playlist-targets", videoId],
+    queryFn: videoId === null ? skipToken : () => engine.playlistTargets(videoId),
+    staleTime: 0,
+  });
+}
+
 function PlaylistTargets({
   videoIds,
   query,
@@ -735,29 +750,35 @@ function PlaylistTargets({
 }) {
   const x = useInteractions();
   const filter = useDropdownMenuFilter();
-  const [state, setState] = useState<
-    { ids: VideoId[]; targets: PlaylistTarget[] } | { error: string } | null
-  >(null);
+  const [songs, setSongs] = useState<{ ids: VideoId[] } | { error: string } | null>(null);
   // Once per opening: the submenu mounts this when it opens.
   const [load] = useState(() => videoIds);
   useEffect(() => {
     let live = true;
-    void (async () => {
-      try {
-        const ids = await load();
-        if (ids.length === 0) throw new Error("There are no songs to add");
-        const targets = await engine.playlistTargets(ids[0]!);
-        if (live) setState({ ids, targets });
-      } catch (error) {
-        if (live) setState({ error: error instanceof Error ? error.message : String(error) });
-      }
-    })();
+    load().then(
+      (ids) => live && setSongs(ids.length > 0 ? { ids } : { error: "There are no songs to add" }),
+      (error: unknown) =>
+        live && setSongs({ error: error instanceof Error ? error.message : String(error) }),
+    );
     return () => {
       live = false;
     };
   }, [load]);
+  const first = songs !== null && "ids" in songs ? songs.ids[0]! : null;
+  const list = useQuery(playlistTargetsOptions(first));
 
-  if (state === null) {
+  if (songs !== null && "error" in songs) {
+    return <DropdownMenuItem disabled>{songs.error}</DropdownMenuItem>;
+  }
+  if (list.isError) {
+    const { error } = list;
+    return (
+      <DropdownMenuItem disabled>
+        {error instanceof Error ? error.message : String(error)}
+      </DropdownMenuItem>
+    );
+  }
+  if (songs === null || list.data === undefined) {
     return (
       <DropdownMenuItem disabled>
         <Spinner />
@@ -765,7 +786,7 @@ function PlaylistTargets({
       </DropdownMenuItem>
     );
   }
-  if ("error" in state) return <DropdownMenuItem disabled>{state.error}</DropdownMenuItem>;
+  const state = { ids: songs.ids, targets: list.data };
   if (state.targets.length === 0) {
     return <DropdownMenuItem disabled>You have no playlists yet</DropdownMenuItem>;
   }
@@ -779,6 +800,7 @@ function PlaylistTargets({
         engine.addToPlaylist(target.id, state.ids).then(
           () => {
             playlistChanged(target.id);
+            void queryClient.invalidateQueries({ queryKey: ["playlist-targets"] });
             x.notify(`Saved to ${target.title}`);
           },
           (error: unknown) =>

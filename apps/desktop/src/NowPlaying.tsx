@@ -88,8 +88,9 @@ const BRAND_SLIDER = "[&_[data-slot=slider-range]]:bg-brand";
  */
 const SEEK_BAR = cn(
   "[&_[data-slot=slider-track]]:h-0.5 [&_[data-slot=slider-track]]:rounded-none [&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-track]]:transition-[height]",
-  "hover:[&_[data-slot=slider-track]]:h-1 data-dragging:[&_[data-slot=slider-track]]:h-1",
-  "[&_[data-slot=slider-thumb]]:opacity-0 hover:[&_[data-slot=slider-thumb]]:opacity-100 data-dragging:[&_[data-slot=slider-thumb]]:opacity-100 [&_[data-slot=slider-thumb]:focus-visible]:opacity-100",
+  // Focus lands on the range input inside the thumb, not the thumb itself.
+  "hover:[&_[data-slot=slider-track]]:h-1 data-dragging:[&_[data-slot=slider-track]]:h-1 has-focus-visible:[&_[data-slot=slider-track]]:h-1",
+  "[&_[data-slot=slider-thumb]]:opacity-0 hover:[&_[data-slot=slider-thumb]]:opacity-100 data-dragging:[&_[data-slot=slider-thumb]]:opacity-100 has-focus-visible:[&_[data-slot=slider-thumb]]:opacity-100",
   "[&_[data-slot=slider-control][data-disabled]]:opacity-100",
 );
 

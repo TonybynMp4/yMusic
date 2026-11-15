@@ -202,17 +202,19 @@ mod tests {
 
     #[test]
     fn allows_only_youtube_hosts() {
-        assert!(allowed(&url(
-            "https://music.youtube.com/youtubei/v1/browse"
-        )));
-        assert!(allowed(&url(
-            "https://rr1---sn-abc.googlevideo.com/videoplayback"
-        )));
-        assert!(allowed(&url("https://www.google.com/js/th/abc.js")));
-        assert!(!allowed(&url("https://www.google.com/search?q=x")));
-        assert!(!allowed(&url("http://www.youtube.com/")));
-        assert!(!allowed(&url("https://evilgooglevideo.com/")));
-        assert!(!allowed(&url("https://example.com/")));
+        let table: Vec<_> = [
+            "https://music.youtube.com/youtubei/v1/browse",
+            "https://rr1---sn-abc.googlevideo.com/videoplayback",
+            "https://www.google.com/js/th/abc.js",
+            "https://www.google.com/search?q=x",
+            "http://www.youtube.com/",
+            "https://evilgooglevideo.com/",
+            "https://example.com/",
+        ]
+        .iter()
+        .map(|u| format!("{u} -> {}", allowed(&url(u))))
+        .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 
     #[test]

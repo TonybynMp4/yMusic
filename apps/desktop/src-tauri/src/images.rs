@@ -420,37 +420,31 @@ fn trim(dir: &Path, cap: u64, to: u64) -> std::io::Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn asks_google_for_webp_at_a_quality_for_the_width() {
-        assert_eq!(
-            as_webp("https://lh3.googleusercontent.com/abc=w120-h120-l90-rj").as_deref(),
-            Some("https://lh3.googleusercontent.com/abc=w120-h120-l70-rw")
-        );
-        assert_eq!(
-            as_webp("https://yt3.ggpht.com/abc=s800-c-k-rj").as_deref(),
-            Some("https://yt3.ggpht.com/abc=s800-c-k-l80-rw")
-        );
-        assert_eq!(
-            as_webp("https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj").as_deref(),
-            Some("https://lh3.googleusercontent.com/abc=w1200-h1200-l80-rw")
-        );
-        assert_eq!(
-            as_webp("https://lh3.googleusercontent.com/abc=w120-h120").as_deref(),
-            Some("https://lh3.googleusercontent.com/abc=w120-h120-l70-rw")
-        );
-        assert_eq!(as_webp("https://lh3.googleusercontent.com/abc"), None);
+    fn webp_table(urls: &[&str]) -> String {
+        urls.iter()
+            .map(|url| format!("{url}\n  -> {:?}", as_webp(url)))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
+    fn asks_google_for_webp_at_a_quality_for_the_width() {
+        insta::assert_snapshot!(webp_table(&[
+            "https://lh3.googleusercontent.com/abc=w120-h120-l90-rj",
+            "https://yt3.ggpht.com/abc=s800-c-k-rj",
+            "https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj",
+            "https://lh3.googleusercontent.com/abc=w120-h120",
+            "https://lh3.googleusercontent.com/abc",
+        ]));
+    }
+
+    /// A signed thumbnail URL has no webp copy, so it stays as it is.
+    #[test]
     fn asks_for_the_webp_copy_of_unsigned_video_thumbnails() {
-        assert_eq!(
-            as_webp("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg").as_deref(),
-            Some("https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/hqdefault.webp")
-        );
-        assert_eq!(
-            as_webp("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg?sqp=abc&rs=def"),
-            None
-        );
+        insta::assert_snapshot!(webp_table(&[
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg?sqp=abc&rs=def",
+        ]));
     }
 
     #[test]

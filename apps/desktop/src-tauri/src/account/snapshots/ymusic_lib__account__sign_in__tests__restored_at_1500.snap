@@ -1,0 +1,7 @@
+---
+source: src/account/sign_in.rs
+expression: restored(1_500)
+---
+[
+    "__Host-GAPS=g; HttpOnly; Secure; Path=/; Domain=accounts.google.com; Expires=Thu, 01 Jan 1970 00:33:20 GMT",
+]

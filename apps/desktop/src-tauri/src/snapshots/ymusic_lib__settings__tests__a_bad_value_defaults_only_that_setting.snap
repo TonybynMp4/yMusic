@@ -1,0 +1,17 @@
+---
+source: src/settings.rs
+expression: settings
+---
+{
+  "autoplay": true,
+  "audioQuality": "high",
+  "stableVolume": "loudOnly",
+  "audioDevice": "pipewire/speakers",
+  "skipDisliked": false,
+  "pauseWatchHistory": false,
+  "searchHistory": "youtube",
+  "closeToTray": true,
+  "checkForUpdates": true,
+  "includePrereleases": false,
+  "statsForNerds": false
+}

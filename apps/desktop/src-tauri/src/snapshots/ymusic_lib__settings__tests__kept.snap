@@ -1,0 +1,18 @@
+---
+source: src/settings.rs
+expression: file
+---
+{
+  "audioDevice": "auto",
+  "audioQuality": "lossless",
+  "autoplay": false,
+  "checkForUpdates": true,
+  "closeToTray": false,
+  "fromTheFuture": 1,
+  "includePrereleases": false,
+  "pauseWatchHistory": false,
+  "searchHistory": "youtube",
+  "skipDisliked": false,
+  "stableVolume": "off",
+  "statsForNerds": false
+}

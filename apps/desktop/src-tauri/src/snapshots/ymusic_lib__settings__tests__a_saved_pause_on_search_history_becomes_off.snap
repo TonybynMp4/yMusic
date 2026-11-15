@@ -1,0 +1,9 @@
+---
+source: src/settings.rs
+expression: "table.join(\"\\n\")"
+---
+{ "pauseSearchHistory": true } -> Off
+{ "pauseSearchHistory": false } -> Youtube
+{} -> Youtube
+{ "pauseSearchHistory": true, "searchHistory": "device" } -> Device
+{ "pauseSearchHistory": true, "searchHistory": "fromTheFuture" } -> Off

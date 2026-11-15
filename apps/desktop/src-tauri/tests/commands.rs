@@ -86,19 +86,10 @@ fn every_command_is_reachable_over_ipc() {
         .expect("platform_summary should succeed")
         .deserialize::<serde_json::Value>()
         .expect("summary json");
-    for field in [
-        "os",
-        "arch",
-        "appVersion",
-        "installFlavor",
-        "supportsInAppUpdate",
-        "hasTray",
-    ] {
-        assert!(
-            summary.get(field).is_some(),
-            "missing `{field}` in {summary}"
-        );
-    }
+    // The values depend on the machine, so only the field names are pinned.
+    let mut fields: Vec<_> = summary.as_object().expect("an object").keys().collect();
+    fields.sort();
+    insta::assert_json_snapshot!("platform_summary_fields", fields);
 
     let volume = get_ipc_response(
         &webview,
@@ -107,7 +98,7 @@ fn every_command_is_reachable_over_ipc() {
     .expect("player_saved_volume should succeed")
     .deserialize::<serde_json::Value>()
     .expect("volume json");
-    assert_eq!(volume, serde_json::json!({ "volume": 1.0, "unmuted": 1.0 }));
+    insta::assert_json_snapshot!("player_saved_volume", volume);
 
     // player_load carries the one non-trivial payload: the lease, headers and
     // all. It goes first because mpv rejects a seek with nothing loaded, which

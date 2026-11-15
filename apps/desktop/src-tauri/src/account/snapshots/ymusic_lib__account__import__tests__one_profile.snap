@@ -1,0 +1,10 @@
+---
+source: src/account/import.rs
+expression: one
+---
+[
+  {
+    "id": "/a",
+    "name": "Firefox"
+  }
+]

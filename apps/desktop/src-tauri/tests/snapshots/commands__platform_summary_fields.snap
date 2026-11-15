@@ -1,0 +1,12 @@
+---
+source: tests/commands.rs
+expression: fields
+---
+[
+  "appVersion",
+  "arch",
+  "hasTray",
+  "installFlavor",
+  "os",
+  "supportsInAppUpdate"
+]

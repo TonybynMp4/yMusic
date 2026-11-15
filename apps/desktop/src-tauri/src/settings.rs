@@ -340,13 +340,8 @@ mod tests {
             .update(patch(json!({ "autoplay": false, "audioQuality": "low" })))
             .unwrap();
 
-        let reopened = SettingsStore::open(path).get();
-        assert!(!reopened.autoplay);
-        assert_eq!(reopened.audio_quality, AudioQuality::Low);
-        assert!(
-            reopened.check_for_updates,
-            "fields the patch left out keep their value"
-        );
+        // Fields the patch left out keep their value.
+        insta::assert_json_snapshot!(SettingsStore::open(path).get());
     }
 
     #[test]
@@ -355,37 +350,33 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, r#"{ "stableVolume": "on", "fromTheFuture": 1 }"#).unwrap();
 
-        let settings = SettingsStore::open(path).get();
-        assert_eq!(settings.stable_volume, StableVolume::On);
-        assert!(settings.autoplay);
+        insta::assert_json_snapshot!(SettingsStore::open(path).get());
     }
 
     #[test]
     fn a_saved_pause_on_search_history_becomes_off() {
-        let history = |json: &str| read(json.as_bytes()).unwrap().settings.search_history;
-        assert_eq!(
-            history(r#"{ "pauseSearchHistory": true }"#),
-            SearchHistory::Off
-        );
-        assert_eq!(
-            history(r#"{ "pauseSearchHistory": false }"#),
-            SearchHistory::Youtube
-        );
-        assert_eq!(history("{}"), SearchHistory::Youtube);
-        assert_eq!(
-            history(r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#),
-            SearchHistory::Device,
-            "a choice already made wins over the old switch"
-        );
-        assert_eq!(
-            history(r#"{ "pauseSearchHistory": true, "searchHistory": "fromTheFuture" }"#),
-            SearchHistory::Off,
-            "a choice this build cannot read does not undo the pause"
-        );
+        let table: Vec<_> = [
+            r#"{ "pauseSearchHistory": true }"#,
+            r#"{ "pauseSearchHistory": false }"#,
+            "{}",
+            // A choice already made wins over the old switch.
+            r#"{ "pauseSearchHistory": true, "searchHistory": "device" }"#,
+            // A choice this build cannot read does not undo the pause.
+            r#"{ "pauseSearchHistory": true, "searchHistory": "fromTheFuture" }"#,
+        ]
+        .iter()
+        .map(|json| {
+            let history = read(json.as_bytes()).unwrap().settings.search_history;
+            format!("{json} -> {history:?}")
+        })
+        .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 
     #[test]
     fn a_bad_value_defaults_only_that_setting() {
+        // "lossless" is an enum value from a newer build and "yes" a value of
+        // the wrong type: both fall back to the default, the rest is read.
         let settings = read(
             br#"{
                 "audioQuality": "lossless",
@@ -397,15 +388,7 @@ mod tests {
         )
         .unwrap()
         .settings;
-        assert_eq!(
-            settings.audio_quality,
-            AudioQuality::High,
-            "an enum value from a newer build"
-        );
-        assert!(settings.autoplay, "a value of the wrong type");
-        assert_eq!(settings.stable_volume, StableVolume::LoudOnly);
-        assert!(settings.close_to_tray);
-        assert_eq!(settings.audio_device, "pipewire/speakers");
+        insta::assert_json_snapshot!(settings);
     }
 
     #[test]
@@ -415,18 +398,13 @@ mod tests {
                 .unwrap()
                 .apply(patch(json!({ "autoplay": false })));
         let file: serde_json::Value = serde_json::from_slice(&saved.to_json()).unwrap();
-        assert_eq!(file["audioQuality"], "lossless");
-        assert_eq!(file["fromTheFuture"], 1);
-        assert_eq!(file["autoplay"], false);
+        insta::assert_json_snapshot!("kept", file);
         assert_eq!(saved.settings.audio_quality, AudioQuality::High);
 
+        // A setting changed here replaces the one this build could not read.
         let changed = saved.apply(patch(json!({ "audioQuality": "low" })));
         let file: serde_json::Value = serde_json::from_slice(&changed.to_json()).unwrap();
-        assert_eq!(
-            file["audioQuality"], "low",
-            "a setting changed here replaces it"
-        );
-        assert_eq!(file["fromTheFuture"], 1);
+        insta::assert_json_snapshot!("replaced", file);
     }
 
     #[test]

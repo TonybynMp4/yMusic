@@ -1,0 +1,15 @@
+---
+source: src/account/rotate.rs
+expression: set
+---
+Some(
+    SetCookie {
+        name: "__Secure-1PSIDTS",
+        domain: Some(
+            ".youtube.com",
+        ),
+        value: Some(
+            "new",
+        ),
+    },
+)

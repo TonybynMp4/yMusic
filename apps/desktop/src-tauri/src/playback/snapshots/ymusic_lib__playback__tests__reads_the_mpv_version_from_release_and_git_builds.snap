@@ -1,0 +1,8 @@
+---
+source: src/playback/mod.rs
+expression: "table.join(\"\\n\")"
+---
+mpv v0.41.0 -> Some((0, 41))
+mpv 0.35.1 -> Some((0, 35))
+mpv v0.38.0-123-gabcdef -> Some((0, 38))
+mpv 38f1b4c -> None

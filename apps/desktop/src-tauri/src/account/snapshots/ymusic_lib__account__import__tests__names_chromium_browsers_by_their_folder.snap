@@ -1,0 +1,8 @@
+---
+source: src/account/import.rs
+expression: "table.join(\"\\n\")"
+---
+/c/google-chrome -> ("Chrome", "Chrome")
+/c/BraveSoftware/Brave-Browser -> ("Brave", "Brave")
+/c/net.imput.helium -> ("Helium", "Helium")
+/c/ungoogled-chromium -> ("Ungoogled Chromium", "Ungoogled Chromium")

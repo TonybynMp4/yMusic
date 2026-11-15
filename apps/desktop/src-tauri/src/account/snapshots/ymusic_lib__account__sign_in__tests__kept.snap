@@ -1,0 +1,26 @@
+---
+source: src/account/sign_in.rs
+expression: kept
+---
+[
+  {
+    "name": "__Host-GAPS",
+    "value": "g",
+    "domain": "accounts.google.com",
+    "path": "/",
+    "secure": true,
+    "http_only": true,
+    "same_site": null,
+    "expires": 2000
+  },
+  {
+    "name": "SID",
+    "value": "s",
+    "domain": "google.com",
+    "path": "/",
+    "secure": false,
+    "http_only": false,
+    "same_site": null,
+    "expires": 1000
+  }
+]

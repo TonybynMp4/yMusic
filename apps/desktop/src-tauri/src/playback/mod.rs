@@ -1081,10 +1081,16 @@ mod tests {
 
     #[test]
     fn reads_the_mpv_version_from_release_and_git_builds() {
-        assert_eq!(mpv_version("mpv v0.41.0"), Some((0, 41)));
-        assert_eq!(mpv_version("mpv 0.35.1"), Some((0, 35)));
-        assert_eq!(mpv_version("mpv v0.38.0-123-gabcdef"), Some((0, 38)));
-        assert_eq!(mpv_version("mpv 38f1b4c"), None);
+        let table: Vec<_> = [
+            "mpv v0.41.0",
+            "mpv 0.35.1",
+            "mpv v0.38.0-123-gabcdef",
+            "mpv 38f1b4c",
+        ]
+        .iter()
+        .map(|v| format!("{v} -> {:?}", mpv_version(v)))
+        .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 
     #[test]

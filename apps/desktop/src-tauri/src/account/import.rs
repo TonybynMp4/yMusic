@@ -683,7 +683,7 @@ mod tests {
     fn names_profiles_only_when_a_browser_has_several() {
         let store = |p: &str| Store::Firefox(PathBuf::from(p));
         let one = labelled("Firefox", vec![("default".into(), store("/a"))]);
-        assert_eq!(one[0].name, "Firefox");
+        insta::assert_json_snapshot!("one_profile", one);
         let two = labelled(
             "Firefox",
             vec![
@@ -691,8 +691,7 @@ mod tests {
                 ("work".into(), store("/b")),
             ],
         );
-        assert_eq!(two[1].name, "Firefox (work)");
-        assert_eq!(two[1].id, "/b");
+        insta::assert_json_snapshot!("two_profiles", two);
     }
 
     #[cfg(target_os = "linux")]
@@ -734,22 +733,15 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn names_chromium_browsers_by_their_folder() {
-        let named = |dir: &str| chromium::identify(Path::new(dir));
-        assert_eq!(
-            named("/c/google-chrome"),
-            ("Chrome".into(), "Chrome".into())
-        );
-        assert_eq!(
-            named("/c/BraveSoftware/Brave-Browser"),
-            ("Brave".into(), "Brave".into())
-        );
-        assert_eq!(
-            named("/c/net.imput.helium"),
-            ("Helium".into(), "Helium".into())
-        );
-        assert_eq!(
-            named("/c/ungoogled-chromium"),
-            ("Ungoogled Chromium".into(), "Ungoogled Chromium".into())
-        );
+        let table: Vec<_> = [
+            "/c/google-chrome",
+            "/c/BraveSoftware/Brave-Browser",
+            "/c/net.imput.helium",
+            "/c/ungoogled-chromium",
+        ]
+        .iter()
+        .map(|dir| format!("{dir} -> {:?}", chromium::identify(Path::new(dir))))
+        .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 }

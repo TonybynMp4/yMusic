@@ -1,0 +1,8 @@
+---
+source: src/images.rs
+expression: "webp_table(&[\"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg\",\n\"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg?sqp=abc&rs=def\",])"
+---
+https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg
+  -> Some("https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/hqdefault.webp")
+https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg?sqp=abc&rs=def
+  -> None

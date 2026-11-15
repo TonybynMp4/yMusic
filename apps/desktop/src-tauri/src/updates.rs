@@ -97,19 +97,14 @@ mod tests {
     #[test]
     fn finds_the_newest_stable_release() {
         let current = Version::new(0, 2, 0);
-        let update = newest(releases(), &current, false).unwrap();
-        assert_eq!(update.version, "0.3.0");
-        assert!(update.url.ends_with("/v0.3.0"));
+        insta::assert_json_snapshot!(newest(releases(), &current, false));
     }
 
     #[test]
     fn prereleases_only_when_asked() {
         let current = Version::new(0, 3, 0);
         assert_eq!(newest(releases(), &current, false), None);
-        assert_eq!(
-            newest(releases(), &current, true).unwrap().version,
-            "0.4.0-beta.1"
-        );
+        insta::assert_json_snapshot!(newest(releases(), &current, true));
     }
 
     #[test]

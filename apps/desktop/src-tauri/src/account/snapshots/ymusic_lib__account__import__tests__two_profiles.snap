@@ -1,0 +1,14 @@
+---
+source: src/account/import.rs
+expression: two
+---
+[
+  {
+    "id": "/a",
+    "name": "Firefox (default)"
+  },
+  {
+    "id": "/b",
+    "name": "Firefox (work)"
+  }
+]

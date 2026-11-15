@@ -182,13 +182,11 @@ fn a_rescan_skips_unchanged_files() {
     let library = home.library();
     library.add_folder(&fixture_dir()).expect("add folder");
 
+    // Nothing changes on disk between the two, so the second scan skips
+    // every file by its mtime.
     let first = library.scan_all().expect("first scan");
-    assert_eq!(first.added, 3);
-    assert_eq!(first.unchanged, 0);
-
     let second = library.scan_all().expect("second scan");
-    assert_eq!(second.added, 0, "nothing changed on disk");
-    assert_eq!(second.unchanged, 3, "every file is skipped by mtime");
+    insta::assert_json_snapshot!([first, second]);
 }
 
 #[test]
@@ -198,11 +196,20 @@ fn search_matches_title_artist_and_album() {
     library.add_folder(&fixture_dir()).expect("add folder");
     library.scan_all().expect("scan");
 
-    assert_eq!(library.search("first").expect("by title").len(), 1);
-    assert_eq!(library.search("nebula").expect("by artist").len(), 2);
-    assert_eq!(library.search("drift").expect("by album").len(), 2);
-    assert_eq!(library.search("  ").expect("blank is everything").len(), 3);
-    assert_eq!(library.search("nothing here").expect("no match").len(), 0);
+    // By title, artist and album; a blank query is everything.
+    let table: Vec<_> = ["first", "nebula", "drift", "  ", "nothing here"]
+        .iter()
+        .map(|query| {
+            let titles: Vec<_> = library
+                .search(query)
+                .expect("search")
+                .into_iter()
+                .map(|track| track.title)
+                .collect();
+            format!("{query:?} -> {titles:?}")
+        })
+        .collect();
+    insta::assert_snapshot!(table.join("\n"));
 }
 
 #[test]
@@ -221,11 +228,17 @@ fn resolve_produces_a_lease_that_never_expires() {
     let lease = library.resolve(&track.id).expect("resolve");
 
     assert_eq!(lease.track_id, track.id);
-    assert!(lease.url.starts_with("file://"), "got {}", lease.url);
-    assert_eq!(lease.expires_at, None, "a file on disk does not expire");
-    assert!(lease.headers.is_empty());
-    assert!(!lease.is_premium_format);
-    assert_eq!(lease.itag, None);
+    // A file on disk never expires and needs no headers.
+    let root = format!("file://{}/", fixture_dir().display());
+    insta::assert_json_snapshot!(lease, {
+        ".trackId" => "[id]",
+        ".url" => insta::dynamic_redaction(move |value, _| {
+            value
+                .as_str()
+                .map(|url| url.replace(&root, "file://<fixtures>/").into())
+                .unwrap_or(value)
+        }),
+    });
 }
 
 #[test]

@@ -290,20 +290,18 @@ mod tests {
                 .build(),
             Cookie::build(("LSOLH", "l")).domain(GOOGLE_HOST).build(),
         ];
+        // LSOLH has no expiry, so it dies with the browser and is not kept.
         let kept = keep(&read);
-        assert_eq!(
-            kept.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
-            ["__Host-GAPS", "SID"],
-            "a cookie without an expiry dies with the browser"
-        );
+        insta::assert_json_snapshot!("kept", kept);
 
-        let set = restore(&kept, 500);
-        assert_eq!(set[0].domain(), Some(GOOGLE_HOST));
-        assert_eq!(set[0].secure(), Some(true));
-        assert_eq!(set[0].expires_datetime(), Some(soon));
-        assert_eq!(set[1].domain(), Some(".google.com"));
-
-        let later = restore(&kept, 1_500);
-        assert_eq!(later.len(), 1, "SID expired at 1000");
+        let restored = |now| {
+            restore(&kept, now)
+                .iter()
+                .map(|cookie| cookie.to_string())
+                .collect::<Vec<_>>()
+        };
+        insta::assert_debug_snapshot!("restored_at_500", restored(500));
+        // SID expired at 1000.
+        insta::assert_debug_snapshot!("restored_at_1500", restored(1_500));
     }
 }

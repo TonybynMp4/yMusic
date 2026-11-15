@@ -153,6 +153,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Local playlists
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)
+- [ ] Versioned migrations for user data with rusqlite_migration, in the PR that adds the first table a rescan can't rebuild
 - [ ] Canvas from Spotify, as a plugin
 - [ ] AI music filter, as a plugin
 - [ ] Plugins: worker sandbox, capabilities, `player.panel` and the other slots

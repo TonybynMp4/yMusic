@@ -62,6 +62,12 @@ Sign release assets with the updater's minisign key so the download is verified 
 
   Identification is its own background pass, separate from the fast filesystem scan, because it is network-bound and rate-limited. A library with no links still works fully.
 
+  `links` is the first data the app can't rebuild from disk, so it lands with versioned migrations, the next item.
+
+- **Versioned migrations for user data.** `library/schema.rs` drops its tables and rescans whenever `SCHEMA_VERSION` changes. That is right for the library index, which is a cache of what is on disk, and wrong for anything the user made or the app can't fetch again: manual links, download records, sync metadata. [rusqlite_migration](https://github.com/cljoly/rusqlite_migration) runs an ordered list of forward-only SQL migrations and records how far it got in `PRAGMA user_version`, the counter `schema.rs` already reads and sets. A schema change is a new entry at the end of the list, and old entries are never edited. Each release depends on one rusqlite minor version, so it has to match the app's (0.40 today).
+  - _When._ In the first PR that adds a table a rescan can't rebuild, most likely `links`. Until then drop-and-rescan stays.
+  - _One database or two._ Either the library cache keeps its own file on drop-and-rescan and user data goes in a second, migrated file, or one file holds both and every table migrates. Go with two. The cache keeps its free upgrade path with no migration code, and deleting the cache file after a corrupt index or a schema bump can't take user corrections with it. The sync service also gets one file that is exactly the data worth syncing. The cost is foreign keys: SQLite doesn't enforce them across attached databases. That matters little here. `links` keys on `local:` ids, which are hashes of the path and stay the same across rescans, so a link whose file is gone does no harm and a pass after each scan can clear it. The page cache from Faster loading can be dropped at any time, so it goes with the library cache, not the user data.
+
 - **More interactions.**
   - Pin albums, playlists and artists to a quick-access row on the home page.
   - A button to dismiss the whole queue.

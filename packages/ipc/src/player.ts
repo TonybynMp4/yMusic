@@ -76,12 +76,13 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #asked = 0;
   #poll: ReturnType<typeof setTimeout> | null = null;
 
-  async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
+  async load(lease: StreamLease, paused = false, startMs?: number, attempt = 1): Promise<void> {
     await this.#ensureSubscribed();
     await call("playerLoad", {
       ...loadRequest(lease),
       startPaused: paused,
       startMs: startMs === undefined ? null : Math.max(0, Math.round(startMs)),
+      attempt,
     });
   }
 

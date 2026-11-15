@@ -82,6 +82,14 @@ pub struct LoadRequest {
     pub player_client: Option<String>,
     #[serde(default)]
     pub itag: Option<i64>,
+    /// 1 for the first load of the track, 2 for the queue's retry on another
+    /// player client after mpv refused the first lease. Only logged.
+    #[serde(default = "first_attempt")]
+    pub attempt: u32,
+}
+
+fn first_attempt() -> u32 {
+    1
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -159,9 +167,6 @@ struct State {
     /// Where mpv's volume goes to be saved once it settles, once
     /// `remember_volume` has started that.
     volume_changes: Arc<Mutex<Option<mpsc::Sender<f64>>>>,
-    /// The track mpv last refused, so loading it again reads as the queue's
-    /// retry on the next player client in the log.
-    refused: Arc<Mutex<Option<String>>>,
 }
 
 pub struct Player {
@@ -289,7 +294,7 @@ impl Player {
         skip_all,
         fields(
             track_id = %request.track_id,
-            attempt = tracing::field::Empty,
+            attempt = request.attempt,
             player_client = request.player_client.as_deref(),
             itag = request.itag,
             start_ms = request.start_ms,
@@ -297,13 +302,6 @@ impl Player {
         ),
     )]
     pub fn load(&self, request: LoadRequest) -> Result<(), String> {
-        let refused = self.state.refused.lock().expect("refused mutex").take();
-        let attempt = if refused.as_deref() == Some(request.track_id.as_str()) {
-            2
-        } else {
-            1
-        };
-        tracing::Span::current().record("attempt", attempt);
         tracing::debug!("loading");
         // Replacing the playlist drops whatever was appended after the song
         // this replaces.
@@ -829,7 +827,6 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                             %error,
                             "mpv could not play the stream"
                         );
-                        *state.refused.lock().expect("refused mutex") = track_id.clone();
                         emit(
                             &sink,
                             PlaybackEvent::Error {
@@ -936,7 +933,6 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 track_id = track_id.as_deref(),
                                 "mpv could not play the stream"
                             );
-                            *state.refused.lock().expect("refused mutex") = track_id.clone();
                             emit(
                                 &sink,
                                 PlaybackEvent::Error {

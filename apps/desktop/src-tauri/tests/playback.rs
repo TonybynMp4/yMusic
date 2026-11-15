@@ -101,6 +101,7 @@ fn request(url: String) -> LoadRequest {
         start_ms: None,
         player_client: None,
         itag: None,
+        attempt: 1,
     }
 }
 

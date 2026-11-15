@@ -309,7 +309,7 @@ export function usePlayer(
           const paused = wantsPaused.current;
           queued.current = null;
           const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
-          await load(lease, paused, startMs);
+          await load(lease, paused, startMs, 2);
           inMpv.current = failed;
           setStreaming(lease);
           if (!paused) await engine.play();

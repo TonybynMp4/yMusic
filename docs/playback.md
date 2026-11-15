@@ -91,6 +91,6 @@ A failure reaches the snackbar once it stands. A 403 from mpv on a YouTube song 
 
 Retry can help with the last two, so the song stays and the queue waits. A lost connection should not run through the whole queue. Retry resolves the song afresh, with its own fallback retry, from the start of the song.
 
-Missing and unavailable songs will not play however often they are tried. The queue moves on by itself when the snackbar goes, after 4 seconds, and Skip moves on at once. Picking another song in the meantime cancels the skip. With nothing to move on to (the last song, or repeat one), the snackbar has no action.
+Missing and unavailable songs will not play however often they are tried. The queue moves on by itself after 4 seconds, on the app's own timer rather than the snackbar's, because Base UI pauses a toast's timer while the window is unfocused and a player usually is. Skip moves on at once. Picking another song in the meantime cancels the skip. With nothing to move on to (the last song, or repeat one), the snackbar has no action.
 
 When the song changes, its snackbar closes, so a Retry never applies to a song that is no longer playing. The player bar no longer shows the raw error.

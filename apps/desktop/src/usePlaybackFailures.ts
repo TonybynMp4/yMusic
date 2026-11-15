@@ -30,14 +30,16 @@ export function usePlaybackFailures(player: ReturnType<typeof usePlayer>) {
     if (failure === null || failure.trackId !== current.current) return;
     const action = failureAction(failure);
     const failed = failure.trackId;
-    let skipped = false;
-    // Skip and the snackbar running out both move on, but only once, and
-    // only if the failed song is still the one up.
+    // Skip and the timer running out both move on, but only once, and only
+    // if the failed song is still the one up.
     const skip = () => {
-      if (skipped || current.current !== failed) return;
-      skipped = true;
+      clearTimeout(timer);
+      if (current.current !== failed) return;
       actions.current.next();
     };
+    // The snackbar's own timer is not used for this: Base UI pauses it while
+    // the window is unfocused, which is where a player usually is.
+    const timer = action === "skip" ? setTimeout(skip, SNACKBAR_MS) : undefined;
     const snackbar = showSnackbar({
       message: failureMessage(failure.kind, title.current),
       urgent: true,
@@ -49,9 +51,9 @@ export function usePlaybackFailures(player: ReturnType<typeof usePlayer>) {
             : undefined,
       // The song waits on it, so it goes as quickly as one with no action.
       timeout: action === "skip" ? SNACKBAR_MS : undefined,
-      onClose: action === "skip" ? skip : undefined,
     });
     shown.current = { trackId: failed, snackbar };
+    return () => clearTimeout(timer);
   }, [failure]);
 
   useEffect(() => {

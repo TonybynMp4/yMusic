@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SNACKBAR_ACTION_MS, SNACKBAR_MS, showSnackbar, snackbarManager } from "./snackbar.ts";
 
@@ -12,13 +12,23 @@ interface Event {
   };
 }
 
+/** Records what reaches the manager, through the public `add` and `close`. */
 function record(): Event[] {
   const events: Event[] = [];
-  snackbarManager[" subscribe"]((event) => events.push(event as Event));
+  vi.spyOn(snackbarManager, "add").mockImplementation((options) => {
+    const id = options.id ?? `toast-${events.length}`;
+    events.push({ action: "add", options: { ...options, id } } as Event);
+    return id;
+  });
+  vi.spyOn(snackbarManager, "close").mockImplementation((id) => {
+    events.push({ action: "close", options: id === undefined ? {} : { id } });
+  });
   return events;
 }
 
 describe("showSnackbar", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("closes whatever is up before showing the new one", () => {
     const events = record();
     const id = showSnackbar({ message: "Added to queue" });

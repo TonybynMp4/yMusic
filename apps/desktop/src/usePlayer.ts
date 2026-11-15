@@ -78,7 +78,7 @@ export function usePlayer(
   savedVolume: number,
 ) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
-  const { state, position, engine, load, reportError } = usePlayback();
+  const { state, position, engine, load, markFailed } = usePlayback();
   /**
    * The slider position in 0..1. Held here rather than in the player bar
    * because the OS can set it too, from the MPRIS volume control. It starts
@@ -156,7 +156,7 @@ export function usePlayer(
     const message = errorMessage(error);
     console.error(`could not play ${id}`, error);
     void playerLogFailure(id, message).catch(logPlaybackFailure);
-    reportError(message);
+    markFailed();
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     setFailure({
       trackId: id,

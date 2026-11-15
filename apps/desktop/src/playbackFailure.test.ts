@@ -4,9 +4,9 @@ import { classifyFailure, failureAction } from "./playbackFailure.ts";
 
 describe("classifyFailure", () => {
   it("reads a local file gone from disk or from the library as missing", () => {
-    expect(
-      classifyFailure("the file for `local:12` is no longer on disk: /music/a.flac"),
-    ).toBe("missing");
+    expect(classifyFailure("the file for `local:12` is no longer on disk: /music/a.flac")).toBe(
+      "missing",
+    );
     expect(classifyFailure("no track in the library with id `local:12`")).toBe("missing");
   });
 
@@ -15,9 +15,7 @@ describe("classifyFailure", () => {
       "unavailable",
     );
     expect(classifyFailure("ERROR")).toBe("unavailable");
-    expect(classifyFailure("LOGIN_REQUIRED: Sign in to confirm you're not a bot")).toBe(
-      "failed",
-    );
+    expect(classifyFailure("LOGIN_REQUIRED: Sign in to confirm you're not a bot")).toBe("failed");
     expect(classifyFailure("could not resolve a stream: ERRORS; then UNPLAYABLE")).toBe("failed");
   });
 
@@ -31,9 +29,7 @@ describe("classifyFailure", () => {
   });
 
   it("calls anything while the system says it is offline offline", () => {
-    expect(classifyFailure("playback failed: the stream may have expired", false)).toBe(
-      "offline",
-    );
+    expect(classifyFailure("playback failed: the stream may have expired", false)).toBe("offline");
   });
 
   it("leaves a refused stream as a plain failure", () => {

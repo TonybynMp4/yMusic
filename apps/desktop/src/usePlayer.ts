@@ -144,9 +144,6 @@ export function usePlayer(
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
   });
-  /** The queue as of the last render, for event handlers that outlive it. */
-  const queueNow = useRef(queue);
-  queueNow.current = queue;
   /** The last song that failed for good. Each failure is a new object, even for the same song. */
   const [failure, setFailure] = useState<PlaybackFailure | null>(null);
   /** Bumped by Retry, so the load effect runs again for the same track. */
@@ -155,21 +152,18 @@ export function usePlayer(
    * Records a song that failed for good: the raw error goes to the log, and
    * the kind of failure to whatever tells the user.
    */
-  const fail = useCallback(
-    (id: TrackId, error: unknown) => {
-      const message = errorMessage(error);
-      console.error(`could not play ${id}`, error);
-      void playerLogFailure(id, message).catch(logPlaybackFailure);
-      reportError(message);
-      const landing = currentTrack(queueReducer(queueNow.current, { type: "next", reason: "user" }));
-      setFailure({
-        trackId: id,
-        kind: classifyFailure(message, navigator.onLine),
-        canSkip: landing !== null && landing.id !== id,
-      });
-    },
-    [reportError],
-  );
+  const fail = useEffectEvent((id: TrackId, error: unknown) => {
+    const message = errorMessage(error);
+    console.error(`could not play ${id}`, error);
+    void playerLogFailure(id, message).catch(logPlaybackFailure);
+    reportError(message);
+    const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
+    setFailure({
+      trackId: id,
+      kind: classifyFailure(message, navigator.onLine),
+      canSkip: landing !== null && landing.id !== id,
+    });
+  });
   /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
   const playlistOf = useCallback((id: TrackId) => {
     const from = source.current;
@@ -270,7 +264,7 @@ export function usePlayer(
       cancelled = true;
     };
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- attempt reloads the track on Retry
-  }, [trackId, attempt, engine, load, fail, leaseFor]);
+  }, [trackId, attempt, engine, load, leaseFor]);
 
   // Hand mpv the next track while this one plays, so it opens it ahead of
   // time and goes on to it with no gap. Only once playing, so resolving it
@@ -352,7 +346,7 @@ export function usePlayer(
           else logPlaybackFailure(error);
         });
       }),
-    [engine, load, fail],
+    [engine, load],
   );
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
@@ -618,13 +612,12 @@ export function usePlayer(
    * lease, and the fallback client retry with it.
    */
   const retry = useCallback(() => {
-    const id = currentId.current;
-    if (id === null) return;
+    if (trackId === null) return;
     loadedId.current = null;
-    queryClient.removeQueries({ queryKey: leaseKey(quality.current, id), exact: true });
+    queryClient.removeQueries({ queryKey: leaseKey(quality.current, trackId), exact: true });
     cameUp.current = false;
     setAttempt((n) => n + 1);
-  }, []);
+  }, [trackId]);
 
   /**
    * Restarting rather than going back is what every other player does once you

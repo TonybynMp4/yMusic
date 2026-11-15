@@ -82,12 +82,12 @@ A failure reaches the snackbar once it stands. A 403 from mpv on a YouTube song 
 
 `playbackFailure.ts` reads the kind of failure from the raw message, since Rust's errors arrive as plain strings:
 
-| Kind | From | Copy | Action |
-| --- | --- | --- | --- |
-| missing | a local file gone from disk or from the library | Couldn't find the file for *title* | Skip |
-| unavailable | YouTube's `ERROR` status, the one answer the engine stops on | *title* isn't available on YouTube Music | Skip |
-| offline | a request that never reached YouTube, or `navigator.onLine` false | Couldn't play *title*. Check your connection | Retry |
-| failed | anything else, such as a stream mpv refused on every client | Couldn't play *title* | Retry |
+| Kind        | From                                                              | Copy                                         | Action |
+| ----------- | ----------------------------------------------------------------- | -------------------------------------------- | ------ |
+| missing     | a local file gone from disk or from the library                   | Couldn't find the file for _title_           | Skip   |
+| unavailable | YouTube's `ERROR` status, the one answer the engine stops on      | _title_ isn't available on YouTube Music     | Skip   |
+| offline     | a request that never reached YouTube, or `navigator.onLine` false | Couldn't play _title_. Check your connection | Retry  |
+| failed      | anything else, such as a stream mpv refused on every client       | Couldn't play _title_                        | Retry  |
 
 Retry can help with the last two, so the song stays and the queue waits. A lost connection should not run through the whole queue. Retry resolves the song afresh, with its own fallback retry, from the start of the song.
 

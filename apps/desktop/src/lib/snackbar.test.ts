@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  SNACKBAR_ACTION_MS,
-  SNACKBAR_MS,
-  showSnackbar,
-  snackbarManager,
-} from "./snackbar.ts";
+import { SNACKBAR_ACTION_MS, SNACKBAR_MS, showSnackbar, snackbarManager } from "./snackbar.ts";
 
 interface Event {
   action: string;
@@ -44,7 +39,11 @@ describe("showSnackbar", () => {
   it("closes the snackbar when its action is pressed, then runs it", () => {
     const events = record();
     const onClick = vi.fn<() => void>();
-    const id = showSnackbar({ message: "Couldn't play", urgent: true, action: { label: "Retry", onClick } });
+    const id = showSnackbar({
+      message: "Couldn't play",
+      urgent: true,
+      action: { label: "Retry", onClick },
+    });
     const added = events.find((e) => e.action === "add")!;
     expect(added.options.priority).toBe("high");
     expect(added.options.actionProps?.children).toBe("Retry");

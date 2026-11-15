@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { Toast } from "@base-ui/react/toast"
-import { snackbarManager } from "@/lib/snackbar"
-import { cn } from "@/lib/utils"
+import { Toast } from "@base-ui/react/toast";
+import { snackbarManager } from "@/lib/snackbar";
+import { cn } from "@/lib/utils";
 
 /**
  * YouTube Music's snackbar: one short message at the bottom left, over the
@@ -22,18 +22,15 @@ function SnackbarProvider({ children }: { children?: React.ReactNode }) {
         </Toast.Viewport>
       </Toast.Portal>
     </Toast.Provider>
-  )
+  );
 }
 
 function SnackbarList() {
-  const { toasts } = Toast.useToastManager()
-  return toasts.map((toast) => <Snackbar key={toast.id} toast={toast} />)
+  const { toasts } = Toast.useToastManager();
+  return toasts.map((toast) => <Snackbar key={toast.id} toast={toast} />);
 }
 
-function Snackbar({
-  className,
-  ...props
-}: Toast.Root.Props) {
+function Snackbar({ className, ...props }: Toast.Root.Props) {
   return (
     <Toast.Root
       data-slot="snackbar"
@@ -42,7 +39,7 @@ function Snackbar({
         "absolute bottom-0 left-0 flex w-fit max-w-full min-w-72 items-center gap-4 rounded-md bg-foreground py-1.5 pr-2 pl-4 text-sm text-background shadow-lg select-none",
         "translate-y-(--toast-swipe-movement-y) transition-[translate,opacity] duration-200 ease-out",
         "data-starting-style:translate-y-4 data-starting-style:opacity-0 data-ending-style:opacity-0 data-limited:opacity-0",
-        className
+        className,
       )}
       {...props}
     >
@@ -52,7 +49,7 @@ function Snackbar({
         className="shrink-0 rounded-md px-3 py-1.5 font-medium outline-none hover:bg-background/10 focus-visible:ring-3 focus-visible:ring-ring/50"
       />
     </Toast.Root>
-  )
+  );
 }
 
-export { SnackbarProvider }
+export { SnackbarProvider };

@@ -15,11 +15,14 @@ export function usePlaybackFailures(player: ReturnType<typeof usePlayer>) {
   const trackId = player.track?.id ?? null;
   /** The playing song as of the last render, for a snackbar's late callbacks. */
   const current = useRef<TrackId | null>(trackId);
-  current.current = trackId;
   const title = useRef(player.track?.title ?? "");
-  title.current = player.track?.title ?? "";
   const actions = useRef(player);
-  actions.current = player;
+  // Declared before the effects that read them, so they see this render's values.
+  useEffect(() => {
+    current.current = trackId;
+    title.current = player.track?.title ?? "";
+    actions.current = player;
+  });
   const shown = useRef<{ trackId: TrackId; snackbar: string } | null>(null);
 
   // A new failure is a new object, so this runs once per failure.

@@ -47,6 +47,7 @@ Sign release assets with the updater's minisign key so the download is verified 
   - _Marked in the queue._ The failed row gets an icon and its menu a Retry, and the queue skips to the next song. Pairs with any of the others rather than replacing them.
 
   Still to build whichever wins: a details view with the raw message, for bug reports. Today it is in the log only.
+
 - **React performance pass.** Once the open memory and playlist PRs are merged, profile a release build: what re-renders during playback, while scrolling browse pages, search results, the sidebar and the queue, and while a menu or dialog opens. Fix what the profile shows, measuring before and after. `docs/react-performance.md` lists how to measure, the common causes, and what is known but not yet looked at.
 
 ## Later

@@ -210,6 +210,7 @@ pub fn library_remove_folder(library: State<'_, Library>, path: String) -> Resul
 
 #[tauri::command]
 #[specta::specta]
+#[tracing::instrument(skip_all)]
 pub fn library_scan(library: State<'_, Library>) -> Result<ScanReport, String> {
     library.scan_all().map_err(|e| e.to_string())
 }
@@ -275,6 +276,7 @@ pub fn account_cookie(account: State<'_, Account>) -> Option<String> {
 /// from the last sign-in window go into this one, so it knows the device.
 #[tauri::command]
 #[specta::specta]
+#[tracing::instrument(skip_all, err(level = "debug"))]
 pub async fn account_sign_in<R: Runtime>(
     app: tauri::AppHandle<R>,
     account: State<'_, Account>,
@@ -303,6 +305,7 @@ pub async fn account_browsers() -> Result<Vec<import::Browser>, String> {
 /// Takes the YouTube session from a browser profile listed by `account_browsers`.
 #[tauri::command]
 #[specta::specta]
+#[tracing::instrument(skip_all, err(level = "debug"))]
 pub async fn account_import(account: State<'_, Account>, id: String) -> Result<String, String> {
     let cookie = import_from(id.clone()).await?;
     account.save(Session {
@@ -321,6 +324,7 @@ pub async fn account_import(account: State<'_, Account>, id: String) -> Result<S
 /// session is rotated here. None when nothing gives anything newer.
 #[tauri::command]
 #[specta::specta]
+#[tracing::instrument(skip_all, err(level = "debug"))]
 pub async fn account_refresh(
     account: State<'_, Account>,
     stale: String,
@@ -352,6 +356,7 @@ pub async fn account_refresh(
 /// rotation did not take.
 #[tauri::command]
 #[specta::specta]
+#[tracing::instrument(skip_all, err(level = "debug"))]
 pub async fn account_rotate(account: State<'_, Account>) -> Result<Option<String>, String> {
     match account.session() {
         Some(session) if session.browser.is_none() => rotated(&account, session).await,
@@ -376,8 +381,10 @@ async fn rotated(account: &Account, session: Session) -> Result<Option<String>, 
 }
 
 async fn import_from(id: String) -> Result<String, String> {
-    // Reading the keyring can wait on an unlock prompt.
-    tauri::async_runtime::spawn_blocking(move || import::import(&id))
+    // Reading the keyring can wait on an unlock prompt. The blocking thread
+    // carries the caller's span, so its lines sit under the right command.
+    let span = tracing::Span::current();
+    tauri::async_runtime::spawn_blocking(move || span.in_scope(|| import::import(&id)))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -446,7 +453,7 @@ pub async fn update_check<R: Runtime>(
     crate::updates::check(&app.package_info().version, include_prereleases).await
 }
 
-/// Opens the folder `tauri-plugin-log` writes to, for attaching a log to a bug
+/// Opens the log folder (docs/logging.md), for attaching a log to a bug
 /// report.
 #[tauri::command]
 #[specta::specta]

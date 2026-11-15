@@ -99,6 +99,8 @@ fn request(url: String) -> LoadRequest {
         start_paused: false,
         loudness_db: None,
         start_ms: None,
+        player_client: None,
+        itag: None,
     }
 }
 

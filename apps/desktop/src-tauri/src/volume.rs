@@ -85,12 +85,12 @@ impl VolumeStore {
             Ok(bytes) => serde_json::from_slice::<SavedVolume>(&bytes)
                 .map(SavedVolume::sanitize)
                 .unwrap_or_else(|error| {
-                    log::error!("ignoring unreadable volume in {}: {error}", path.display());
+                    tracing::error!(path = %path.display(), %error, "ignoring an unreadable volume");
                     SavedVolume::default()
                 }),
             Err(error) if error.kind() == ErrorKind::NotFound => SavedVolume::default(),
             Err(error) => {
-                log::error!("could not read {}: {error}", path.display());
+                tracing::error!(path = %path.display(), %error, "could not read the volume");
                 SavedVolume::default()
             }
         };
@@ -123,7 +123,7 @@ impl VolumeStore {
         if let Some(path) = &self.path {
             let json = serde_json::to_vec_pretty(&next).expect("volume serialize");
             if let Err(error) = crate::files::write_atomically(path, &json) {
-                log::warn!("could not save the volume: {error}");
+                tracing::warn!(%error, "could not save the volume");
             }
         }
     }

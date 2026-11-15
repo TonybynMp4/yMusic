@@ -64,17 +64,22 @@ pub fn browsers() -> Vec<Browser> {
 }
 
 /// Reads the session out of one of `browsers()`, by its id.
+/// The span names the browser, not the profile path in `id`, and neither the
+/// span nor anything in it ever carries a cookie.
+#[tracing::instrument(skip_all, fields(browser = tracing::field::Empty))]
 pub fn import(id: &str) -> Result<String, String> {
     let browser = browsers()
         .into_iter()
         .find(|b| b.id == id)
         .ok_or("that browser profile is gone")?;
+    tracing::Span::current().record("browser", browser.name.as_str());
     let cookies = match &browser.store {
         Store::Firefox(path) => read_firefox(path),
         #[cfg(target_os = "linux")]
         Store::Chromium { cookies, keyring } => chromium::read(cookies, keyring),
     }
     .map_err(|error| format!("could not read {}'s cookies: {error}", browser.name))?;
+    tracing::debug!(cookies = cookies.len(), "read the cookie store");
     cookie_header(&cookies).ok_or_else(|| format!("{} is not signed in to YouTube", browser.name))
 }
 

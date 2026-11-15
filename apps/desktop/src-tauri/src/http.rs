@@ -86,12 +86,22 @@ impl Http {
         Ok(join(&head, &body))
     }
 
+    /// The span names the host and path only: the query and headers can hold
+    /// a key, a token or the session cookie.
+    #[tracing::instrument(
+        name = "http",
+        skip_all,
+        fields(method = %head.method, host = tracing::field::Empty, path = tracing::field::Empty),
+    )]
     pub async fn send(
         &self,
         head: RequestHead,
         body: Vec<u8>,
     ) -> Result<(ResponseHead, Vec<u8>), String> {
         let url = Url::parse(&head.url).map_err(|err| format!("bad url {}: {err}", head.url))?;
+        let span = tracing::Span::current();
+        span.record("host", url.host_str());
+        span.record("path", url.path());
         if !allowed(&url) {
             return Err(format!("not a YouTube url: {url}"));
         }
@@ -124,6 +134,9 @@ impl Http {
         let response = request.send().await.map_err(describe)?;
 
         let status = response.status();
+        if !status.is_success() {
+            tracing::debug!(status = status.as_u16(), "answered");
+        }
         let head = ResponseHead {
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or_default().to_string(),

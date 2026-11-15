@@ -75,6 +75,7 @@ pub struct DeviceCookie {
 
 /// Opens the sign-in window, with `device` set in it first, and waits.
 /// `Ok(None)` means the user closed it.
+#[tracing::instrument(name = "sign_in", skip_all)]
 pub async fn sign_in<R: Runtime>(
     app: &AppHandle<R>,
     device: Vec<DeviceCookie>,
@@ -115,13 +116,16 @@ pub async fn sign_in<R: Runtime>(
 
     // Blocking on the channel, and reading cookies, both belong off the async
     // runtime: WebView2's cookie call can deadlock a thread the webview needs.
+    let span = tracing::Span::current();
     tauri::async_runtime::spawn_blocking(move || {
+        let _span = span.entered();
         let restore = restore(&device, OffsetDateTime::now_utc().unix_timestamp());
         let names: Vec<&str> = restore.iter().map(|c| c.name()).collect();
-        log::info!("sign-in: restoring Google cookies {names:?}");
+        // Cookie names only, never their values.
+        tracing::info!("restoring Google cookies {names:?}");
         for cookie in restore {
             if let Err(error) = window.set_cookie(cookie.clone()) {
-                log::warn!("sign-in: could not restore {}: {error}", cookie.name());
+                tracing::warn!(cookie = cookie.name(), %error, "could not restore a cookie");
             }
         }
         if let Err(error) = window.navigate(SIGN_IN_URL.parse().expect("a valid URL")) {
@@ -151,7 +155,7 @@ pub async fn sign_in<R: Runtime>(
                         .unwrap_or_default();
                     let device = keep(&google);
                     let names: Vec<&str> = device.iter().map(|c| c.name.as_str()).collect();
-                    log::info!("sign-in: keeping Google cookies {names:?}");
+                    tracing::info!("keeping Google cookies {names:?}");
                     let _ = window.destroy();
                     return Ok(Some(SignedIn { cookie, device }));
                 }

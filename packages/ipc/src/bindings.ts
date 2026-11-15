@@ -25,6 +25,12 @@ export const commands = {
 	loudnessDb?: number | null,
 	/**  Where to start, for a queue restored at launch. From the top when None. */
 	startMs?: number | null,
+	/**
+	 *  The InnerTube client that resolved the stream, such as `WEB_REMIX`, and
+	 *  the format it chose. Only logged: they say which lease mpv was given.
+	 */
+	playerClient?: string | null,
+	itag?: number | null,
 } | null) => __TAURI_INVOKE<null>("player_queue_next", { after, request }),
 	playerPlay: () => __TAURI_INVOKE<null>("player_play"),
 	playerPause: () => __TAURI_INVOKE<null>("player_pause"),
@@ -151,7 +157,7 @@ export const commands = {
 	prerelease: boolean,
 } | null>("update_check"),
 	/**
-	 *  Opens the folder `tauri-plugin-log` writes to, for attaching a log to a bug
+	 *  Opens the log folder (docs/logging.md), for attaching a log to a bug
 	 *  report.
 	 */
 	openLogsFolder: () => __TAURI_INVOKE<null>("open_logs_folder"),
@@ -265,6 +271,12 @@ export type LoadRequest = {
 	loudnessDb?: number | null,
 	/**  Where to start, for a queue restored at launch. From the top when None. */
 	startMs?: number | null,
+	/**
+	 *  The InnerTube client that resolved the stream, such as `WEB_REMIX`, and
+	 *  the format it chose. Only logged: they say which lease mpv was given.
+	 */
+	playerClient?: string | null,
+	itag?: number | null,
 };
 
 /**  Mirrors `StreamLease` in `@ymusic/core`. */

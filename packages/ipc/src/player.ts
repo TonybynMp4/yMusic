@@ -54,6 +54,9 @@ function loadRequest(lease: StreamLease): LoadRequest {
     url: lease.url,
     headers: lease.headers,
     loudnessDb: lease.loudnessDb,
+    // Only for the Rust log, which names the lease mpv was given.
+    playerClient: lease.playerClient,
+    itag: lease.itag,
   };
 }
 

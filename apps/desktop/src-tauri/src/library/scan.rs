@@ -89,6 +89,7 @@ fn mtime_of(path: &Path) -> i64 {
         .unwrap_or(0)
 }
 
+#[tracing::instrument(name = "scan", skip(library), fields(folder = %folder.display()))]
 pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport> {
     let folder_key = folder.to_string_lossy().to_string();
     let mut report = ScanReport::default();
@@ -124,14 +125,25 @@ pub(super) fn scan_folder(library: &Library, folder: &Path) -> Result<ScanReport
         match index_file(library, &folder_key, &id, path, mtime) {
             Ok(()) if is_update => report.updated += 1,
             Ok(()) => report.added += 1,
-            Err(err) => report.failed.push(ScanFailure {
-                path: path.to_string_lossy().to_string(),
-                reason: err.to_string(),
-            }),
+            Err(err) => {
+                tracing::debug!(path = %path.display(), error = %err, "could not index");
+                report.failed.push(ScanFailure {
+                    path: path.to_string_lossy().to_string(),
+                    reason: err.to_string(),
+                })
+            }
         }
     }
 
     report.removed = prune_missing(library, &folder_key, &seen)?;
+    tracing::debug!(
+        added = report.added,
+        updated = report.updated,
+        unchanged = report.unchanged,
+        removed = report.removed,
+        failed = report.failed.len(),
+        "scanned"
+    );
     Ok(report)
 }
 

@@ -130,7 +130,7 @@ impl Account {
         };
         match account.load() {
             Ok(session) => *account.session.lock().expect("session mutex") = session,
-            Err(error) => log::warn!("starting signed out: {error}"),
+            Err(error) => tracing::warn!(%error, "starting signed out"),
         }
         account
     }
@@ -148,7 +148,7 @@ impl Account {
     /// again next launch instead of being refused now.
     pub fn save(&self, session: Session) {
         if let Err(error) = self.persist(&session) {
-            log::error!("signed in for this session only: {error}");
+            tracing::error!(%error, "signed in for this session only");
         }
         *self.session.lock().expect("session mutex") = Some(session);
     }
@@ -162,7 +162,7 @@ impl Account {
             return false;
         }
         if let Err(error) = self.persist(&session) {
-            log::error!("signed in for this session only: {error}");
+            tracing::error!(%error, "signed in for this session only");
         }
         *current = Some(session);
         true

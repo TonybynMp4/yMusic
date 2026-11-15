@@ -27,14 +27,14 @@ pub fn sync<R: Runtime>(app: &AppHandle<R>, on: bool) {
     match (on, keeps_playing(app)) {
         (true, false) => {
             if !has_tray_support() {
-                log::error!(
+                tracing::error!(
                     "could not add the tray icon: no system tray support (on Linux, install \
                      libayatana-appindicator3-1)"
                 );
                 return;
             }
             if let Err(error) = build(app) {
-                log::error!("could not add the tray icon: {error}");
+                tracing::error!(%error, "could not add the tray icon");
             }
         }
         (false, true) => {
@@ -86,7 +86,7 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             "play-pause" => {
                 if let Some(player) = app.try_state::<Player>() {
                     if let Err(error) = player.toggle_pause() {
-                        log::warn!("{error}");
+                        tracing::warn!("{error}");
                     }
                 }
             }

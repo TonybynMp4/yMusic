@@ -117,7 +117,7 @@ impl MediaSession {
         let session = Self::default();
         match create_controls(window, session.clone(), window.app_handle().clone()) {
             Ok(controls) => session.lock().controls = Some(controls),
-            Err(error) => log::warn!("media keys unavailable: {error}"),
+            Err(error) => tracing::warn!(%error, "media keys unavailable"),
         }
         session
     }
@@ -150,7 +150,7 @@ impl MediaSession {
             None => MediaMetadata::default(),
         };
         if let Err(error) = controls.set_metadata(metadata) {
-            log::warn!("could not update media metadata: {error:?}");
+            tracing::warn!(?error, "could not update media metadata");
         }
     }
 
@@ -159,7 +159,7 @@ impl MediaSession {
         #[cfg(target_os = "linux")]
         if let Some(controls) = self.lock().controls.as_mut() {
             if let Err(error) = controls.set_volume(volume.clamp(0.0, 1.0)) {
-                log::warn!("could not update media volume: {error:?}");
+                tracing::warn!(?error, "could not update media volume");
             }
         }
         #[cfg(not(target_os = "linux"))]
@@ -173,7 +173,7 @@ impl MediaSession {
     fn forward(&self, event: MediaKeyEvent) {
         if let Some(channel) = self.lock().frontend.as_ref() {
             if let Err(error) = channel.send(event) {
-                log::warn!("dropping media key event, channel closed: {error}");
+                tracing::warn!(%error, "dropping media key event, channel closed");
             }
         }
     }
@@ -247,7 +247,7 @@ impl EventSink for MediaSession {
         };
         if let Some(controls) = state.controls.as_mut() {
             if let Err(error) = controls.set_playback(playback) {
-                log::warn!("could not update media playback state: {error:?}");
+                tracing::warn!(?error, "could not update media playback state");
             }
         }
     }

@@ -180,7 +180,7 @@ impl Saved {
             match serde_json::from_value(next) {
                 Ok(settings) => saved.settings = settings,
                 Err(error) => {
-                    log::warn!("ignoring saved setting `{key}`: {error}");
+                    tracing::warn!(setting = %key, %error, "ignoring a saved setting");
                     saved.kept.insert(key, value);
                 }
             }
@@ -192,10 +192,7 @@ impl Saved {
     /// a JSON object.
     fn load(bytes: &[u8], path: &std::path::Path) -> Self {
         read(bytes).unwrap_or_else(|error| {
-            log::error!(
-                "ignoring unreadable settings in {}: {error}",
-                path.display()
-            );
+            tracing::error!(path = %path.display(), %error, "ignoring unreadable settings");
             Self::default()
         })
     }
@@ -240,7 +237,7 @@ impl SettingsStore {
             Ok(bytes) => Saved::load(&bytes, &path),
             Err(error) if error.kind() == ErrorKind::NotFound => Saved::default(),
             Err(error) => {
-                log::error!("could not read {}: {error}", path.display());
+                tracing::error!(path = %path.display(), %error, "could not read the settings");
                 Saved::default()
             }
         };

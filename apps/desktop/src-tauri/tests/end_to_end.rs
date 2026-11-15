@@ -70,6 +70,8 @@ fn a_scanned_track_plays_through_its_lease() {
             start_paused: false,
             loudness_db: None,
             start_ms: None,
+            player_client: None,
+            itag: None,
         })
         .unwrap_or_else(|error| panic!("mpv rejected the lease URL `{}`: {error}", lease.url));
 

@@ -14,7 +14,9 @@ Local files have their own items. A folder's menu opens it in the file manager, 
 
 The player bar and the full player show the song's byline as YouTube Music's bar does: artists, album and release year. The title opens the album, as do the album's name and each artist with a channel. Following one of these links collapses the full player. The full player covers the page only: the sidebar and the bar with search and the account menu stay, as in YouTube Music. Back, the mouse's back button, Alt+Left, Escape or the arrow on the player bar close it and leave you on the page under it.
 
-The player bar gives way on narrow windows without anything overlapping: only the title and byline shrink. Below 768 px the song takes the spare room and the volume slider becomes a vertical popup over its button. Below 640 px the thumbs are hidden, and below 520 px the song is its cover alone, which still opens the full player.
+The player bar's top edge is its scrubber, as in YouTube Music: a thin line across the whole window that thickens and shows its handle under the pointer. The time played and the song's length sit beside the volume.
+
+The player bar gives way on narrow windows without anything overlapping: only the title and byline shrink. Below 768 px the song takes the spare room and the volume slider becomes a vertical popup over its button. Below 640 px the thumbs are hidden, and below 520 px the song is its cover alone, which still opens the full player, and the time is hidden.
 
 The top bar keeps its buttons whole: below 640 px Sign in is its icon alone, and only the search box shrinks. Below 640 px, where the page would keep less than 384 px beside it, the sidebar is collapsed whatever was saved, as YouTube Music's guide is. Expanding it there floats it over the page behind a dimmed backdrop, so the top bar keeps its width. Clicking the backdrop, picking an entry or widening the window closes it, and the saved choice is left alone.
 

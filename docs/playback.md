@@ -13,14 +13,14 @@ Two details that each cost a day if missed:
 
 ## Player clients
 
-A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next. The log records each resolution (`resolved <id> as itag 774 through WEB_REMIX`).
+A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next. The webview console records each resolution (`resolved <id> as itag 774 through WEB_REMIX`), and the Rust log records the client and itag of each lease mpv loads (see [Logging](logging.md)).
 
 - Signed in: `WEB_REMIX`, then `VISIONOS`, then `TV_SIMPLY`.
 - Signed out: `VISIONOS`, then `TV_SIMPLY`.
 
 `WEB_REMIX` is music.youtube.com's own client, with the session cookie and the player script's signature timestamp. It is the only client that hands out Premium's formats (itag 774, Opus, and 141, AAC, both about 256 kbps) as plain URLs. Its formats are ciphered, signature and `n` both, and the URLs need both deciphered (the signature alone gets a 403), with the same evaluator `TV_SIMPLY` uses (see [The player script](#the-player-script)). Once deciphered they need no cookie and no PO token. `VISIONOS` needs no token and no evaluator. `TV_SIMPLY` needs a PO token bound to its visitor id, and is there for when `VISIONOS` stops working. A web cookie on either of those gets HTTP 400, so they stay anonymous.
 
-When mpv refuses a stream that resolved (a 403 shows up only in mpv), the player retries it once, starting on the client after the one that resolved it.
+When mpv refuses a stream that resolved (a 403 shows up only in mpv), the player retries it once, starting on the client after the one that resolved it. The log shows the retry as `attempt=2` on its `load` span.
 
 On "high", a Premium format wins whenever one is offered, Opus before AAC, then the highest bitrate. "normal" and "low" pick by bitrate as before. There is no level above "high": 256 kbps is the most YouTube serves.
 
@@ -57,7 +57,7 @@ Prior art: googlevideo#42 and #54 (the reload loop on voice-boost formats, and t
 - The queue calls `player_queue_next` again whenever the next track changes (skip, reorder, play next, shuffle, a cleared queue), which runs `playlist-clear` and appends the new one, or nothing. Rust ignores a call meant for a song that is no longer playing. Repeat-one and a disliked next song under "Skip disliked songs" append nothing. Neither does a next track whose headers differ from the current one's, because `http-header-fields` is global.
 - mpv keeps the audio device open with the first file's format, so a file at another sample rate (YouTube's Opus is 48 kHz, a local file may be 44.1 kHz) is resampled rather than reopening the device. Silence encoded into the files themselves stays, as on YouTube Music.
 
-The log records each join (`went on to <id> with no gap`).
+The log records each join (`went on with no gap track_id=<id>`).
 
 Volume is perceptual. mpv's `volume` property already applies a cubic taper, so the UI sends the slider position as a linear fraction and never applies the curve again.
 

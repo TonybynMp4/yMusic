@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ymusic_lib::library::{AudioCodec, Library};
+use ymusic_lib::library::Library;
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/library")
@@ -37,6 +37,27 @@ impl Drop for TempHome {
     }
 }
 
+/// Fields that change between runs or machines: ids hash the absolute path,
+/// paths start at the checkout, art lands in a temp cache, and `addedAt` is the
+/// scan time. Everything else, every tag of every fixture, is in the snapshot.
+fn track_settings() -> insta::Settings {
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction("[].id", "[id]");
+    settings.add_redaction("[].addedAt", "[timestamp]");
+    settings.add_redaction("[].coverArt.path", "[art cache]");
+    settings.add_redaction(
+        "[].path",
+        insta::dynamic_redaction(|value, _| {
+            let root = format!("{}/", fixture_dir().display());
+            value
+                .as_str()
+                .map(|path| path.replace(&root, "<fixtures>/").into())
+                .unwrap_or(value)
+        }),
+    );
+    settings
+}
+
 #[test]
 fn scans_a_folder_and_reads_tags() {
     let home = TempHome::new("scan");
@@ -49,27 +70,30 @@ fn scans_a_folder_and_reads_tags() {
     assert_eq!(report.added, 3, "two tagged files plus the untagged one");
 
     let tracks = library.tracks().expect("tracks");
-    assert_eq!(tracks.len(), 3);
+    assert!(
+        tracks.iter().all(|t| t.id.starts_with("local:")),
+        "ids are namespaced"
+    );
+    track_settings().bind(|| insta::assert_json_snapshot!(tracks));
+}
 
-    let first = tracks
-        .iter()
-        .find(|t| t.title == "First Light")
-        .expect("tagged flac");
-    assert_eq!(first.artist, "Nebula");
-    assert_eq!(first.album.as_deref(), Some("Drift"));
-    assert_eq!(first.track_number, Some(1));
-    assert_eq!(first.year, Some(2021));
-    assert_eq!(first.codec, AudioCodec::Flac);
-    assert!(
-        first.id.starts_with("local:"),
-        "ids are namespaced: {}",
-        first.id
-    );
-    let duration = first.duration_ms.expect("flac reports a duration");
-    assert!(
-        (1900..=2100).contains(&duration),
-        "expected ~2s, got {duration}ms"
-    );
+/// A file with an audio extension that lofty cannot read is reported, with
+/// the reason, rather than dropped.
+#[test]
+fn a_file_that_cannot_be_read_is_reported_with_the_reason() {
+    let home = TempHome::new("corrupt");
+    let folder = home.0.join("music");
+    std::fs::create_dir_all(&folder).expect("music folder");
+    std::fs::write(folder.join("broken.flac"), b"not a flac file").expect("broken file");
+    std::fs::copy(fixture_dir().join("untagged.ogg"), folder.join("fine.ogg")).expect("copy");
+
+    let library = home.library();
+    library.add_folder(&folder).expect("add folder");
+    let report = library.scan_folder(&folder).expect("scan");
+
+    let mut settings = insta::Settings::clone_current();
+    settings.add_redaction(".failed[].path", "[temp]/music/broken.flac");
+    settings.bind(|| insta::assert_json_snapshot!(report));
 }
 
 #[test]

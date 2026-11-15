@@ -1,0 +1,58 @@
+---
+source: tests/library.rs
+expression: tracks
+---
+[
+  {
+    "id": "[id]",
+    "path": "<fixtures>/Nebula/01.flac",
+    "title": "First Light",
+    "artist": "Nebula",
+    "album": "Drift",
+    "albumArtist": null,
+    "trackNumber": 1,
+    "discNumber": null,
+    "year": 2021,
+    "durationMs": 2000,
+    "codec": "flac",
+    "bitrate": 96,
+    "coverArt": null,
+    "addedAt": "[timestamp]"
+  },
+  {
+    "id": "[id]",
+    "path": "<fixtures>/Nebula/02.mp3",
+    "title": "Second Light",
+    "artist": "Nebula",
+    "album": "Drift",
+    "albumArtist": "Nebula",
+    "trackNumber": 2,
+    "discNumber": null,
+    "year": null,
+    "durationMs": 1045,
+    "codec": "mp3",
+    "bitrate": 65,
+    "coverArt": {
+      "path": "[art cache]",
+      "width": 64,
+      "height": 48
+    },
+    "addedAt": "[timestamp]"
+  },
+  {
+    "id": "[id]",
+    "path": "<fixtures>/untagged.ogg",
+    "title": "untagged",
+    "artist": "Unknown Artist",
+    "album": null,
+    "albumArtist": null,
+    "trackNumber": null,
+    "discNumber": null,
+    "year": null,
+    "durationMs": 1000,
+    "codec": "vorbis",
+    "bitrate": 80,
+    "coverArt": null,
+    "addedAt": "[timestamp]"
+  }
+]

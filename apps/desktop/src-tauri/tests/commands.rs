@@ -252,8 +252,7 @@ fn settings_round_trip_over_ipc() {
         .expect("settings_get should succeed")
         .deserialize::<serde_json::Value>()
         .expect("settings json");
-    assert_eq!(settings["audioQuality"], "high", "{settings}");
-    assert_eq!(settings["autoplay"], true, "{settings}");
+    insta::assert_json_snapshot!("settings_get", settings);
 
     let changed = get_ipc_response(
         &webview,
@@ -265,8 +264,7 @@ fn settings_round_trip_over_ipc() {
     .expect("settings_set should succeed")
     .deserialize::<serde_json::Value>()
     .expect("settings json");
-    assert_eq!(changed["pauseWatchHistory"], true, "{changed}");
-    assert_eq!(changed["autoplay"], true, "{changed}");
+    insta::assert_json_snapshot!("settings_set", changed);
 }
 
 /// The library half of the surface, driven the same way. Kept separate from the
@@ -302,28 +300,13 @@ fn library_commands_round_trip_over_ipc() {
         .expect("tracks json");
     let tracks = tracks.as_array().expect("an array of tracks");
     assert_eq!(tracks.len(), 3);
-    // Pins the casing the zod schema in `packages/ipc` parses.
-    for field in [
-        "id",
-        "path",
-        "title",
-        "artist",
-        "album",
-        "albumArtist",
-        "trackNumber",
-        "discNumber",
-        "year",
-        "durationMs",
-        "codec",
-        "bitrate",
-        "coverArt",
-    ] {
-        assert!(
-            tracks[0].get(field).is_some(),
-            "missing `{field}` in {}",
-            tracks[0]
-        );
-    }
+    // Pins the casing the zod schema in `packages/ipc` parses, and the values.
+    insta::assert_json_snapshot!("library_track", tracks[0], {
+        ".id" => "[id]",
+        ".path" => "[fixture path]",
+        ".addedAt" => "[timestamp]",
+        ".coverArt.path" => "[art cache]",
+    });
 
     let found = get_ipc_response(
         &webview,
@@ -342,27 +325,12 @@ fn library_commands_round_trip_over_ipc() {
     .expect("library_resolve should succeed")
     .deserialize::<serde_json::Value>()
     .expect("lease json");
-    // The lease must satisfy the same schema a YouTube lease will.
-    for field in [
-        "trackId",
-        "url",
-        "itag",
-        "codec",
-        "bitrate",
-        "isPremiumFormat",
-        "headers",
-        "expiresAt",
-        "loudnessDb",
-        "playerClient",
-        "degraded",
-    ] {
-        assert!(lease.get(field).is_some(), "missing `{field}` in {lease}");
-    }
-    assert!(lease["expiresAt"].is_null(), "a local file never expires");
-    assert!(
-        lease["loudnessDb"].is_null(),
-        "a local file has no YouTube loudness"
-    );
+    // The lease must satisfy the same schema a YouTube lease will. A local
+    // file never expires and has no YouTube loudness.
+    insta::assert_json_snapshot!("library_lease", lease, {
+        ".trackId" => "[id]",
+        ".url" => "[fixture path]",
+    });
 
     let folders = get_ipc_response(&webview, request("library_folders", serde_json::json!({})))
         .expect("library_folders should succeed")

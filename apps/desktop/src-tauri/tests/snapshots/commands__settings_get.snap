@@ -1,0 +1,17 @@
+---
+source: tests/commands.rs
+expression: settings
+---
+{
+  "audioDevice": "auto",
+  "audioQuality": "high",
+  "autoplay": true,
+  "checkForUpdates": true,
+  "closeToTray": false,
+  "includePrereleases": false,
+  "pauseWatchHistory": false,
+  "searchHistory": "youtube",
+  "skipDisliked": false,
+  "stableVolume": "off",
+  "statsForNerds": false
+}

@@ -1,0 +1,46 @@
+# Git hooks, installed by lefthook's postinstall on `pnpm install`. See the
+# "Git hooks" section of AGENTS.md. Only fast checks on staged files run here:
+# typecheck, clippy and the tests stay in CI.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: oxlint
+      glob: "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
+      run: node_modules/.bin/oxlint --deny-warnings --no-error-on-unmatched-pattern {staged_files}
+
+    # Formats and re-stages. Files .oxfmtrc.json ignores are skipped by oxfmt.
+    - name: oxfmt
+      glob: "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,json5,css,md}"
+      run: node_modules/.bin/oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+    # rustfmt rather than cargo fmt, which would rewrite unstaged files across
+    # the crate. rustfmt still follows `mod x;` into child files (skipping
+    # them is nightly only), so staging lib.rs or a mod.rs formats those too.
+    - name: rustfmt
+      root: apps/desktop/src-tauri/
+      glob: "*.rs"
+      run: |
+        if ! rustfmt --version >/dev/null 2>&1; then
+          echo "rustfmt is not installed, skipping. CI still runs cargo fmt --check."
+          exit 0
+        fi
+        edition=$(sed -n 's/^edition = "\(.*\)"$/\1/p' Cargo.toml)
+        rustfmt --edition "$edition" {staged_files}
+      stage_fixed: true
+
+# The squash merge takes the PR title, which CI checks, so this only keeps
+# branch commits readable. Git's own merge, revert and fixup subjects pass.
+commit-msg:
+  jobs:
+    - name: conventional commit
+      run: |
+        subject=$(grep -v '^#' {1} | grep -m1 -v '^[[:space:]]*$')
+        types='feat|fix|perf|refactor|docs|test|build|ci|style|revert|chore'
+        if printf '%s\n' "$subject" | grep -Eq "^(($types)(\([^)]+\))?!?: .+|Merge |Revert \"|(fixup|squash|amend)! )"; then
+          exit 0
+        fi
+        echo "Commit subject is not a Conventional Commit: $subject"
+        echo "Expected <type>(<scope>)?: <summary>, where type is one of: $types"
+        exit 1

@@ -1,0 +1,6 @@
+---
+source: tests/commands.rs
+expression: "found.join(\"\\n\")"
+---
+"First Light" / "Nebula" / "Drift"
+"Second Light" / "Nebula" / "Drift"

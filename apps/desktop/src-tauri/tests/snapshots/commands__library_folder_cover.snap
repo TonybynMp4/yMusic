@@ -1,0 +1,9 @@
+---
+source: tests/commands.rs
+expression: cover
+---
+{
+  "height": 1,
+  "path": "[art cache]",
+  "width": 2
+}

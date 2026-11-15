@@ -1,0 +1,19 @@
+---
+source: src/playback/mod.rs
+expression: "table.join(\"\\n\")"
+---
+Off None -> ""
+Off Some(6.0) -> ""
+Off Some(0.0) -> ""
+Off Some(-3.0) -> ""
+Off Some(-20.0) -> ""
+On None -> ""
+On Some(6.0) -> "lavfi=[volume=-6.00dB]"
+On Some(0.0) -> ""
+On Some(-3.0) -> "lavfi=[volume=3.00dB,alimiter=limit=0.891:level=disabled]"
+On Some(-20.0) -> "lavfi=[volume=6.00dB,alimiter=limit=0.891:level=disabled]"
+LoudOnly None -> ""
+LoudOnly Some(6.0) -> "lavfi=[volume=-6.00dB]"
+LoudOnly Some(0.0) -> ""
+LoudOnly Some(-3.0) -> ""
+LoudOnly Some(-20.0) -> ""

@@ -1093,6 +1093,20 @@ mod tests {
         insta::assert_snapshot!(table.join("\n"));
     }
 
+    /// The `af` string mpv gets for each mode and YouTube loudness: positive
+    /// is louder than the reference, negative quieter.
+    #[test]
+    fn stable_volume_filter_for_each_mode_and_loudness() {
+        let mut table = Vec::new();
+        for mode in [StableVolume::Off, StableVolume::On, StableVolume::LoudOnly] {
+            for loudness in [None, Some(6.0), Some(0.0), Some(-3.0), Some(-20.0)] {
+                let filter = stable_volume_filter(mode, loudness);
+                table.push(format!("{mode:?} {loudness:?} -> {filter:?}"));
+            }
+        }
+        insta::assert_snapshot!(table.join("\n"));
+    }
+
     #[test]
     fn an_option_value_is_quoted_by_its_length_in_bytes() {
         assert_eq!(quote_option(""), "%0%");

@@ -1,5 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { QueueState, StreamLease, Track, TrackId } from "@ymusic/core";
 import type { QueueFrom } from "@ymusic/ipc";
 
@@ -70,8 +69,7 @@ export function FullPlayer({
   ...queueProps
 }: Props) {
   const [active, setActive] = useState("queue");
-  // Narrow windows only: whether the tabs are pulled up over the artwork.
-  const [sheet, setSheet] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   const year = useSongYear(track);
 
   // Escape collapses, because a view that covers everything needs a way out
@@ -87,25 +85,22 @@ export function FullPlayer({
 
   const contributed = tabs.find((tab) => tab.id === active);
 
-  // Pressing the open tab again lowers the sheet. On a wide window the sheet
-  // state changes nothing.
+  // On a narrow player the page scrolls, so a tab brings its panel up: it is
+  // the last thing on the page, so that is scrolling to the end. On a wide one
+  // nothing overflows and this does nothing.
   const pick = (id: string) => {
-    setSheet(id === active ? !sheet : true);
     setActive(id);
+    const page = panel.current?.parentElement;
+    page?.scrollTo({ top: page.scrollHeight, behavior: "smooth" });
   };
 
   return (
     // Below 768 px of its own width (the sidebar's width varies) the tabs
-    // move under the artwork and open as a sheet over it, as YouTube Music's
-    // player does on a narrow window.
+    // move under the artwork and the page scrolls. The tabs' panel is one
+    // page tall, so scrolled to the end it fills the player.
     <section className="@container absolute inset-0 z-10 flex flex-col bg-background">
-      <div className="flex min-h-0 flex-1 gap-8 p-8 @max-3xl:flex-col @max-3xl:gap-4 @max-3xl:p-4">
-        <div
-          className={cn(
-            "flex min-w-0 flex-[3] flex-col items-center justify-center gap-5 @max-3xl:min-h-0",
-            sheet && "@max-3xl:hidden",
-          )}
-        >
+      <div className="flex min-h-0 flex-1 gap-8 p-8 @max-3xl:flex-col @max-3xl:gap-4 @max-3xl:overflow-y-auto @max-3xl:p-4">
+        <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5 @max-3xl:flex-none">
           <div className="relative w-full max-w-md @max-3xl:max-w-[min(28rem,45vh)]">
             {stats && <StatsForNerds key={track?.id} lease={lease} onClose={onCloseStats} />}
             <CoverArt track={track} />
@@ -127,10 +122,8 @@ export function FullPlayer({
         </div>
 
         <div
-          className={cn(
-            "flex min-h-0 w-96 shrink-0 flex-col @max-3xl:w-full",
-            sheet && "@max-3xl:flex-1",
-          )}
+          ref={panel}
+          className="flex min-h-0 w-96 shrink-0 flex-col @max-3xl:h-full @max-3xl:w-full"
         >
           <div className="flex gap-1 border-b">
             <Tab active={active === "queue"} onClick={() => pick("queue")}>
@@ -141,19 +134,9 @@ export function FullPlayer({
                 {tab.label}
               </Tab>
             ))}
-            {sheet && (
-              <button
-                type="button"
-                onClick={() => setSheet(false)}
-                aria-label="Show artwork"
-                className="ml-auto hidden px-2 text-muted-foreground transition-colors outline-none hover:text-foreground @max-3xl:block"
-              >
-                <IconChevronDown size={20} />
-              </button>
-            )}
           </div>
 
-          <div className={cn("min-h-0 flex-1 pt-2", !sheet && "@max-3xl:hidden")}>
+          <div className="min-h-0 flex-1 pt-2">
             {contributed ? contributed.render(track) : <Queue {...queueProps} />}
           </div>
         </div>

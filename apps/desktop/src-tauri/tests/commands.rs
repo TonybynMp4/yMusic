@@ -287,22 +287,14 @@ fn library_commands_round_trip_over_ipc() {
         .build()
         .expect("mock webview");
 
+    // `library_add_folder` opens the native picker, which a test cannot
+    // answer, so the folder goes in the way the command adds it.
     let fixtures = format!("{}/tests/fixtures/library", env!("CARGO_MANIFEST_DIR"));
-
-    let report = get_ipc_response(
-        &webview,
-        request(
-            "library_add_folder",
-            serde_json::json!({ "path": fixtures }),
-        ),
-    )
-    .expect("library_add_folder should succeed")
-    .deserialize::<serde_json::Value>()
-    .expect("report json");
-    assert_eq!(
-        report["added"], 3,
-        "adding a folder also scans it: {report}"
-    );
+    let fixtures = std::path::Path::new(&fixtures);
+    let library = app.state::<Library>();
+    library.add_folder(fixtures).expect("add folder");
+    let report = library.scan_folder(fixtures).expect("scan folder");
+    assert_eq!(report.added, 3, "the fixtures hold three songs");
 
     let tracks = get_ipc_response(&webview, request("library_tracks", serde_json::json!({})))
         .expect("library_tracks should succeed")

@@ -13,6 +13,7 @@ use crate::queue::{QueueJson, QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsPatch, SettingsStore};
 use crate::volume::{SavedVolume, VolumeStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
+use tauri_plugin_dialog::DialogExt;
 
 /// What the app knows about where it is running. The frontend shows some of it
 /// on the about screen; the updater decides what it may do with the rest.
@@ -172,14 +173,33 @@ pub async fn library_folder_cover(
     library.folder_cover(&path).map_err(|e| e.to_string())
 }
 
+/// Asks for the folder here, in the native picker, rather than taking a path
+/// from the webview: a page that could name the path could have any directory
+/// scanned and its cover art copied to where the asset protocol serves it.
+/// `None` when the picker is cancelled.
 #[tauri::command]
 #[specta::specta]
-pub fn library_add_folder(library: State<'_, Library>, path: String) -> Result<ScanReport, String> {
-    let path = std::path::PathBuf::from(path);
+pub async fn library_add_folder<R: Runtime>(
+    window: tauri::Window<R>,
+    library: State<'_, Library>,
+) -> Result<Option<ScanReport>, String> {
+    let picked = window
+        .dialog()
+        .file()
+        .set_title("Add music folder")
+        .set_parent(&window)
+        .blocking_pick_folder();
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
     library.add_folder(&path).map_err(|e| e.to_string())?;
     // Scanning here rather than making the caller do it keeps "add a folder"
     // a single user-visible action that either works or reports why not.
-    library.scan_folder(&path).map_err(|e| e.to_string())
+    library
+        .scan_folder(&path)
+        .map_err(|e| e.to_string())
+        .map(Some)
 }
 
 #[tauri::command]

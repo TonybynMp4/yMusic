@@ -8,6 +8,7 @@ import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { AccountMenu } from "./AccountMenu.tsx";
 import { BrowseView, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { errorMessage } from "./errors.ts";
@@ -28,6 +29,7 @@ import { useAccount } from "./useAccount.ts";
 import { forgetPage, viewKey, type View } from "./useBrowse.ts";
 import { tracksIn, useLocalLibrary, type LocalLibrary } from "./useLocalLibrary.ts";
 import { useLibraryPlaylists } from "./useLibraryPlaylists.ts";
+import { useMediaQuery } from "./useMediaQuery.ts";
 import { forgetSaved } from "./useSavedLibrary.ts";
 import { useMediaSession } from "./useMediaSession.ts";
 import { useResume } from "./useResume.ts";
@@ -56,6 +58,11 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   /** Scroll offsets by history depth, so Back lands where you left. */
   const scrolls = useRef<number[]>([]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
+  // Below 640 px the sidebar starts collapsed whatever was saved, as YouTube
+  // Music's guide does. Expanded there, it floats over the page.
+  const narrow = useMediaQuery("(max-width: 639px)");
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  if (!narrow && narrowExpanded) setNarrowExpanded(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
@@ -88,11 +95,13 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
 
-  const toggleSidebar = () =>
+  const toggleSidebar = () => {
+    if (narrow) return setNarrowExpanded((e) => !e);
     setCollapsed((c) => {
       localStorage.setItem(SIDEBAR_KEY, c ? "0" : "1");
       return !c;
     });
+  };
   const go = (next: View | null) => {
     setExpanded(false);
     setHistory((entries) => {
@@ -266,36 +275,54 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
       <div className="flex h-full flex-col bg-background text-foreground">
         <TitleBar />
 
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           {/* Outside the area the expanded player covers, so the library stays
               reachable with the player open. */}
-          <Sidebar
-            collapsed={collapsed}
-            onToggleCollapsed={toggleSidebar}
-            current={expanded ? "player" : view ? viewKey(view) : null}
-            onSearch={showSearch}
-            onNavigate={go}
-            playlists={playlists.playlists}
-            folders={library.folders}
-            covers={library.covers}
-            localCount={library.all.length}
-            report={library.report}
-            loading={library.loading || playlists.loading}
-            onAddFolder={() => void library.addFolder()}
-            onRemoveFolder={(path) => void library.removeFolder(path)}
-            onRefresh={() => {
-              playlists.reload();
-              forgetSaved();
-              if (library.folders.length > 0) void library.rescan();
-            }}
-          />
+          {/* Holds the rail's width while the expanded sidebar floats. */}
+          <div className={cn("relative z-20 flex shrink-0", narrow && "w-16")}>
+            <Sidebar
+              collapsed={narrow ? !narrowExpanded : collapsed}
+              overlay={narrow}
+              onToggleCollapsed={toggleSidebar}
+              current={expanded ? "player" : view ? viewKey(view) : null}
+              onSearch={() => {
+                setNarrowExpanded(false);
+                showSearch();
+              }}
+              onNavigate={(next) => {
+                setNarrowExpanded(false);
+                go(next);
+              }}
+              playlists={playlists.playlists}
+              folders={library.folders}
+              covers={library.covers}
+              localCount={library.all.length}
+              report={library.report}
+              loading={library.loading || playlists.loading}
+              onAddFolder={() => void library.addFolder()}
+              onRemoveFolder={(path) => void library.removeFolder(path)}
+              onRefresh={() => {
+                playlists.reload();
+                forgetSaved();
+                if (library.folders.length > 0) void library.rescan();
+              }}
+            />
+          </div>
+          {/* Dims the page under the floating sidebar; a click outside closes it. */}
+          {narrow && narrowExpanded && (
+            <div
+              aria-hidden
+              className="absolute inset-0 z-15 bg-black/50"
+              onClick={() => setNarrowExpanded(false)}
+            />
+          )}
 
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Above the area the expanded player covers, like the sidebar, so
                 search and settings stay reachable with the player open. */}
             <div className="flex items-center gap-3 px-4 py-3">
               {(depth > 0 || expanded) && (
-                <IconButton label="Back" size="icon" onClick={back}>
+                <IconButton label="Back" size="icon" onClick={back} className="shrink-0">
                   <IconArrowLeft size={18} stroke={1.75} />
                 </IconButton>
               )}

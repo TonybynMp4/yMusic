@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { QueueState, StreamLease, Track, TrackId } from "@ymusic/core";
 import type { QueueFrom } from "@ymusic/ipc";
 
@@ -69,6 +69,7 @@ export function FullPlayer({
   ...queueProps
 }: Props) {
   const [active, setActive] = useState("queue");
+  const panel = useRef<HTMLDivElement>(null);
   const year = useSongYear(track);
 
   // Escape collapses, because a view that covers everything needs a way out
@@ -84,11 +85,23 @@ export function FullPlayer({
 
   const contributed = tabs.find((tab) => tab.id === active);
 
+  // On a narrow player the page scrolls, so a tab brings its panel up: it is
+  // the last thing on the page, so that is scrolling to the end. On a wide one
+  // nothing overflows and this does nothing.
+  const pick = (id: string) => {
+    setActive(id);
+    const page = panel.current?.parentElement;
+    page?.scrollTo({ top: page.scrollHeight, behavior: "smooth" });
+  };
+
   return (
-    <section className="absolute inset-0 z-10 flex flex-col bg-background">
-      <div className="flex min-h-0 flex-1 gap-8 p-8">
-        <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5">
-          <div className="relative w-full max-w-md">
+    // Below 768 px of its own width (the sidebar's width varies) the tabs
+    // move under the artwork and the page scrolls. The tabs' panel is one
+    // page tall, so scrolled to the end it fills the player.
+    <section className="@container absolute inset-0 z-10 flex flex-col bg-background">
+      <div className="flex min-h-0 flex-1 gap-8 p-8 @max-3xl:flex-col @max-3xl:gap-4 @max-3xl:overflow-y-auto @max-3xl:p-4">
+        <div className="flex min-w-0 flex-[3] flex-col items-center justify-center gap-5 @max-3xl:flex-none">
+          <div className="relative w-full max-w-md @max-3xl:max-w-[min(28rem,45vh)]">
             {stats && <StatsForNerds key={track?.id} lease={lease} onClose={onCloseStats} />}
             <CoverArt track={track} />
           </div>
@@ -108,13 +121,16 @@ export function FullPlayer({
           )}
         </div>
 
-        <div className="flex min-h-0 w-96 shrink-0 flex-col">
+        <div
+          ref={panel}
+          className="flex min-h-0 w-96 shrink-0 flex-col @max-3xl:h-full @max-3xl:w-full"
+        >
           <div className="flex gap-1 border-b">
-            <Tab active={active === "queue"} onClick={() => setActive("queue")}>
+            <Tab active={active === "queue"} onClick={() => pick("queue")}>
               Up next
             </Tab>
             {tabs.map((tab) => (
-              <Tab key={tab.id} active={active === tab.id} onClick={() => setActive(tab.id)}>
+              <Tab key={tab.id} active={active === tab.id} onClick={() => pick(tab.id)}>
                 {tab.label}
               </Tab>
             ))}

@@ -31,6 +31,10 @@ const LIBRARY: View = { kind: "library", id: "" };
 
 interface Props {
   collapsed: boolean;
+  /** Expanded, it floats over the content instead of pushing it aside, as
+   * YouTube Music's guide does on a narrow window. The parent keeps the rail's
+   * place. */
+  overlay?: boolean;
   onToggleCollapsed: () => void;
   /** The key of the view showing, or null for search. */
   current: string | null;
@@ -88,11 +92,13 @@ export function Sidebar(props: Props) {
     })),
   ];
 
+  const floating = props.overlay && !collapsed;
   return (
     <aside
       className={cn(
-        "flex shrink-0 flex-col border-r transition-[width] duration-200",
+        "flex shrink-0 flex-col border-r bg-background transition-[width] duration-200",
         collapsed ? "w-16" : "w-64",
+        floating && "absolute inset-y-0 left-0 shadow-xl",
       )}
     >
       <div className={cn("flex flex-col gap-1 p-2", collapsed && "items-center")}>

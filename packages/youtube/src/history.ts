@@ -15,7 +15,7 @@ export interface PlaybackTracking {
 }
 
 /** Who a report claims to come from, the client that asked for the tracking URLs. */
-export interface StatsClient {
+interface StatsClient {
   name: string;
   version: string;
 }

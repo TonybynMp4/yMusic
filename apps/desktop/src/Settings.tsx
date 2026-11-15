@@ -518,7 +518,7 @@ function Choice<T extends string>(props: {
   );
 }
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1">
       <h2 className="mb-1 text-lg font-semibold">{title}</h2>
@@ -532,7 +532,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
  * clicking the text flips a switch, unless `action` says the control is a
  * button, which a stray click on the text must not press.
  */
-export function Row(props: {
+function Row(props: {
   label: string;
   description?: ReactNode;
   control: ReactNode;

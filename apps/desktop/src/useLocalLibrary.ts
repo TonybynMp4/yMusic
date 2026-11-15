@@ -9,7 +9,6 @@ import {
   libraryScan,
   librarySearch,
   type LocalTrack,
-  pickMusicFolder,
   type ScanReport,
 } from "@ymusic/ipc";
 
@@ -101,7 +100,7 @@ export function useLocalLibrary(query: string) {
 
   /** Runs a change to the library, then reloads it and any search showing. */
   const change = useCallback(
-    async (run: () => Promise<ScanReport | void>) => {
+    async (run: () => Promise<ScanReport | null | void>) => {
       setState((s) => ({ ...s, loading: true }));
       try {
         const report = await run();
@@ -115,10 +114,7 @@ export function useLocalLibrary(query: string) {
     [reload],
   );
 
-  const addFolder = useCallback(async () => {
-    const chosen = await pickMusicFolder();
-    if (chosen !== null) await change(() => libraryAddFolder(chosen));
-  }, [change]);
+  const addFolder = useCallback(() => change(() => libraryAddFolder()), [change]);
 
   const removeFolder = useCallback(
     (path: string) => change(() => libraryRemoveFolder(path)),

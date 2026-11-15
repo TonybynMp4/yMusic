@@ -2,6 +2,8 @@
 
 Folders are scanned into SQLite (`library/scan.rs`). A song's id is a hash of its path, so retagging a file updates its row, and moving it makes a new one. A file whose modification time has not changed since the last scan is not read again.
 
+Adding a folder opens the native picker from Rust: `library_add_folder` takes no path, so the webview can ask for a picker but cannot name a directory to scan. The webview has no dialog permission of its own.
+
 ## Cover art
 
 A song's art is the first picture embedded in its tags (an ID3 `APIC` frame, a FLAC `PICTURE` block and so on), copied into the art cache once per song because the webview's asset protocol only reaches that directory. A song without one has no art. It never borrows a cover image from its folder.

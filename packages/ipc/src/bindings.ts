@@ -60,7 +60,25 @@ export const commands = {
 	width: number,
 	height: number,
 } | null>("library_folder_cover", { path }),
-	libraryAddFolder: (path: string) => __TAURI_INVOKE<ScanReport>("library_add_folder", { path }),
+	/**
+	 *  Asks for the folder here, in the native picker, rather than taking a path
+	 *  from the webview: a page that could name the path could have any directory
+	 *  scanned and its cover art copied to where the asset protocol serves it.
+	 *  `None` when the picker is cancelled.
+	 */
+	libraryAddFolder: () => __TAURI_INVOKE<{
+	added: number,
+	updated: number,
+	/**  Skipped because the file has not changed since the last scan. */
+	unchanged: number,
+	/**
+	 *  Files that looked like audio but could not be read. Reported rather
+	 *  than thrown away so a corrupt file is visible instead of silently
+	 *  missing from the library.
+	 */
+	failed: ScanFailure[],
+	removed: number,
+} | null>("library_add_folder"),
 	libraryRemoveFolder: (path: string) => __TAURI_INVOKE<null>("library_remove_folder", { path }),
 	libraryScan: () => __TAURI_INVOKE<ScanReport>("library_scan"),
 	libraryTracks: () => __TAURI_INVOKE<LocalTrack[]>("library_tracks"),

@@ -87,7 +87,8 @@ impl Http {
     }
 
     /// The span names the host and path only: the query and headers can hold
-    /// a key, a token or the session cookie.
+    /// a key, a token or the session cookie. A stream host's path is left out
+    /// too, since googlevideo can carry the signature in it.
     #[tracing::instrument(
         name = "http",
         skip_all,
@@ -101,9 +102,14 @@ impl Http {
         let url = Url::parse(&head.url).map_err(|err| format!("bad url {}: {err}", head.url))?;
         let span = tracing::Span::current();
         span.record("host", url.host_str());
-        span.record("path", url.path());
+        if !is_stream_host(&url) {
+            span.record("path", url.path());
+        }
         if !allowed(&url) {
-            return Err(format!("not a YouTube url: {url}"));
+            return Err(format!(
+                "not a YouTube url: {}",
+                url.host_str().unwrap_or("no host")
+            ));
         }
         let method = Method::from_bytes(head.method.as_bytes())
             .map_err(|_| format!("bad method {}", head.method))?;
@@ -155,6 +161,11 @@ impl Http {
 }
 
 /// The hosts `capabilities/default.json` allowed the HTTP plugin, kept as they were.
+fn is_stream_host(url: &Url) -> bool {
+    url.host_str()
+        .is_some_and(|host| host.ends_with(".googlevideo.com"))
+}
+
 fn allowed(url: &Url) -> bool {
     if url.scheme() != "https" {
         return false;

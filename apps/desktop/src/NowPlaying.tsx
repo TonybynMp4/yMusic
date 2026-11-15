@@ -79,6 +79,21 @@ const REPEAT_LABEL: Record<RepeatMode, string> = {
 /** Red fill, as YouTube Music's progress bar is; the volume bar stays white. */
 const BRAND_SLIDER = "[&_[data-slot=slider-range]]:bg-brand";
 
+/**
+ * The scrubber is the bar's top edge, as in YouTube Music: a 2 px line in
+ * place of the border that thickens and shows its handle under the pointer,
+ * while dragging and on keyboard focus. The unplayed part is brighter than a
+ * border so it reads as a track, and stays at full strength when disabled,
+ * since it is also the bar's border.
+ */
+const SEEK_BAR = cn(
+  "[&_[data-slot=slider-track]]:h-0.5 [&_[data-slot=slider-track]]:rounded-none [&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-track]]:transition-[height]",
+  // Focus lands on the range input inside the thumb, not the thumb itself.
+  "hover:[&_[data-slot=slider-track]]:h-1 data-dragging:[&_[data-slot=slider-track]]:h-1 has-focus-visible:[&_[data-slot=slider-track]]:h-1",
+  "[&_[data-slot=slider-thumb]]:opacity-0 hover:[&_[data-slot=slider-thumb]]:opacity-100 data-dragging:[&_[data-slot=slider-thumb]]:opacity-100 has-focus-visible:[&_[data-slot=slider-thumb]]:opacity-100",
+  "[&_[data-slot=slider-control][data-disabled]]:opacity-100",
+);
+
 export function NowPlaying(props: Props) {
   const { track, playback, repeat, shuffle } = props;
   /** The slider works in whole percent; the curve lives in `@ymusic/core`. */
@@ -133,8 +148,28 @@ export function NowPlaying(props: Props) {
       onClick={(event) => {
         if (track && !pressedControl.current && !onControl(event.target)) props.onToggleExpanded();
       }}
-      className={cn("border-t bg-card px-4 py-3", track && "cursor-pointer")}
+      // Above the sidebar (z-20), which the scrubber's upper half and handle
+      // overhang.
+      className={cn("relative z-30 bg-card px-4 py-3", track && "cursor-pointer")}
     >
+      <Slider
+        aria-label="Seek"
+        min={0}
+        // A zero-width range is not a range: Base UI warns, and the
+        // handle has nowhere to sit. Before a duration arrives the
+        // scrubber is disabled anyway, so the number is arbitrary.
+        max={duration ?? 1}
+        value={Math.min(position, duration ?? 0)}
+        disabled={duration === null}
+        // Dragging only moves the handle; the seek is sent on commit, so
+        // a drag across a track is one seek rather than a hundred.
+        onValueChange={(value) => setScrubbing(value as number)}
+        onValueCommitted={(value) => {
+          props.onSeek(value as number);
+          setScrubbing(null);
+        }}
+        className={cn("absolute inset-x-0 top-0 z-10 -translate-y-1/2", BRAND_SLIDER, SEEK_BAR)}
+      />
       {playback.error && (
         <p className="mb-2 truncate text-xs text-destructive" title={playback.error}>
           {playback.error}
@@ -184,7 +219,7 @@ export function NowPlaying(props: Props) {
           )}
         </div>
 
-        <div className="flex flex-[2] flex-col items-center gap-1 max-md:flex-[0_1_18rem]">
+        <div className="flex flex-[2] justify-center max-md:flex-[0_1_18rem]">
           <div className="flex items-center gap-1">
             <IconButton
               label={shuffle ? "Shuffle on" : "Shuffle off"}
@@ -226,35 +261,12 @@ export function NowPlaying(props: Props) {
               )}
             </IconButton>
           </div>
-
-          <div className="flex w-full items-center gap-2">
-            <span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
-              {formatDuration(position)}
-            </span>
-            <Slider
-              min={0}
-              // A zero-width range is not a range: Base UI warns, and the
-              // handle has nowhere to sit. Before a duration arrives the
-              // scrubber is disabled anyway, so the number is arbitrary.
-              max={duration ?? 1}
-              value={Math.min(position, duration ?? 0)}
-              disabled={duration === null}
-              // Dragging only moves the handle; the seek is sent on commit, so
-              // a drag across a track is one seek rather than a hundred.
-              onValueChange={(value) => setScrubbing(value as number)}
-              onValueCommitted={(value) => {
-                props.onSeek(value as number);
-                setScrubbing(null);
-              }}
-              className={`flex-1 ${BRAND_SLIDER}`}
-            />
-            <span className="w-10 text-[11px] tabular-nums text-muted-foreground">
-              {formatDuration(duration)}
-            </span>
-          </div>
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-2 max-md:flex-none">
+          <span className="mr-2 text-xs whitespace-nowrap tabular-nums text-muted-foreground max-[520px]:hidden">
+            {`${formatDuration(position)} / ${formatDuration(duration)}`}
+          </span>
           {props.rating && (
             <span className="flex items-center max-sm:hidden">
               <RatingButtons {...props.rating} />

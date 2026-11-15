@@ -4,6 +4,8 @@ packages:
 
 allowBuilds:
   esbuild: true
+  # Its postinstall runs `lefthook install`, skipped when CI is set.
+  lefthook: true
 
 # Refuse npm versions published less than 3 days ago (in minutes), so a
 # hijacked release is usually caught and pulled before it can be installed.

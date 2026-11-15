@@ -58,9 +58,9 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   /** Scroll offsets by history depth, so Back lands where you left. */
   const scrolls = useRef<number[]>([]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === "1");
-  // Below 768 px the sidebar starts collapsed whatever was saved, as YouTube
-  // Music's guide does. Expanding it there lasts until the window widens.
-  const narrow = useMediaQuery("(max-width: 767px)");
+  // Below 640 px the sidebar starts collapsed whatever was saved, as YouTube
+  // Music's guide does. Expanded there, it floats over the page.
+  const narrow = useMediaQuery("(max-width: 639px)");
   const [narrowExpanded, setNarrowExpanded] = useState(false);
   if (!narrow && narrowExpanded) setNarrowExpanded(false);
   const searchInput = useRef<HTMLInputElement>(null);

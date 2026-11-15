@@ -40,7 +40,10 @@ export function AccountMenu({
   if (!isTauri) return null;
   if (state.busy) {
     return (
-      <span className="grid size-8 shrink-0 place-items-center text-muted-foreground" aria-label="Signing in">
+      <span
+        className="grid size-8 shrink-0 place-items-center text-muted-foreground"
+        aria-label="Signing in"
+      >
         <Spinner size={16} />
       </span>
     );

@@ -57,7 +57,12 @@ jobs:
           tool: cargo-machete
       - run: cargo machete
       - run: cargo clippy --all-targets --locked -- -D warnings
+      # A snapshot that differs from, or is missing in, `tests/snapshots`
+      # fails its test. INSTA_UPDATE=no keeps insta from writing any snapshot
+      # file here, so CI only ever compares.
       - run: cargo test --locked
+        env:
+          INSTA_UPDATE: "no"
 
   # The squash merge uses the PR title as the commit subject, which the
   # release notes group by type, so it has to be a Conventional Commit.

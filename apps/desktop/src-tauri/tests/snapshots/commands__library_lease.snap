@@ -13,5 +13,5 @@ expression: lease
   "loudnessDb": null,
   "playerClient": null,
   "trackId": "[id]",
-  "url": "[fixture path]"
+  "url": "file://<fixtures>/Nebula/01.flac"
 }

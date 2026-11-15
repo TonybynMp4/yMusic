@@ -13,7 +13,7 @@ expression: "tracks[0]"
   "discNumber": null,
   "durationMs": 2000,
   "id": "[id]",
-  "path": "[fixture path]",
+  "path": "<fixtures>/Nebula/01.flac",
   "title": "First Light",
   "trackNumber": 1,
   "year": 2021

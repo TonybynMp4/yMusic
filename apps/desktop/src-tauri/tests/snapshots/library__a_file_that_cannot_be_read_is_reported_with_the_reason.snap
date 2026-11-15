@@ -8,7 +8,7 @@ expression: report
   "unchanged": 0,
   "failed": [
     {
-      "path": "[temp]/music/broken.flac",
+      "path": "<temp>/music/broken.flac",
       "reason": "failed to parse Flac file"
     }
   ],

@@ -235,6 +235,19 @@ fn http_fetch_reads_a_raw_frame_over_ipc() {
     );
 }
 
+/// Keeps the part of a path below `tests/fixtures/library`, which is the same
+/// on every machine, so a snapshot still shows which file a path points at.
+fn strip_fixtures(
+    value: insta::internals::Content,
+    _: insta::internals::ContentPath,
+) -> insta::internals::Content {
+    let root = format!("{}/tests/fixtures/library/", env!("CARGO_MANIFEST_DIR"));
+    value
+        .as_str()
+        .map(|path| path.replace(&root, "<fixtures>/").into())
+        .unwrap_or(value)
+}
+
 /// Pins the casing the zod schema in `packages/ipc` parses, and that a patch
 /// arrives under the argument name the TS client sends.
 #[test]
@@ -303,7 +316,7 @@ fn library_commands_round_trip_over_ipc() {
     // Pins the casing the zod schema in `packages/ipc` parses, and the values.
     insta::assert_json_snapshot!("library_track", tracks[0], {
         ".id" => "[id]",
-        ".path" => "[fixture path]",
+        ".path" => insta::dynamic_redaction(strip_fixtures),
         ".addedAt" => "[timestamp]",
         ".coverArt.path" => "[art cache]",
     });
@@ -329,7 +342,7 @@ fn library_commands_round_trip_over_ipc() {
     // file never expires and has no YouTube loudness.
     insta::assert_json_snapshot!("library_lease", lease, {
         ".trackId" => "[id]",
-        ".url" => "[fixture path]",
+        ".url" => insta::dynamic_redaction(strip_fixtures),
     });
 
     let folders = get_ipc_response(&webview, request("library_folders", serde_json::json!({})))

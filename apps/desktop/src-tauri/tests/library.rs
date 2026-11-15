@@ -92,7 +92,16 @@ fn a_file_that_cannot_be_read_is_reported_with_the_reason() {
     let report = library.scan_folder(&folder).expect("scan");
 
     let mut settings = insta::Settings::clone_current();
-    settings.add_redaction(".failed[].path", "[temp]/music/broken.flac");
+    let temp = format!("{}/", home.0.display());
+    settings.add_redaction(
+        ".failed[].path",
+        insta::dynamic_redaction(move |value, _| {
+            value
+                .as_str()
+                .map(|path| path.replace(&temp, "<temp>/").into())
+                .unwrap_or(value)
+        }),
+    );
     settings.bind(|| insta::assert_json_snapshot!(report));
 }
 

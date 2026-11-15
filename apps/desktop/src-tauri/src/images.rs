@@ -166,20 +166,22 @@ impl Images {
         self.fetch(url, ATTEMPTS).await
     }
 
-    #[tracing::instrument(name = "artwork", skip(self, attempts))]
+    /// Its lines number tries from 1, as the player's `load` span does. The URL
+    /// goes on the failure lines only, so a fetch that works costs no span.
     async fn fetch(&self, url: &str, attempts: u32) -> Option<Vec<u8>> {
-        for attempt in 0..attempts {
-            if attempt > 0 {
-                tokio::time::sleep(BACKOFF * 2u32.pow(attempt - 1)).await;
+        for attempt in 1..=attempts {
+            if attempt > 1 {
+                tokio::time::sleep(BACKOFF * 2u32.pow(attempt - 2)).await;
             }
             match self.client.get(url).send().await {
                 Ok(response) if response.status().is_success() => match response.bytes().await {
                     Ok(bytes) if content_type(&bytes).is_some() => return Some(bytes.to_vec()),
-                    Ok(_) => tracing::debug!(attempt, "artwork was not an image"),
-                    Err(error) => tracing::debug!(attempt, %error, "artwork body failed"),
+                    Ok(_) => tracing::debug!(url, attempt, "artwork was not an image"),
+                    Err(error) => tracing::debug!(url, attempt, %error, "artwork body failed"),
                 },
                 Ok(response) => {
                     tracing::debug!(
+                        url,
                         attempt,
                         status = response.status().as_u16(),
                         "artwork answered"
@@ -188,10 +190,10 @@ impl Images {
                         return None;
                     }
                 }
-                Err(error) => tracing::debug!(attempt, %error, "artwork request failed"),
+                Err(error) => tracing::debug!(url, attempt, %error, "artwork request failed"),
             }
         }
-        tracing::debug!(attempts, "gave up on artwork");
+        tracing::debug!(url, attempts, "gave up on artwork");
         None
     }
 }

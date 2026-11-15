@@ -127,6 +127,9 @@ pub fn export_bindings(path: &std::path::Path) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before the builder, so plugin initialisation is logged too. The file
+    // starts in setup, once the app knows its log directory.
+    logging::init();
     tauri::Builder::default()
         // First, so a second launch hands over to the running window before
         // anything else starts, a second player above all.
@@ -156,10 +159,7 @@ pub fn run() {
             });
         })
         .setup(|app| {
-            // First, so everything after it is logged. Nothing before setup
-            // logs: plugins only register here.
-            let log_dir = app.path().app_log_dir();
-            logging::init(log_dir.as_deref().ok());
+            logging::open(app.path().app_log_dir().ok().as_deref());
             let window = app
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");

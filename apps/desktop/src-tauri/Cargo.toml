@@ -41,8 +41,8 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "=0.0.12"
 tauri-plugin-window-state = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tracing = "0.1"
-tracing-appender = "0.2"
 # `tracing-log` bridges the crates that still log through `log` (tauri, reqwest,
 # keyring) into the same subscriber; `chrono` stamps lines in local time.
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "chrono", "env-filter", "fmt", "smallvec", "std", "tracing-log"] }

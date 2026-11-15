@@ -24,5 +24,7 @@
   "ignoreFiles": [
     // Kept for the theme setting in PLAN.md.
     "apps/desktop/src/components/ui/theme-switcher.tsx",
+    // Kept for collaborative playlists.
+    "apps/desktop/src/components/ui/avatar-stack.tsx",
   ],
 }

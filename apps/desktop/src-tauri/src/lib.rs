@@ -71,7 +71,13 @@ macro_rules! ymusic_commands {
             $crate::commands::cache_size,
             $crate::commands::cache_clear,
             #[cfg(feature = "memory-scenario")]
-            $crate::commands::memory_mark
+            $crate::commands::memory_mark,
+            #[cfg(feature = "memory-scenario")]
+            $crate::commands::memory_scenario,
+            #[cfg(feature = "memory-scenario")]
+            $crate::commands::memory_skip,
+            #[cfg(feature = "memory-scenario")]
+            $crate::commands::memory_tray
         ]
     };
 }

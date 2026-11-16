@@ -323,6 +323,95 @@ async fn import_from(id: String) -> Result<String, String> {
         .map_err(|error| error.to_string())?
 }
 
+/// Which of the harness's scenarios the runner asked for: `session`, the
+/// default, or `tray` (`YMUSIC_MEMORY_SCENARIO`).
+#[cfg(feature = "memory-scenario")]
+#[tauri::command]
+pub fn memory_scenario() -> String {
+    std::env::var("YMUSIC_MEMORY_SCENARIO").unwrap_or_else(|_| "session".into())
+}
+
+/// Moves the playing song to five seconds before its end, so the change to the
+/// next one is a real one. The harness calls it on a fixed beat, from the core,
+/// so the page does nothing in the tray it would not do on its own.
+#[cfg(feature = "memory-scenario")]
+#[tauri::command]
+pub fn memory_skip(player: State<'_, Player>) {
+    skip_to_tail(&player);
+}
+
+#[cfg(feature = "memory-scenario")]
+fn skip_to_tail(player: &Player) {
+    const TAIL_MS: u64 = 5_000;
+    let Some(Position {
+        position_ms,
+        duration_ms: Some(duration_ms),
+    }) = player.progress()
+    else {
+        return;
+    };
+    if duration_ms > 2 * TAIL_MS && position_ms + TAIL_MS < duration_ms {
+        if let Err(error) = player.seek(duration_ms - TAIL_MS) {
+            log::warn!("{error}");
+        }
+    }
+}
+
+/// The tray part of the harness's `tray` scenario. It asks the window to close,
+/// which is what its close button does, so with "Keep playing in the tray" on
+/// the app hides it. It then waits `hidden_secs`, and shows the window the way
+/// the tray icon does. Half way through each `advance_secs` it skips to the end
+/// of the song, and it marks each song it finds playing as `tray-track`.
+///
+/// The waiting is done here and not in the page, so a build that slows or
+/// unmounts the hidden page is timed the same as one that does not.
+#[cfg(feature = "memory-scenario")]
+#[tauri::command]
+pub async fn memory_tray<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    hidden_secs: u64,
+    advance_secs: u64,
+) -> Result<(), String> {
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or("there is no main window")?;
+    if !crate::tray::keeps_playing(&app) {
+        return Err("there is no tray icon, so closing would quit".into());
+    }
+    window.close().map_err(|error| error.to_string())?;
+    sleep(Duration::from_secs(1)).await;
+    if window.is_visible().map_err(|error| error.to_string())? {
+        return Err("closing did not hide the window".into());
+    }
+    println!("ymemory-mark tray-hide");
+
+    let beat = advance_secs.max(2);
+    let mut waited = 1;
+    while waited < hidden_secs {
+        let half = (beat / 2).min(hidden_secs - waited);
+        sleep(Duration::from_secs(half)).await;
+        waited += half;
+        if waited >= hidden_secs {
+            break;
+        }
+        if let Some(player) = app.try_state::<Player>() {
+            let track = player.position().map(|(track, _)| track);
+            println!("ymemory-mark tray-track {}", track.as_deref().unwrap_or("none"));
+            skip_to_tail(&player);
+        }
+        let rest = (beat - beat / 2).min(hidden_secs - waited);
+        sleep(Duration::from_secs(rest)).await;
+        waited += rest;
+    }
+
+    println!("ymemory-mark tray-show");
+    crate::tray::show_window(&app);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn account_sign_out(account: State<'_, Account>) -> Result<(), String> {
     account.clear()

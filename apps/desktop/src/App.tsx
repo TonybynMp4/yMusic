@@ -136,6 +136,10 @@ export function App(props: { settings: Settings }) {
   if (import.meta.env.VITE_MEMORY_SCENARIO) {
     scenario.current = {
       go,
+      search: (text) => {
+        setQuery(text);
+        go(null);
+      },
       playTrack: player.playTrack,
       setVolume: player.setVolume,
       seek: player.seek,

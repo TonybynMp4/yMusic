@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the memory harness's app, runs its scripted scenario and samples it.
 //
-//   node scripts/memory/run.mjs <label> [--runs 3] [--variant fallback|signed-in] [--skip-build]
+//   node scripts/memory/run.mjs <label> [--runs 3] [--variant fallback|signed-in]
+//     [--scenario tray] [--skip-build]
 //   node scripts/memory/run.mjs --sign-in
 //
 // Each run starts from a clean data directory under the harness's own
@@ -9,7 +10,8 @@
 // and never touches its library, settings or session. `--sign-in` opens the
 // app to sign in once and keeps the saved session in `.memory/account.bin`;
 // `--variant signed-in` puts it back before each run. Results go to
-// `.memory/runs/<label>/<variant>-<n>.json`; `compare.mjs` reads them.
+// `.memory/runs/<label>/<variant>-<n>.json`, or `tray-<variant>-<n>.json` for
+// `--scenario tray`; `compare.mjs` reads them.
 // See docs/memory.md.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -34,13 +36,15 @@ const signIn = args.includes("--sign-in");
 const label = args.find((a) => !a.startsWith("--") && !isValue(a));
 const runs = Number(option("--runs") ?? 3);
 const variant = option("--variant") ?? "normal";
+const scenario = option("--scenario") ?? "session";
 if (
   (!label && !signIn) ||
   !["normal", "fallback", "signed-in"].includes(variant) ||
+  !["session", "tray"].includes(scenario) ||
   !(runs > 0)
 ) {
   console.error(
-    "usage: run.mjs <label> [--runs 3] [--variant normal|fallback|signed-in] [--skip-build]\n" +
+    "usage: run.mjs <label> [--runs 3] [--variant normal|fallback|signed-in] [--scenario session|tray] [--skip-build]\n" +
       "       run.mjs --sign-in",
   );
   process.exit(2);
@@ -64,9 +68,9 @@ const out = join(ROOT, ".memory/runs", label);
 mkdirSync(out, { recursive: true });
 for (let n = 1; n <= runs; n++) {
   if (n > 1) await sleep(SETTLE_MS);
-  console.log(`${label} ${variant} run ${n}/${runs}`);
+  console.log(`${label} ${scenario} ${variant} run ${n}/${runs}`);
   const result = await runOnce();
-  const file = join(out, `${variant}-${n}.json`);
+  const file = join(out, `${scenario === "session" ? "" : `${scenario}-`}${variant}-${n}.json`);
   writeFileSync(file, JSON.stringify(result));
   const problems = result.marks.filter((m) => /^(error|stall|stuck)/.test(m.phase));
   console.log(
@@ -120,6 +124,7 @@ async function runOnce() {
   const meta = {
     label,
     variant,
+    scenario,
     commit: git("rev-parse", "--short", "HEAD"),
     dirty: git("status", "--porcelain").length > 0,
     kernel: release(),
@@ -128,7 +133,10 @@ async function runOnce() {
     swapFreeKb: meminfo("SwapFree"),
   };
 
-  const child = spawn(binary, [], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(binary, [], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, YMUSIC_MEMORY_SCENARIO: scenario },
+  });
   const started = Date.now();
   const marks = [];
   const samples = [];
@@ -232,7 +240,7 @@ function option(name) {
 
 function isValue(arg) {
   const at = args.indexOf(arg);
-  return at > 0 && ["--runs", "--variant"].includes(args[at - 1]);
+  return at > 0 && ["--runs", "--variant", "--scenario"].includes(args[at - 1]);
 }
 
 function sleep(ms) {

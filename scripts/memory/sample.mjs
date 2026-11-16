@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Samples the memory of yMusic's processes from /proc (Linux only).
+// Samples the memory and CPU of yMusic's processes from /proc (Linux only).
 //
 // As a module it gives `sample(rootPid)`, which `run.mjs` calls every two
 // seconds. On its own it watches a running app and prints a line per sample:
@@ -8,6 +8,7 @@
 //
 // Without a pid it picks the newest process named `ymusic`.
 
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -17,6 +18,16 @@ const KINDS = [
   ["network", /^WebKitNetworkPr/],
   ["gpu", /^WebKitGPUProces/],
 ];
+
+/** Clock ticks per second, which `/proc/<pid>/stat` counts CPU time in. */
+const TICK_MS = 1000 / clockTicks();
+/**
+ * Times each thread has been given the CPU, as last read, and the total since
+ * the first sample per process. A thread's count goes with it when it exits,
+ * so the total is kept here from the differences rather than summed afresh.
+ */
+const lastSlices = new Map();
+const wakeupTotals = new Map();
 
 /**
  * One sample of the app rooted at `rootPid` and its direct children, which
@@ -47,7 +58,58 @@ function read(pid) {
     rss: field(status, "VmRSS"),
     hwm: field(status, "VmHWM"),
     threads: field(status, "Threads"),
+    ...cpu(pid),
+    wakeups: wakeups(pid),
   };
+}
+
+/**
+ * CPU time the process has used since it started, in ms: `utime` and `stime`,
+ * fields 14 and 15 of `/proc/<pid>/stat`. They count every thread, including
+ * ones that have exited.
+ */
+function cpu(pid) {
+  const stat = text(`/proc/${pid}/stat`);
+  const fields = stat?.slice(stat.lastIndexOf(")") + 2).split(" ") ?? [];
+  return {
+    cpuUser: Math.round(Number(fields[11] ?? 0) * TICK_MS),
+    cpuSystem: Math.round(Number(fields[12] ?? 0) * TICK_MS),
+  };
+}
+
+/**
+ * How many times the process's threads have been put on a CPU since the first
+ * sample of it: the third number of each `/proc/<pid>/task/<tid>/schedstat`.
+ * A thread that is asleep adds nothing, so this counts wakeups. What a thread
+ * did between its last sample and its exit is missed.
+ */
+function wakeups(pid) {
+  let total = wakeupTotals.get(pid) ?? 0;
+  let tids = [];
+  try {
+    tids = readdirSync(`/proc/${pid}/task`);
+  } catch {
+    return total;
+  }
+  for (const tid of tids) {
+    const slices = Number(text(`/proc/${pid}/task/${tid}/schedstat`)?.split(" ")[2]);
+    if (!Number.isFinite(slices)) continue;
+    const key = `${pid}:${tid}`;
+    const before = lastSlices.get(key);
+    // A thread first seen counts from here, so the total starts at zero.
+    if (before !== undefined && slices > before) total += slices - before;
+    lastSlices.set(key, slices);
+  }
+  wakeupTotals.set(pid, total);
+  return total;
+}
+
+function clockTicks() {
+  try {
+    return Number(execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8" })) || 100;
+  } catch {
+    return 100;
+  }
 }
 
 function add(a, b) {

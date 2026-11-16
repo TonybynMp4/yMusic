@@ -17,6 +17,7 @@ import type { PlayFrom } from "./usePlayer.ts";
 /** What the scenario needs of the app, read fresh at every step. */
 export interface ScenarioControls {
   go: (view: View) => void;
+  search: (query: string) => void;
   playTrack: (tracks: Track[], id: Track["id"], from?: PlayFrom) => void;
   setVolume: (fraction: number) => void;
   seek: (positionMs: number) => void;
@@ -80,6 +81,17 @@ const IDLE_END_MS = 120_000;
 /** Longer than any track takes to start; past it the track is skipped. */
 const STALL_MS = 60_000;
 
+/** The tray scenario: shorter before the tray, since the tray is what it measures. */
+const TRAY_IDLE_START_MS = 30_000;
+const TRAY_PAGES = 4;
+const TRAY_QUERY = "daft punk";
+const TRAY_SEARCH_MS = 10_000;
+/** With the window open, before and after the tray, to compare the tray with. */
+const TRAY_VISIBLE_MS = 60_000;
+const TRAY_HIDDEN_S = 360;
+/** One song change per this long, in every phase that is measured. */
+const TRAY_ADVANCE_S = 60;
+
 let started = false;
 
 export async function runMemoryScenario(controls: () => ScenarioControls): Promise<void> {
@@ -88,7 +100,8 @@ export async function runMemoryScenario(controls: () => ScenarioControls): Promi
   started = true;
   if (!(await mark("start"))) return;
   try {
-    await session(controls);
+    const scenario = await invoke<string>("memory_scenario");
+    await (scenario === "tray" ? traySession(controls) : session(controls));
   } catch (error) {
     console.error("memory scenario failed", error);
     await mark(`error ${error instanceof Error ? error.message : String(error)}`);
@@ -155,6 +168,67 @@ async function session(controls: () => ScenarioControls): Promise<void> {
 
   await mark("idle-end");
   await sleep(IDLE_END_MS);
+}
+
+/**
+ * What the app costs in the tray: a queue playing, some pages and a search in
+ * the page's caches, then the window closed to the tray, then shown again.
+ * The core does the hiding, the waiting and the showing (`memory_tray`), and
+ * marks `tray-hide` and `tray-show` itself.
+ */
+async function traySession(controls: () => ScenarioControls): Promise<void> {
+  controls().setVolume(0);
+
+  await mark("idle");
+  await sleep(TRAY_IDLE_START_MS);
+  await mark(controls().signedIn ? "account signed-in" : "account signed-out");
+
+  await mark("playback");
+  controls().go({ kind: "playlist", id: PLAY_PLAYLIST });
+  const page = await settledPage({ kind: "playlist", id: PLAY_PLAYLIST });
+  if (page.kind !== "playlist" || page.page.tracks.length === 0) {
+    throw new Error("the playlist to play from is empty");
+  }
+  const tracks = page.page.tracks;
+  controls().playTrack(tracks, tracks[0]!.id, {
+    kind: "playlist",
+    id: PLAY_PLAYLIST,
+    title: page.page.title,
+  });
+  const playing = await until(() => (controls().status === "playing" ? true : null), STALL_MS);
+  if (playing === null) throw new Error("the first song did not start");
+
+  await mark("browse");
+  const pages: View[] = [
+    ...ARTISTS.slice(0, TRAY_PAGES).map((id) => ({ kind: "artist", id }) as const),
+    ...ALBUMS.slice(0, TRAY_PAGES).map((id) => ({ kind: "album", id }) as const),
+    ...PLAYLISTS.slice(0, TRAY_PAGES).map((id) => ({ kind: "playlist", id }) as const),
+  ];
+  for (const next of pages) {
+    controls().go(next);
+    await sleep(PAGE_MS);
+  }
+
+  await mark("search");
+  controls().search(TRAY_QUERY);
+  await sleep(TRAY_SEARCH_MS);
+
+  await mark("visible");
+  await visibleMinute();
+
+  // The setting's own command, which adds the tray icon; without the icon the
+  // app would quit on close, and `memory_tray` refuses to close.
+  await invoke("settings_set", { patch: { closeToTray: true } });
+  await invoke("memory_tray", { hiddenSecs: TRAY_HIDDEN_S, advanceSecs: TRAY_ADVANCE_S });
+
+  await visibleMinute();
+}
+
+/** A minute with the window open and one song change in the middle of it. */
+async function visibleMinute(): Promise<void> {
+  await sleep(TRAY_VISIBLE_MS / 2);
+  await invoke("memory_skip");
+  await sleep(TRAY_VISIBLE_MS / 2);
 }
 
 /** False when the app was opened only to sign in, with no scenario to run. */

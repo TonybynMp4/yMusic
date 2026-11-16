@@ -76,7 +76,7 @@ live("the engine across a message port", () => {
       engine.resolve(first.id.slice("yt:".length) as VideoId),
     );
     expect(lease.trackId).toBe(first.id);
-    expect(lease.url).toMatch(/^https:\/\/.*googlevideo\.com\//);
+    expect(lease.url).toMatch(/^https:\/\/[^/]+\.googlevideo\.com\//);
     // `VISIONOS` URLs need nothing deciphered, so no script was analysed.
     expect(extractors).toBe(0);
 

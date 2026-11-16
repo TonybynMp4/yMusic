@@ -919,11 +919,15 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 }
                             }
                         }
-                        OBSERVE_DURATION => {
-                            if let libmpv2::events::PropertyData::Double(seconds) = change {
+                        // mpv reports `None` once the file unloads, so a
+                        // finished track's duration never outlives it.
+                        OBSERVE_DURATION => match change {
+                            libmpv2::events::PropertyData::Double(seconds) => {
                                 duration_ms = Some(seconds_to_ms(seconds));
                             }
-                        }
+                            libmpv2::events::PropertyData::None => duration_ms = None,
+                            _ => {}
+                        },
                         OBSERVE_PAUSE => {
                             if let libmpv2::events::PropertyData::Flag(paused) = change {
                                 emit(

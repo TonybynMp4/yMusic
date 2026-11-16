@@ -316,6 +316,9 @@ fn handle<R: Runtime>(session: &MediaSession, app: &AppHandle<R>, event: MediaCo
         }
         // We advertise no URI schemes, so nothing should send this.
         MediaControlEvent::OpenUri(_) => return,
+        // SetShuffle only comes from macOS, which we don't build for, and the
+        // enum is non_exhaustive, so later additions land here too.
+        _ => return,
     };
     session.forward(forwarded);
 }

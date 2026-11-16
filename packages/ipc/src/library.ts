@@ -104,9 +104,12 @@ export async function libraryFolderCover(path: string): Promise<Thumbnail[]> {
   return toThumbnails(await call("libraryFolderCover", path));
 }
 
-/** Registers the folder and scans it in one step. */
-export async function libraryAddFolder(path: string): Promise<ScanReport> {
-  return call("libraryAddFolder", path);
+/**
+ * Opens the native folder picker, then registers the chosen folder and scans
+ * it. Null when the user cancels. Rust asks, so the webview never names a path.
+ */
+export async function libraryAddFolder(): Promise<ScanReport | null> {
+  return call("libraryAddFolder");
 }
 
 export async function libraryRemoveFolder(path: string): Promise<void> {
@@ -137,13 +140,6 @@ export async function libraryResolve(id: TrackId): Promise<StreamLease> {
 /** Rust's lease is core's `StreamLease` with the track id unbranded. */
 export function toStreamLease(lease: LocalLease): StreamLease {
   return { ...lease, trackId: rustTrackId(lease.trackId) };
-}
-
-/** Opens the native folder picker. Null when the user cancels. */
-export async function pickMusicFolder(): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const chosen = await open({ directory: true, multiple: false, title: "Add music folder" });
-  return typeof chosen === "string" ? chosen : null;
 }
 
 /** Opens a library folder in the system file manager. */

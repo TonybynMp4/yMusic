@@ -52,7 +52,7 @@ macro_rules! ymusic_specta {
                 media_set_volume,
                 library_folders,
                 library_folder_cover,
-                library_add_folder,
+                library_add_folder::<$r>,
                 library_remove_folder,
                 library_scan,
                 library_tracks,

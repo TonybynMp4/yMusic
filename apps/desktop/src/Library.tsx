@@ -42,9 +42,9 @@ import { folderName, tracksIn } from "./useLocalLibrary.ts";
 import { LIKED_MUSIC } from "./libraryPlaylists.ts";
 import { useSaved, type SavedState } from "./useSavedLibrary.ts";
 
-export type Chip = "playlists" | "songs" | "albums" | "artists" | "local";
+type Chip = "playlists" | "songs" | "albums" | "artists" | "local";
 type AccountChip = Exclude<Chip, "local">;
-export type Sort = "added" | "played" | "title";
+type Sort = "added" | "played" | "title";
 type Layout = "grid" | "list";
 
 const CHIPS: { value: Chip; label: string; account: boolean }[] = [
@@ -389,7 +389,7 @@ const byTitle = new Intl.Collator(undefined, { sensitivity: "base", numeric: tru
  * record; what has not played here follows, newest added first. `pinned`
  * items stay in front.
  */
-export function sortItems<T extends { key: string; title: string; added: number }>(
+function sortItems<T extends { key: string; title: string; added: number }>(
   items: readonly T[],
   sort: Sort,
   played: Readonly<Record<string, number>>,

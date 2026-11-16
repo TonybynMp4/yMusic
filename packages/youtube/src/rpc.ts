@@ -28,7 +28,7 @@ export interface EngineHost {
 }
 
 /** Which of the host's optional methods work. */
-export interface EngineHostOffers {
+interface EngineHostOffers {
   botguard: boolean;
   playerScript: boolean;
 }

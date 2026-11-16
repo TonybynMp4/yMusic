@@ -20,12 +20,14 @@
     "lint": "oxlint --deny-warnings",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "knip": "knip",
     "test": "turbo run test",
     "tauri": "pnpm --filter @ymusic/desktop tauri",
     "app": "pnpm --filter @ymusic/desktop tauri dev",
     "bindings": "cd apps/desktop/src-tauri && cargo test --test bindings -- --ignored --exact write_bindings"
   },
   "devDependencies": {
+    "knip": "^6.45.1",
     "lefthook": "^2.2.2",
     "oxfmt": "^0.78.0",
     "oxlint": "^1.93.0",

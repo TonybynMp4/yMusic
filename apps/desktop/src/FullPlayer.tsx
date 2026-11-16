@@ -19,7 +19,7 @@ import { useSongYear } from "./useSongYear.ts";
  * are all "a tab beside the queue, given the current track", which is the
  * same shape YouTube Music's own Up next / Lyrics / Related strip has.
  */
-export interface PlayerPanelTab {
+interface PlayerPanelTab {
   id: string;
   label: string;
   render: (track: Track | null) => ReactNode;

@@ -11,6 +11,7 @@ pub mod queue;
 pub mod settings;
 mod tray;
 pub mod updates;
+pub mod visibility;
 pub mod volume;
 
 use account::{Account, OsKeyring};
@@ -50,6 +51,7 @@ macro_rules! ymusic_specta {
                 media_subscribe,
                 media_set_track,
                 media_set_volume,
+                window_subscribe,
                 library_folders,
                 library_folder_cover,
                 library_add_folder::<$r>,
@@ -130,7 +132,7 @@ pub fn run() {
         // First, so a second launch hands over to the running window before
         // anything else starts, a second player above all.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_window(app);
+            visibility::show(app);
         }))
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -165,6 +167,7 @@ pub fn run() {
             let window = app
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
+            app.manage(visibility::WindowVisibility::default());
             platform::window::apply_backdrop(&window);
             platform::window::forward_touchpad_pinch(&window);
             // WebKitGTK's default cache model keeps up to 64 MB of images no
@@ -231,7 +234,7 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" && tray::keeps_playing(window.app_handle()) {
                     api.prevent_close();
-                    let _ = window.hide();
+                    visibility::hide(window.app_handle());
                 }
             }
         })

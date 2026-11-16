@@ -17,6 +17,7 @@ import type {
   SavedVolume,
 } from "./bindings.ts";
 import { call, isTauri, rustTrackId, type Same } from "./tauri.ts";
+import { windowHidden, type WindowHiddenStore } from "./window.ts";
 
 export type { AudioDevice, AudioStats, Position, SavedVolume } from "./bindings.ts";
 
@@ -48,6 +49,14 @@ export async function playerStats(): Promise<AudioStats | null> {
   return call("playerStats");
 }
 
+/**
+ * How often the position is asked for while the window is hidden in the tray.
+ * Nothing shows it then. What still reads it is the saved queue position,
+ * every ten seconds, and the watch time reported to YouTube, which
+ * `useWatchHistory` bridges across a gap this long.
+ */
+export const HIDDEN_POLL_MS = 10_000;
+
 function loadRequest(lease: StreamLease): LoadRequest {
   return {
     trackId: lease.trackId,
@@ -68,10 +77,18 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #listeners = new Set<(event: PlaybackEvent) => void>();
   #subscribed = false;
   #playing = false;
+  // Playing or paused: a song mpv has, so its position is worth asking for.
+  #loaded = false;
   #seeking = false;
+  #hidden = false;
+  #window: WindowHiddenStore;
   // Bumped whenever a reply in flight would be stale, so it gets dropped.
   #asked = 0;
   #poll: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(window: WindowHiddenStore = windowHidden) {
+    this.#window = window;
+  }
 
   async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
     await this.#ensureSubscribed();
@@ -133,6 +150,8 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   async #ensureSubscribed(): Promise<void> {
     if (this.#subscribed || !isTauri) return;
     this.#subscribed = true;
+    this.#hidden = this.#window.get();
+    this.#window.subscribe(() => this.#onHidden(this.#window.get()));
     const channel = new Channel<RustPlaybackEvent>();
     channel.onmessage = (message) => {
       const event = toCoreEvent(message);
@@ -141,6 +160,7 @@ export class MpvPlaybackEngine implements PlaybackEngine {
       if (event.type === "status" || event.type === "error") {
         this.#seeking = false;
         this.#playing = event.type === "status" && event.status === "playing";
+        this.#loaded = this.#playing || (event.type === "status" && event.status === "paused");
         if (this.#playing) this.#pollIn(0);
         else this.#stopPolling();
       }
@@ -151,6 +171,27 @@ export class MpvPlaybackEngine implements PlaybackEngine {
 
   #deliver(event: PlaybackEvent): void {
     for (const listener of this.#listeners) listener(event);
+  }
+
+  /**
+   * Asks for the position now, outside the poll. For a reader that acts on it
+   * while the window is hidden (a media key that seeks by an offset), when
+   * the last one polled can be ten seconds old.
+   */
+  async syncPosition(): Promise<void> {
+    if (this.#seeking || !this.#loaded) return;
+    this.#stopPolling();
+    await this.#askPosition();
+  }
+
+  /**
+   * Hidden, the next poll is the slow one. Shown again, the position is asked
+   * for at once, paused or playing, so the bar is right when it is first drawn.
+   * Not while a song loads: mpv may still answer with the last one's.
+   */
+  #onHidden(hidden: boolean): void {
+    this.#hidden = hidden;
+    if (!hidden && this.#loaded && !this.#seeking) this.#pollIn(0);
   }
 
   /**
@@ -179,11 +220,14 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     } catch (error) {
       console.error("could not read the playback position", error);
     }
-    // Nothing loaded: the next "playing" status starts the polling again.
-    if (!this.#playing || this.#seeking || asked !== this.#asked || !position) return;
+    // A pause, a seek or a new song since the question bumps `#asked`, and the
+    // reply is dropped. Nothing loaded: the next "playing" status starts the
+    // polling again.
+    if (this.#seeking || asked !== this.#asked || !position) return;
     this.#deliver({ type: "position", ...position });
+    if (!this.#playing) return;
     // Just after the next whole second, so the time label ticks on time.
-    this.#pollIn(1000 - (position.positionMs % 1000) + 20);
+    this.#pollIn(this.#hidden ? HIDDEN_POLL_MS : 1000 - (position.positionMs % 1000) + 20);
   }
 }
 

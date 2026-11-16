@@ -54,6 +54,8 @@ export const commands = {
 	durationMs: number | null,
 } | null) => __TAURI_INVOKE<void>("media_set_track", { track }),
 	mediaSetVolume: (volume: number | null) => __TAURI_INVOKE<void>("media_set_volume", { volume }),
+	/**  Opens the page's channel for the main window being hidden and shown. */
+	windowSubscribe: (channel: Channel<Visibility>) => __TAURI_INVOKE<void>("window_subscribe", { channel }),
 	libraryFolders: () => __TAURI_INVOKE<string[]>("library_folders"),
 	libraryFolderCover: (path: string) => __TAURI_INVOKE<{
 	path: string,
@@ -449,4 +451,7 @@ export type Update = {
 	url: string,
 	prerelease: boolean,
 };
+
+/**  What the page is told when the main window is hidden or shown. */
+export type Visibility = "shown" | "hidden";
 

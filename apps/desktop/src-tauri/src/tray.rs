@@ -13,6 +13,7 @@ use tauri::{
 };
 
 use crate::playback::Player;
+use crate::visibility;
 
 const TRAY_ID: &str = "main";
 
@@ -82,7 +83,7 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_window(app),
+            "show" => visibility::show(app),
             "play-pause" => {
                 if let Some(player) = app.try_state::<Player>() {
                     if let Err(error) = player.toggle_pause() {
@@ -100,7 +101,7 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 ..
             } = event
             {
-                show_window(tray.app_handle());
+                visibility::show(tray.app_handle());
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -108,12 +109,4 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
-}
-
-pub fn show_window<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
 }

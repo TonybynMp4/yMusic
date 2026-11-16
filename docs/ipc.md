@@ -13,7 +13,7 @@ Rust owns the types of everything that crosses between the core and the frontend
 - `Settings::default()` is exported as the `defaultSettings` constant, which is what a plain browser gets.
 - `settings_set` takes a `SettingsPatch`, one optional field per setting, so a misspelt setting fails `tsc`. The `settings!` macro in `settings.rs` declares `Settings`, its defaults, the patch and `Settings::apply` from one list, so a new setting is one line there. At run time Rust rejects an unknown field, and a field sent as `null`, which the TypeScript type also leaves out.
 
-There are no global events. The two streams, playback and media keys, are `Channel<T>` arguments, so their payloads (`PlaybackEvent`, `MediaKeyEvent`) come through the command types.
+There are no global events. The three streams, playback, media keys and the window being hidden or shown, are `Channel<T>` arguments, so their payloads (`PlaybackEvent`, `MediaKeyEvent`, `Visibility`) come through the command types.
 
 ## Keeping the bindings current
 

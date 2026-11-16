@@ -11,6 +11,7 @@ use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player, Position};
 use crate::queue::{QueueJson, QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsPatch, SettingsStore};
+use crate::visibility::{Visibility, WindowVisibility};
 use crate::volume::{SavedVolume, VolumeStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
 use tauri_plugin_dialog::DialogExt;
@@ -140,6 +141,13 @@ use crate::platform::media::{MediaKeyEvent, MediaSession, MediaTrack};
 #[specta::specta]
 pub fn media_subscribe(media: State<'_, MediaSession>, channel: Channel<MediaKeyEvent>) {
     media.subscribe(channel);
+}
+
+/// Opens the page's channel for the main window being hidden and shown.
+#[tauri::command]
+#[specta::specta]
+pub fn window_subscribe(visibility: State<'_, WindowVisibility>, channel: Channel<Visibility>) {
+    visibility.subscribe(channel);
 }
 
 #[tauri::command]

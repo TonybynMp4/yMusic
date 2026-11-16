@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent } from "react";
 import { mediaSetTrack, mediaSetVolume, subscribeMediaKeys, toMediaTrack } from "@ymusic/ipc";
+import { windowHidden } from "@ymusic/ipc";
 import type { MediaKeyEvent } from "@ymusic/ipc";
 
 import type { usePlayer } from "./usePlayer.ts";
@@ -18,7 +19,12 @@ function logMediaFailure(error: unknown): void {
 export function useMediaSession(player: Player) {
   // The subscription is made once, so it reads the player through an effect
   // event: the callbacks close over playback state and change every render.
-  const onMediaKey = useEffectEvent((event: MediaKeyEvent) => {
+  const onMediaKey = useEffectEvent(async (event: MediaKeyEvent) => {
+    // Previous and a seek by an offset start from the position, which is up to
+    // ten seconds old while the window is hidden in the tray.
+    if (windowHidden.get() && (event.type === "previous" || event.type === "seekBy")) {
+      await player.syncPosition().catch(logMediaFailure);
+    }
     switch (event.type) {
       case "play":
         return player.play();
@@ -44,7 +50,7 @@ export function useMediaSession(player: Player) {
         return player.setVolume(event.volume);
     }
   });
-  useEffect(() => subscribeMediaKeys((event) => onMediaKey(event)), []);
+  useEffect(() => subscribeMediaKeys((event) => void onMediaKey(event)), []);
 
   const { track } = player;
   const durationMs = player.playback.durationMs;

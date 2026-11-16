@@ -18,6 +18,13 @@ Signed in, the engine tells YouTube what plays, the way YouTube Music's web play
 
 The listening is tracked in `useWatchHistory`, from mpv's position updates: steady updates extend a stretch, and a jump or a pause starts a new one (`Listened` in `packages/core`).
 
+`Listened` reads any step over 2.5 s as a seek. With the window hidden in the tray the position arrives every ten seconds ([Memory](memory.md#the-window-hidden-in-the-tray)), so `WatchTime` in `watchTime.ts` sits in front of it and times each position with `performance.now()`:
+
+- A step forward no longer than the time since the last position (plus 1.5 s for a late timer or reply) is playback that carried on. `WatchTime` feeds it to `Listened` in steps it accepts. A step back, or further than the clock moved, is a seek.
+- When a stretch closes (a seek, a pause, the song ending) and the last position is more than 2.5 s old, the song played on after it. `WatchTime` adds the time since, up to the song's length, before it closes the stretch. At one position a second this never applies, so nothing changes while the window is up.
+
+The reports are sent when a position arrives, so hidden they go out up to ten seconds late.
+
 ## Search history
 
 YouTube Music shows the account's recent searches when its search box opens. They come from `/music/get_search_suggestions` with an empty `input`: the answer is a suggestions section of `historySuggestionRenderer`s, each with its query and a `feedbackEndpoint` token. Removing one posts that token to `/feedback` as `feedbackTokens`, as the web player's remove button does. Both go out on the signed-in `WEB_REMIX` client. There is no request that adds a search: YouTube records any search made signed in, which is why the app searches signed out while you type (see [Settings](settings.md)). Signed out the engine returns an empty list without asking. The setting that decides whether this list or one on the device is shown is in [Settings](settings.md).

@@ -21,10 +21,17 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 // `isTauri` is read once, when the module loads.
 vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
-const { MpvPlaybackEngine } = await import("./player.ts");
+const { MpvPlaybackEngine, HIDDEN_POLL_MS } = await import("./player.ts");
 
 let engine: InstanceType<typeof MpvPlaybackEngine>;
 let events: PlaybackEvent[];
+let hidden: boolean;
+let hiddenListeners: Set<() => void>;
+
+function setHidden(next: boolean): void {
+  hidden = next;
+  for (const listener of hiddenListeners) listener();
+}
 
 function push(message: unknown): void {
   tauri.channel!.onmessage(message);
@@ -42,7 +49,15 @@ beforeEach(async () => {
   tauri.channel = null;
   tauri.position.mockReset();
   events = [];
-  engine = new MpvPlaybackEngine();
+  hidden = false;
+  hiddenListeners = new Set();
+  engine = new MpvPlaybackEngine({
+    get: () => hidden,
+    subscribe(listener) {
+      hiddenListeners.add(listener);
+      return () => void hiddenListeners.delete(listener);
+    },
+  });
   engine.subscribe((event) => events.push(event));
   // The channel opens behind a dynamic import.
   while (!tauri.channel) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -170,5 +185,90 @@ describe("MpvPlaybackEngine position polling", () => {
     await expect(engine.seek(60_000)).rejects.toThrow("seek failed");
     await vi.advanceTimersByTimeAsync(0);
     expect(positions()).toEqual([10_000, 11_000]);
+  });
+});
+
+describe("MpvPlaybackEngine while the window is hidden", () => {
+  it("asks every ten seconds", async () => {
+    tauri.position
+      .mockReturnValueOnce(reply(1_300))
+      .mockReturnValueOnce(reply(2_021))
+      .mockReturnValue(reply(12_030));
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    setHidden(true);
+    // The poll already due still fires on the second.
+    await vi.advanceTimersByTimeAsync(720);
+    expect(tauri.position).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(HIDDEN_POLL_MS - 1);
+    expect(tauri.position).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(tauri.position).toHaveBeenCalledTimes(3);
+    expect(positions()).toEqual([1_300, 2_021, 12_030]);
+  });
+
+  it("asks at once when the window is shown, then every second again", async () => {
+    tauri.position
+      .mockReturnValueOnce(reply(1_000))
+      .mockReturnValueOnce(reply(5_300))
+      .mockReturnValue(reply(6_020));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(tauri.position).toHaveBeenCalledTimes(1);
+
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(positions()).toEqual([1_000, 5_300]);
+    await vi.advanceTimersByTimeAsync(720);
+    expect(positions()).toEqual([1_000, 5_300, 6_020]);
+  });
+
+  it("asks once when shown while paused", async () => {
+    tauri.position.mockReturnValueOnce(reply(1_000)).mockReturnValue(reply(8_400));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    push({ type: "status", status: "paused" });
+
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(tauri.position).toHaveBeenCalledTimes(2);
+    expect(positions()).toEqual([1_000, 8_400]);
+  });
+
+  it("does not ask when shown with nothing loaded, or while a song loads", async () => {
+    setHidden(true);
+    setHidden(false);
+    setHidden(true);
+    push({ type: "status", status: "loading" });
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(tauri.position).not.toHaveBeenCalled();
+  });
+
+  it("does not ask when shown in the middle of a seek", async () => {
+    tauri.position.mockReturnValue(reply(10_000));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(0);
+    await engine.seek(60_000);
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(tauri.position).toHaveBeenCalledTimes(1);
+  });
+
+  it("syncs the position on request, and keeps the slow poll going", async () => {
+    tauri.position.mockReturnValueOnce(reply(1_000)).mockReturnValue(reply(7_500));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    await engine.syncPosition();
+    expect(positions()).toEqual([1_000, 7_500]);
+    await vi.advanceTimersByTimeAsync(HIDDEN_POLL_MS - 1);
+    expect(tauri.position).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(tauri.position).toHaveBeenCalledTimes(3);
   });
 });

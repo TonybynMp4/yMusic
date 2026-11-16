@@ -72,6 +72,22 @@ Sending the positions once a second instead, still pushed, ended within noise of
 
 Synced lyrics will need the position more often than once a second. They should estimate it in the page from the last position, the time it arrived (`performance.now()`) and whether the song is playing, not ask the core more often.
 
+### The window hidden in the tray
+
+With "Keep playing in the tray", closing the window hides it. The webview stays, because the queue, the engine worker and BotGuard live in the page and playback needs all three. What the page can drop is the work only a visible window needs.
+
+`visibility.rs` is the one place that hides and shows the main window. `hide` is what closing does. `show` is behind the tray menu, a click on the tray icon, a second launch and MPRIS Raise. Both record the state in `WindowVisibility` and tell the page over a channel (`window_subscribe`), once per change. `show` tells the page before it shows the window, so the page has started on its first frame by then. A page that subscribes while the window is hidden, after a reload, is told at once. `visibilitychange` is not used: nobody has checked what WebKitGTK and WebView2 report for a hidden window.
+
+In the page, `windowHidden` in `packages/ipc` is a store shaped for `useSyncExternalStore`, and `useWindowHidden` is the hook over it.
+
+`MpvPlaybackEngine` asks for the position every ten seconds while hidden (`HIDDEN_POLL_MS`), where it asks every second otherwise. Nothing draws it then. What still reads it:
+
+- The saved queue position, which `useSavedQueue` writes every ten seconds anyway.
+- Watch time, which `WatchTime` carries across the gap ([the data engine](engine.md)).
+- The Previous media key, which restarts the song past three seconds, and a seek by an offset. Both start from the position, so `useMediaSession` asks for a fresh one first (`syncPosition`).
+
+When the window is shown, the engine asks once at once, playing or paused, so the bar is right when it is drawn.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

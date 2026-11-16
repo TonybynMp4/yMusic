@@ -145,7 +145,14 @@ export function usePlayer(
     const from = source.current;
     return from?.ids.has(id) ? from.playlistId : null;
   }, []);
-  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory, playlistOf);
+  useWatchHistory(
+    trackId,
+    state.status,
+    position,
+    settings.pauseWatchHistory,
+    playlistOf,
+    state.durationMs,
+  );
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -626,6 +633,11 @@ export function usePlayer(
     },
     [engine],
   );
+  /**
+   * Brings `position` up to date. With the window hidden it is only read every
+   * ten seconds, too stale for a media key that acts on it.
+   */
+  const syncPosition = useCallback(() => engine.syncPosition(), [engine]);
   /** The track mpv has, which `position` belongs to once it is not null. */
   const loadedTrack = useCallback(() => inMpv.current, []);
   const setRepeat = useCallback(
@@ -648,6 +660,7 @@ export function usePlayer(
     lease: streaming !== null && streaming.trackId === trackId ? streaming : null,
     playback: state,
     position,
+    syncPosition,
     loadedTrack,
     volume,
     playTrack,

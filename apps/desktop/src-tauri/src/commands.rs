@@ -463,6 +463,21 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Whether the app opens when the user logs in.
+#[tauri::command]
+#[specta::specta]
+pub fn autostart_get<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool, String> {
+    crate::autostart::is_enabled(&app)
+}
+
+/// Adds or removes the login entry, and returns whether it is there after.
+#[tauri::command]
+#[specta::specta]
+pub fn autostart_set<R: Runtime>(app: tauri::AppHandle<R>, on: bool) -> Result<bool, String> {
+    crate::autostart::set(&app, on)?;
+    crate::autostart::is_enabled(&app)
+}
+
 /// How many bytes the artwork cache takes on disk, the only cache with a size
 /// worth showing.
 #[tauri::command]

@@ -130,15 +130,19 @@ static STARTUP: Mutex<Startup> = Mutex::new(Startup {
     requested: false,
 });
 
-/// Shows the main window at the end of setup, and focuses it when a second
-/// launch, the tray or the media controls asked for it while setup ran.
-pub fn reveal(window: &WebviewWindow) {
+/// Ends setup's hold on the main window: from here on others may show it.
+/// Shows it when `visible` (false for a login launch into the tray), and
+/// shows and focuses it when a second launch, the tray or the media controls
+/// asked for it while setup ran.
+pub fn reveal(window: &WebviewWindow, visible: bool) {
     let requested = {
         let mut startup = STARTUP.lock().expect("startup mutex");
         startup.shown = true;
         startup.requested
     };
-    let _ = window.show();
+    if visible || requested {
+        let _ = window.show();
+    }
     if requested {
         let _ = window.set_focus();
     }

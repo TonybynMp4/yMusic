@@ -4,6 +4,8 @@ import {
   accountBrowsers,
   type AudioDevice,
   type Browser,
+  autostartGet,
+  autostartSet,
   cacheClear,
   cacheSize,
   isTauri,
@@ -204,6 +206,7 @@ export function SettingsView({ settings: { settings, update }, library, updates,
       </Section>
 
       <Section title="App">
+        {isTauri && <AutostartRow inTray={settings.closeToTray && hasTray} />}
         <Row
           label="Keep playing in the tray"
           description={
@@ -391,6 +394,37 @@ function AccountSection({ state }: { state: AccountState }) {
  * Every cache the app keeps, with the artwork's size and a way to empty them
  * all, so the app fetches and draws as on a cold start.
  */
+function AutostartRow(props: { inTray: boolean }) {
+  // Null until Rust says whether the login entry is there.
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    autostartGet()
+      .then(setOn)
+      .catch((error: unknown) => console.warn("could not read the login entry", error));
+  }, []);
+  const change = (next: boolean) => {
+    setOn(next);
+    autostartSet(next)
+      .then(setOn)
+      .catch((error: unknown) => {
+        console.warn("could not change the login entry", error);
+        return autostartGet().then(setOn);
+      })
+      .catch((error: unknown) => console.warn("could not read the login entry", error));
+  };
+  return (
+    <Row
+      label="Open at login"
+      description={
+        props.inTray
+          ? "Starts yMusic in the tray when you log in."
+          : "Opens yMusic when you log in."
+      }
+      control={<Switch checked={on ?? false} disabled={on === null} onCheckedChange={change} />}
+    />
+  );
+}
+
 function CacheRow() {
   const [size, setSize] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);

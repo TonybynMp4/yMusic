@@ -27,6 +27,8 @@ pub struct PlatformSummary {
     supports_in_app_update: bool,
     /// False without a system tray library, so the page can't offer the tray.
     has_tray: bool,
+    /// False where the app has no login entry to write.
+    has_autostart: bool,
 }
 
 #[tauri::command]
@@ -40,6 +42,7 @@ pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary
         install_flavor: flavor,
         supports_in_app_update: flavor.supports_in_app_update(),
         has_tray: crate::tray::has_tray_support(),
+        has_autostart: crate::autostart::SUPPORTED,
     }
 }
 

@@ -27,6 +27,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
   Select,
@@ -44,6 +45,7 @@ import { searchHistoryIn } from "./useSearchHistory.ts";
 import type { LocalLibrary } from "./useLocalLibrary.ts";
 import { clearBrowseCache } from "./useBrowse.ts";
 import { clearSongYears } from "./useSongYear.ts";
+import { queryClient } from "./query.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
 
@@ -62,6 +64,7 @@ export function SettingsView({ settings: { settings, update }, library, updates,
   const version = platform?.appVersion ?? null;
   // Assumed there until the summary says otherwise.
   const hasTray = platform?.hasTray ?? true;
+  const hasAutostart = platform?.hasAutostart ?? true;
   const signedIn = account.account !== null;
   const searchHistory = searchHistoryIn(settings.searchHistory, signedIn);
   return (
@@ -206,7 +209,9 @@ export function SettingsView({ settings: { settings, update }, library, updates,
       </Section>
 
       <Section title="App">
-        {isTauri && <AutostartRow inTray={settings.closeToTray && hasTray} />}
+        {isTauri && (
+          <AutostartRow supported={hasAutostart} inTray={settings.closeToTray && hasTray} />
+        )}
         <Row
           label="Keep playing in the tray"
           description={
@@ -391,40 +396,49 @@ function AccountSection({ state }: { state: AccountState }) {
 }
 
 /**
- * Every cache the app keeps, with the artwork's size and a way to empty them
- * all, so the app fetches and draws as on a cold start.
+ * The login entry. Read each time the page opens, since the system's startup
+ * list can remove it while the app runs. The switch holds the asked-for state
+ * and stays disabled until Rust answers.
  */
-function AutostartRow(props: { inTray: boolean }) {
-  // Null until Rust says whether the login entry is there.
-  const [on, setOn] = useState<boolean | null>(null);
-  useEffect(() => {
-    autostartGet()
-      .then(setOn)
-      .catch((error: unknown) => console.warn("could not read the login entry", error));
-  }, []);
-  const change = (next: boolean) => {
-    setOn(next);
-    autostartSet(next)
-      .then(setOn)
-      .catch((error: unknown) => {
-        console.warn("could not change the login entry", error);
-        return autostartGet().then(setOn);
-      })
-      .catch((error: unknown) => console.warn("could not read the login entry", error));
-  };
+function AutostartRow(props: { supported: boolean; inTray: boolean }) {
+  const entry = useQuery({
+    queryKey: ["autostart"],
+    queryFn: autostartGet,
+    enabled: props.supported,
+    staleTime: 0,
+  });
+  const setting = useMutation({
+    mutationFn: autostartSet,
+    onSuccess: (on) => queryClient.setQueryData(["autostart"], on),
+    onError: (error) => {
+      console.warn("could not change the login entry", error);
+      return queryClient.invalidateQueries({ queryKey: ["autostart"] });
+    },
+  });
+  const on = setting.isPending ? setting.variables : (entry.data ?? false);
+  let description = props.inTray
+    ? "Starts yMusic in the tray when you log in."
+    : "Opens yMusic when you log in.";
+  if (!props.supported) description = "Not available on this system yet.";
   return (
     <Row
       label="Open at login"
-      description={
-        props.inTray
-          ? "Starts yMusic in the tray when you log in."
-          : "Opens yMusic when you log in."
+      description={description}
+      control={
+        <Switch
+          checked={on}
+          disabled={!props.supported || entry.data === undefined || setting.isPending}
+          onCheckedChange={(next) => setting.mutate(next)}
+        />
       }
-      control={<Switch checked={on ?? false} disabled={on === null} onCheckedChange={change} />}
     />
   );
 }
 
+/**
+ * Every cache the app keeps, with the artwork's size and a way to empty them
+ * all, so the app fetches and draws as on a cold start.
+ */
 function CacheRow() {
   const [size, setSize] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);

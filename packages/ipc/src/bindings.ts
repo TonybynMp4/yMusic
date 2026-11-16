@@ -360,6 +360,8 @@ export type PlatformSummary = {
 	supportsInAppUpdate: boolean,
 	/**  False without a system tray library, so the page can't offer the tray. */
 	hasTray: boolean,
+	/**  False where the app has no login entry to write. */
+	hasAutostart: boolean,
 };
 
 export type PlaybackEvent = { type: "status"; status: PlaybackStatus } | { type: "position"; positionMs: number; durationMs: number | null } | { type: "ended"; trackId: string | null } | 

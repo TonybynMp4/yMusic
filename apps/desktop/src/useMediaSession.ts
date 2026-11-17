@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { mediaSetTrack, mediaSetVolume, subscribeMediaKeys, toMediaTrack } from "@ymusic/ipc";
 import { windowHidden } from "@ymusic/ipc";
 import type { MediaKeyEvent } from "@ymusic/ipc";
@@ -27,14 +27,18 @@ function logMediaFailure(error: unknown): void {
 export function useMediaSession(player: Player) {
   // The subscription is made once, so it reads the player through an effect
   // event: the callbacks close over playback state and change every render.
+  // Settles once every position asked for so far has arrived. Each key waits
+  // on it, so one that needs no position still runs after the ones before it.
+  const synced = useRef<Promise<void>>(Promise.resolve());
   const onMediaKey = useEffectEvent(async (event: MediaKeyEvent) => {
     // While the window is hidden in the tray the position is up to ten
     // seconds old. Previous and a seek by an offset start from it, and a skip
     // or a seek closes a stretch of listening at it, so each asks for a fresh
     // one first. A pause needs nothing: Rust sends the position with it.
     if (windowHidden.get() && MOVES.has(event.type)) {
-      await player.syncPosition().catch(logMediaFailure);
+      synced.current = synced.current.then(() => player.syncPosition()).catch(logMediaFailure);
     }
+    await synced.current;
     switch (event.type) {
       case "play":
         return player.play();
@@ -60,7 +64,7 @@ export function useMediaSession(player: Player) {
         return player.setVolume(event.volume);
     }
   });
-  useEffect(() => subscribeMediaKeys((event) => void onMediaKey(event)), []);
+  useEffect(() => subscribeMediaKeys((event) => void onMediaKey(event).catch(logMediaFailure)), []);
 
   const { track } = player;
   const durationMs = player.playback.durationMs;

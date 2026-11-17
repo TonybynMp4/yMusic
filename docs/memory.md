@@ -103,6 +103,23 @@ A run takes about 11 minutes. `--variant fallback` builds a version that resolve
 
 The number that matters is anonymous memory (`Pss_Anon`: heaps, JIT code and buffers the process allocated itself) plus swap. PSS, each process's share of every page it maps, also counts shared libraries, and that share drops whenever another program maps the same libraries. Any other WebKitGTK app open during a run lowers every process's PSS by 20 to 30 MB without the app changing, so the report gives PSS only as a secondary table. Swap depends on how much else the machine is doing, so each run records the free memory and swap it started with.
 
+### The tray scenario
+
+`--scenario tray` on both scripts measures what the app costs while its window is hidden in the tray. It takes about 10 minutes a run:
+
+1. 30 s idle after launch.
+2. A song from the 948-track playlist starts and keeps playing.
+3. 12 pages, 5 s each (four artists, four albums, four playlists), then a search, so the page holds a realistic UI and cache.
+4. 60 s with the window open, to compare the tray with.
+5. The scenario turns "Keep playing in the tray" on through `settings_set` and asks the window to close, which is what its close button does, so the app hides it. It stays hidden for 360 s.
+6. The window is shown the way the tray icon shows it, then 60 s more.
+
+From step 4 on, the core moves the song to 5 s before its end once a minute, so songs keep changing at the same rate in all three stretches. The core does the hiding, the waiting and the showing (`memory_tray`), and marks `tray-hide`, `tray-show` and each song it finds playing (`tray-track`). The page does nothing during the tray stretch that it would not do unprompted, so a build that slows or unmounts the hidden page is timed the same as one that does not. A run where fewer than six songs played in the tray did not keep advancing, and the report prints that count per run.
+
+For this scenario the sampler also records CPU time and wakeups per process. CPU time is `utime` plus `stime` from `/proc/<pid>/stat`, which counts every thread including ones that have exited. Wakeups are the times a thread was put on a CPU, the third number of each `/proc/<pid>/task/<tid>/schedstat`, summed from the differences between samples. The report gives both over each whole stretch (window open, in the tray, shown again), next to the memory held at the end of each stretch and how much it grew after the window was shown. The chart adds a CPU panel.
+
+Results land in `tray-<variant>-<n>.json`, apart from the session scenario's. `docs/memory/tray-idle/` has the baseline on `main` and the two tray idle branches against it.
+
 ### Keeping comparisons fair
 
 The scenario loads real pages from YouTube, and those change: a playlist gains songs, an artist page gains a shelf. Measure the before and the after on the same day, one after the other, rather than against an old baseline. Close what you can before a run, since swap depends on other programs. `docs/memory/baseline/` is the first measurement of `main`, for the long view.

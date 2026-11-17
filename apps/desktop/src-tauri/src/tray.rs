@@ -110,9 +110,6 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Shows the main window, unless setup has not shown it yet: it is still
-/// starting, and focuses it once it shows, or mpv failed and it stays hidden
-/// behind the error dialog.
 /// Shows the window if no tray host turns up to draw the icon. Building the
 /// icon only proves the library loaded: stock GNOME without the AppIndicator
 /// extension has no host, and at login the host may start after the app. The
@@ -160,6 +157,9 @@ fn wait_for_host(timeout: std::time::Duration) -> bool {
     }
 }
 
+/// Shows the main window, unless setup has not shown it yet: it is still
+/// starting, and focuses it once it shows, or mpv failed and it stays hidden
+/// behind the error dialog.
 pub fn show_window<R: Runtime>(app: &AppHandle<R>) {
     if !crate::platform::window::may_show() {
         return;

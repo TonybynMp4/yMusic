@@ -111,7 +111,8 @@ fn every_command_is_reachable_over_ipc() {
             // list, so this pins the one-at-a-time change-list path.
             "headers": { "User-Agent": "YMUSIC/0.1", "Cookie": "a=1, b=2" },
             "startPaused": false,
-            "startMs": 500
+            "startMs": 500,
+            "attempt": 1
         }
     });
     get_ipc_response(&webview, request("player_load", load)).expect("player_load should succeed");
@@ -135,7 +136,8 @@ fn every_command_is_reachable_over_ipc() {
                     "trackId": "def456",
                     "url": format!("{}/tests/fixtures/tone.wav", env!("CARGO_MANIFEST_DIR")),
                     "headers": { "User-Agent": "YMUSIC/0.1", "Cookie": "a=1, b=2" },
-                    "loudnessDb": -2.5
+                    "loudnessDb": -2.5,
+                    "attempt": 1
                 }
             }),
         ),

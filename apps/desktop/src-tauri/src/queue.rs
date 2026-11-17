@@ -101,12 +101,12 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes)
             .inspect_err(|error| {
-                log::error!("ignoring unreadable {}: {error}", path.display());
+                tracing::error!(path = %path.display(), %error, "ignoring an unreadable saved queue");
             })
             .ok(),
         Err(error) if error.kind() == ErrorKind::NotFound => None,
         Err(error) => {
-            log::error!("could not read {}: {error}", path.display());
+            tracing::error!(path = %path.display(), %error, "could not read the saved queue");
             None
         }
     }

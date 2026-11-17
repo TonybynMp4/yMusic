@@ -5,6 +5,7 @@ pub mod files;
 pub mod http;
 pub mod images;
 pub mod library;
+mod logging;
 pub mod platform;
 pub mod playback;
 pub mod queue;
@@ -126,28 +127,15 @@ pub fn export_bindings(path: &std::path::Path) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before the builder, so plugin initialisation is logged too. The file
+    // starts in setup, once the app knows its log directory.
+    logging::init();
     tauri::Builder::default()
         // First, so a second launch hands over to the running window before
         // anything else starts, a second player above all.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::show_window(app);
         }))
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                // The MPRIS backend's async runtime traces every poll, which
-                // buries everything else in the log within seconds.
-                .level_for("zbus", log::LevelFilter::Warn)
-                .level_for("polling", log::LevelFilter::Warn)
-                .level_for("async_io", log::LevelFilter::Warn)
-                .level_for("tracing", log::LevelFilter::Warn)
-                // One line per connection and a "shouldn't retry!" per
-                // request: noise that reads like errors and is not.
-                .level_for("reqwest", log::LevelFilter::Warn)
-                .level_for("hyper_util", log::LevelFilter::Warn)
-                // A line for every cookie YouTube sets on the engine's client.
-                .level_for("cookie_store", log::LevelFilter::Warn)
-                .build(),
-        )
         // Before the windows are built, so the main window is resized and
         // placed while still hidden. It starts hidden (tauri.conf.json) and
         // `setup` shows it once it is where it was.
@@ -171,6 +159,7 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            logging::open(app.path().app_log_dir().ok().as_deref());
             let window = app
                 .get_webview_window("main")
                 .expect("the main window is declared in tauri.conf.json");
@@ -207,7 +196,7 @@ pub fn run() {
                     player.apply_settings(&startup_settings);
                     let volume = open_volume(app.handle());
                     if let Err(error) = player.remember_volume(volume.clone()) {
-                        log::warn!("{error}");
+                        tracing::warn!("{error}");
                     }
                     app.manage(volume);
                     app.manage(player);
@@ -215,7 +204,7 @@ pub fn run() {
                     true
                 }
                 Err(error) => {
-                    log::error!("{error}");
+                    tracing::error!("{error}");
                     app.dialog()
                         .message(format!(
                             "yMusic plays audio through libmpv, and it would not start.\n\n\
@@ -229,10 +218,7 @@ pub fn run() {
                         // plugin saves the never-shown window's creation-time
                         // geometry over where the user last left it. Nothing
                         // else has an exit hook with work to do yet.
-                        .show(|_| {
-                            log::logger().flush();
-                            std::process::exit(1)
-                        });
+                        .show(|_| std::process::exit(1));
                     false
                 }
             };
@@ -299,7 +285,7 @@ fn save_position<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         position_ms,
     };
     if let Err(error) = store.save_position(&position) {
-        log::error!("{error}");
+        tracing::error!("{error}");
     }
 }
 
@@ -317,9 +303,11 @@ fn open_library<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Library {
     match db_path {
         Ok(path) => match Library::open(&path, art_dir.clone()) {
             Ok(library) => return library,
-            Err(err) => log::error!("falling back to an in-memory library: {err}"),
+            Err(err) => tracing::error!(error = %err, "falling back to an in-memory library"),
         },
-        Err(err) => log::error!("no app data directory, using an in-memory library: {err}"),
+        Err(err) => {
+            tracing::error!(error = %err, "no app data directory, using an in-memory library")
+        }
     }
 
     Library::open_in_memory(art_dir).expect("an in-memory library cannot fail to open")
@@ -335,7 +323,7 @@ fn open_queue<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> QueueStore {
     match app.path().app_data_dir() {
         Ok(dir) => QueueStore::open(dir),
         Err(err) => {
-            log::error!("no app data directory, the queue will not persist: {err}");
+            tracing::error!(error = %err, "no app data directory, the queue will not persist");
             QueueStore::in_memory()
         }
     }
@@ -345,7 +333,7 @@ fn open_settings<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SettingsStore 
     match app.path().app_data_dir() {
         Ok(dir) => SettingsStore::open(dir.join("settings.json")),
         Err(err) => {
-            log::error!("no app data directory, settings will not persist: {err}");
+            tracing::error!(error = %err, "no app data directory, settings will not persist");
             SettingsStore::in_memory()
         }
     }
@@ -357,7 +345,7 @@ fn open_volume<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VolumeStore {
     match app.path().app_data_dir() {
         Ok(dir) => VolumeStore::open(dir.join("volume.json")),
         Err(err) => {
-            log::error!("no app data directory, the volume will not persist: {err}");
+            tracing::error!(error = %err, "no app data directory, the volume will not persist");
             VolumeStore::in_memory()
         }
     }
@@ -365,7 +353,7 @@ fn open_volume<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> VolumeStore {
 
 fn open_account<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Account {
     let dir = app.path().app_data_dir().unwrap_or_else(|err| {
-        log::error!("no app data directory, the session will not persist: {err}");
+        tracing::error!(error = %err, "no app data directory, the session will not persist");
         std::env::temp_dir().join("ymusic")
     });
     Account::open(dir.join("account.bin"), OsKeyring)

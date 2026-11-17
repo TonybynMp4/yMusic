@@ -8,9 +8,10 @@ import type { StreamLease, TrackId } from "./domain.ts";
 export interface PlaybackEngine {
   /**
    * Starts playing once loaded, unless `paused`. `startMs` starts it part
-   * way in, for a queue restored at launch.
+   * way in, for a queue restored at launch. `attempt` is 2 for the retry on
+   * another player client after the first lease was refused, and only logged.
    */
-  load(lease: StreamLease, paused?: boolean, startMs?: number): Promise<void>;
+  load(lease: StreamLease, paused?: boolean, startMs?: number, attempt?: number): Promise<void>;
   /**
    * The track to go on to with no gap when `after` ends, or null to take it
    * back. Ignored once `after` is no longer playing. When the engine goes on

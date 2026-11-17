@@ -7,7 +7,7 @@ What to check when the UI feels slow, and what the work on long playlists ([#72]
 - Profile a release build (`pnpm tauri build --no-bundle`) when the numbers matter. A dev build is fine for finding what renders, not for how long it takes.
 - The WebKit inspector (right click, Inspect, in a dev build) has a Timelines tab. Record with "JavaScript & Events" and "Layout & Rendering" to see whether a slow frame is spent in React, in style and layout, or in paint.
 - React DevTools runs standalone with `npx react-devtools`. Add `<script src="http://localhost:8097"></script>` to `index.html` for the session, and do not commit it. Turn on "Highlight updates when components render" and watch what flashes while you scroll or while a song plays.
-- For scrolling, a frame probe beats eyeballing it. The one used for #72 logged, every 2 seconds: frames drawn, the longest gap between frames, React render time, and frames where the viewport showed no rows. It sent the line to the Rust log through `invoke("plugin:log|log", ...)`, which needs `log:default` in `capabilities/default.json`. It was never committed. Rebuild it when needed.
+- For scrolling, a frame probe beats eyeballing it. The one used for #72 logged, every 2 seconds: frames drawn, the longest gap between frames, React render time, and frames where the viewport showed no rows. It sent the line to the Rust log through `tauri-plugin-log`, which the app no longer has; a rebuild needs a throwaway command that passes the line to `tracing::info!`. It was never committed. Rebuild it when needed.
 
 ## Common causes
 

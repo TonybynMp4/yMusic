@@ -47,7 +47,7 @@ pub fn save_state(window: &tauri::Window) {
     }
     match window.app_handle().save_window_state(saved_state()) {
         Ok(()) => *last = geometry,
-        Err(error) => log::warn!("could not save the window state: {error}"),
+        Err(error) => tracing::warn!("could not save the window state: {error}"),
     }
 }
 
@@ -163,7 +163,7 @@ pub fn apply_backdrop(window: &WebviewWindow) {
         // Mica needs Windows 11 build 22000+. Older builds keep the solid
         // background, which looks plain but is not broken.
         if let Err(error) = window_vibrancy::apply_mica(window, Some(true)) {
-            log::debug!("mica unavailable, falling back to a solid background: {error}");
+            tracing::debug!(%error, "mica unavailable, falling back to a solid background");
         }
     }
 
@@ -268,7 +268,7 @@ pub fn keep_on_screen(window: &WebviewWindow) {
     let Some((position, fitted)) = placement(position, size, screens, target.work_area()) else {
         return;
     };
-    log::info!("the saved window position is off screen, centring it");
+    tracing::info!("the saved window position is off screen, centring it");
     // A maximized window takes the new place as the one it un-maximizes to.
     if saved.maximized {
         let _ = window.unmaximize();

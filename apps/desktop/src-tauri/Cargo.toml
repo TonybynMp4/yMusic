@@ -24,8 +24,6 @@ tauri-plugin-opener = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "charset", "system-proxy", "cookies", "gzip", "brotli"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-log = "0.4"
-tauri-plugin-log = "2"
 libmpv2 = "7.0.1"
 lofty = "0.25.4"
 walkdir = "2.5.0"
@@ -43,6 +41,11 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "=0.0.12"
 tauri-plugin-window-state = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tracing = "0.1"
+# `tracing-log` bridges the crates that still log through `log` (tauri, reqwest,
+# keyring) into the same subscriber; `chrono` stamps lines in local time.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "chrono", "env-filter", "fmt", "smallvec", "std", "tracing-log"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test", "protocol-asset", "tray-icon"] }

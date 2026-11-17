@@ -28,6 +28,7 @@ pub struct GitHubRelease {
     prerelease: bool,
 }
 
+#[tracing::instrument(name = "update_check", skip(current), fields(%current), err(level = "debug"))]
 pub async fn check(current: &Version, include_prereleases: bool) -> Result<Option<Update>, String> {
     let client = reqwest::Client::builder()
         .user_agent(format!("yMusic/{current}"))
@@ -46,7 +47,12 @@ pub async fn check(current: &Version, include_prereleases: bool) -> Result<Optio
         .map_err(|error| format!("could not check for updates: {error}"))?;
     let releases: Vec<GitHubRelease> = serde_json::from_slice(&body)
         .map_err(|error| format!("unexpected answer from GitHub: {error}"))?;
-    Ok(newest(releases, current, include_prereleases))
+    let update = newest(releases, current, include_prereleases);
+    tracing::debug!(
+        newest = update.as_ref().map(|u| u.version.as_str()),
+        "checked for updates"
+    );
+    Ok(update)
 }
 
 /// The newest release above `current`, skipping drafts, tags that are not

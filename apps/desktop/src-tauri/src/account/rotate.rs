@@ -23,6 +23,7 @@ const ROTATED: &str = "__Secure-1PSIDTS";
 
 /// The cookie header with the rotated cookies in, or None if Google did not
 /// rotate it.
+#[tracing::instrument(skip_all)]
 pub async fn rotate(cookie: &str) -> Result<Option<String>, String> {
     let response = client()
         .post(URL)
@@ -40,9 +41,10 @@ pub async fn rotate(cookie: &str) -> Result<Option<String>, String> {
         .filter_map(|value| value.to_str().ok())
         .filter_map(SetCookie::parse)
         .collect();
-    log::info!(
-        "rotating the session: HTTP {}, set {}",
-        response.status().as_u16(),
+    // Names and domains only: `describe` never includes a value.
+    tracing::info!(
+        status = response.status().as_u16(),
+        "rotating the session: set {}",
         set.iter()
             .map(SetCookie::describe)
             .collect::<Vec<_>>()

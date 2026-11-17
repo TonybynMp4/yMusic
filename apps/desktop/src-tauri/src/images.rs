@@ -101,7 +101,7 @@ impl Images {
                 image(bytes)
             }
             None => {
-                log::warn!("could not fetch artwork: {url}");
+                tracing::warn!(%url, "could not fetch artwork");
                 status(StatusCode::BAD_GATEWAY)
             }
         }
@@ -116,7 +116,7 @@ impl Images {
             match store(&images.store, generation, &images.dir, &path, &bytes) {
                 Ok(true) => images.wrote(bytes.len() as u64),
                 Ok(false) => {}
-                Err(err) => log::warn!("could not cache artwork: {err}"),
+                Err(error) => tracing::warn!(%error, "could not cache artwork"),
             }
         });
     }
@@ -148,7 +148,7 @@ impl Images {
         let (dir, trimming) = (self.dir.clone(), self.trimming.clone());
         tauri::async_runtime::spawn_blocking(move || {
             if let Err(err) = trim(&dir, CAP_BYTES, TRIM_TO_BYTES) {
-                log::warn!("could not trim the artwork cache: {err}");
+                tracing::warn!(error = %err, "could not trim the artwork cache");
             }
             trimming.store(false, Ordering::Release);
         });
@@ -166,27 +166,36 @@ impl Images {
         self.fetch(url, ATTEMPTS).await
     }
 
+    /// The URL goes on the failure lines only, so a fetch that works costs no
+    /// span.
     async fn fetch(&self, url: &str, attempts: u32) -> Option<Vec<u8>> {
-        for attempt in 0..attempts {
-            if attempt > 0 {
-                tokio::time::sleep(BACKOFF * 2u32.pow(attempt - 1)).await;
+        for retry in 0..attempts {
+            if retry > 0 {
+                tokio::time::sleep(BACKOFF * 2u32.pow(retry - 1)).await;
             }
+            // Counted from 1 in the log, as the player's `load` span does.
+            let attempt = retry + 1;
             match self.client.get(url).send().await {
                 Ok(response) if response.status().is_success() => match response.bytes().await {
                     Ok(bytes) if content_type(&bytes).is_some() => return Some(bytes.to_vec()),
-                    Ok(_) => log::debug!("artwork was not an image: {url}"),
-                    Err(err) => log::debug!("artwork body failed: {err}"),
+                    Ok(_) => tracing::debug!(url, attempt, "artwork was not an image"),
+                    Err(error) => tracing::debug!(url, attempt, %error, "artwork body failed"),
                 },
                 Ok(response) => {
-                    log::debug!("artwork answered {}: {url}", response.status());
+                    tracing::debug!(
+                        url,
+                        attempt,
+                        status = response.status().as_u16(),
+                        "artwork answered"
+                    );
                     if !retryable(response.status()) {
                         return None;
                     }
                 }
-                Err(err) => log::debug!("artwork request failed: {err}"),
+                Err(error) => tracing::debug!(url, attempt, %error, "artwork request failed"),
             }
         }
-        log::debug!("gave up on artwork after {attempts} attempts: {url}");
+        tracing::debug!(url, attempts, "gave up on artwork");
         None
     }
 }

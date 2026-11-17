@@ -48,12 +48,16 @@ export async function playerStats(): Promise<AudioStats | null> {
   return call("playerStats");
 }
 
-function loadRequest(lease: StreamLease): LoadRequest {
+function loadRequest(lease: StreamLease, attempt: number): LoadRequest {
   return {
     trackId: lease.trackId,
     url: lease.url,
     headers: lease.headers,
     loudnessDb: lease.loudnessDb,
+    // Only for the Rust log, which names the lease mpv was given.
+    playerClient: lease.playerClient,
+    itag: lease.itag,
+    attempt,
   };
 }
 
@@ -73,17 +77,17 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #asked = 0;
   #poll: ReturnType<typeof setTimeout> | null = null;
 
-  async load(lease: StreamLease, paused = false, startMs?: number): Promise<void> {
+  async load(lease: StreamLease, paused = false, startMs?: number, attempt = 1): Promise<void> {
     await this.#ensureSubscribed();
     await call("playerLoad", {
-      ...loadRequest(lease),
+      ...loadRequest(lease, attempt),
       startPaused: paused,
       startMs: startMs === undefined ? null : Math.max(0, Math.round(startMs)),
     });
   }
 
   async queueNext(after: TrackId, lease: StreamLease | null): Promise<void> {
-    await call("playerQueueNext", after, lease && loadRequest(lease));
+    await call("playerQueueNext", after, lease && loadRequest(lease, 1));
   }
 
   async play(): Promise<void> {

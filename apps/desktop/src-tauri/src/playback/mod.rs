@@ -37,7 +37,7 @@ pub trait EventSink: Send + Sync + 'static {
 impl EventSink for tauri::ipc::Channel<PlaybackEvent> {
     fn send(&self, event: PlaybackEvent) {
         if let Err(error) = tauri::ipc::Channel::send(self, event) {
-            log::warn!("dropping playback event, channel closed: {error}");
+            tracing::warn!(%error, "dropping playback event, channel closed");
         }
     }
 }
@@ -76,6 +76,15 @@ pub struct LoadRequest {
     /// Where to start, for a queue restored at launch. From the top when None.
     #[serde(default)]
     pub start_ms: Option<u64>,
+    /// The InnerTube client that resolved the stream, such as `WEB_REMIX`, and
+    /// the format it chose. Only logged: they say which lease mpv was given.
+    #[serde(default)]
+    pub player_client: Option<String>,
+    #[serde(default)]
+    pub itag: Option<i64>,
+    /// 1 for the first load of the track, 2 for the queue's retry on another
+    /// player client after mpv refused the first lease. Only logged.
+    pub attempt: u32,
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -223,11 +232,11 @@ impl Player {
 
         let version = match mpv.get_property::<String>("mpv-version") {
             Ok(version) => {
-                log::info!("playing through {version}");
+                tracing::info!("playing through {version}");
                 mpv_version(&version)
             }
             Err(error) => {
-                log::warn!("could not read the mpv version: {error}");
+                tracing::warn!(%error, "could not read the mpv version");
                 None
             }
         };
@@ -273,7 +282,22 @@ impl Player {
             .push(Box::new(observer));
     }
 
+    /// The span carries what identifies a load and never the URL or headers,
+    /// which hold the stream's signature and can hold a cookie or PO token.
+    #[tracing::instrument(
+        name = "load",
+        skip_all,
+        fields(
+            track_id = %request.track_id,
+            attempt = request.attempt,
+            player_client = request.player_client.as_deref(),
+            itag = request.itag,
+            start_ms = request.start_ms,
+            paused = request.start_paused,
+        ),
+    )]
     pub fn load(&self, request: LoadRequest) -> Result<(), String> {
+        tracing::debug!("loading");
         // Replacing the playlist drops whatever was appended after the song
         // this replaces.
         let mut gapless = self.state.gapless.lock().expect("gapless mutex");
@@ -319,6 +343,14 @@ impl Player {
     /// Appends the track to play when `after` ends, or with None, takes back
     /// the one appended. Ignored when `after` is no longer playing, because
     /// the queue asked about a song that has since changed.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            after,
+            next = request.as_ref().map(|r| r.track_id.as_str()),
+            player_client = request.as_ref().and_then(|r| r.player_client.as_deref()),
+        ),
+    )]
     pub fn queue_next(&self, after: &str, request: Option<LoadRequest>) -> Result<(), String> {
         let mut gapless = self.state.gapless.lock().expect("gapless mutex");
         let current = self
@@ -338,10 +370,7 @@ impl Player {
             return Ok(());
         };
         if request.headers != gapless.headers {
-            log::info!(
-                "not appending {}: its headers differ from the playing song's",
-                request.track_id
-            );
+            tracing::info!("not appending: its headers differ from the playing song's");
             return Ok(());
         }
         let next = Next {
@@ -401,13 +430,13 @@ impl Player {
     /// a setting mpv refuses is logged rather than failing the others.
     pub fn apply_settings(&self, settings: &crate::settings::Settings) {
         if let Err(error) = self.set_stable_volume(settings.stable_volume) {
-            log::warn!("{error}");
+            tracing::warn!(setting = "stable_volume", "{error}");
         }
         if let Err(error) = self.set_audio_device(&settings.audio_device) {
-            log::warn!("{error}");
+            tracing::warn!(setting = "audio_device", "{error}");
         }
         if let Err(error) = self.set_stats(settings.stats_for_nerds) {
-            log::warn!("{error}");
+            tracing::warn!(setting = "stats_for_nerds", "{error}");
         }
     }
 
@@ -589,7 +618,7 @@ impl Player {
             .take();
         if let Some(saver) = self.volume_saver.lock().expect("saver mutex").take() {
             if saver.join().is_err() {
-                log::warn!("the volume saver panicked");
+                tracing::warn!("the volume saver panicked");
             }
         }
     }
@@ -766,6 +795,9 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
     thread::Builder::new()
         .name("mpv-events".into())
         .spawn(move || {
+            // Every line from this thread names the track it is about, as a
+            // field, since the thread outlives any one song.
+            let _span = tracing::info_span!("mpv_events").entered();
             let mut duration_ms: Option<u64> = None;
             // Set on a restart, so the next `time-pos` reaches the page too.
             let mut page_wants_position = false;
@@ -784,17 +816,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                 let event = match event {
                     Ok(event) => event,
                     Err(error) => {
-                        log::warn!("mpv could not play the stream: {error}");
-                        emit(
-                            &sink,
-                            PlaybackEvent::Error {
-                                track_id: track(),
-                                message: format!(
-                                    "playback failed: the stream may have expired or been \
-                                     rejected ({error})"
-                                ),
-                            },
-                        );
+                        report_refused(&sink, track(), Some(&error));
                         continue;
                     }
                 };
@@ -886,15 +908,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         // Unreachable through libmpv2 today (see above), and
                         // kept in case a release starts sending it.
                         libmpv2::mpv_end_file_reason::Error => {
-                            emit(
-                                &sink,
-                                PlaybackEvent::Error {
-                                    track_id: track(),
-                                    message: "playback failed: the stream may have expired or \
-                                              been rejected"
-                                        .into(),
-                                },
-                            );
+                            report_refused(&sink, track(), None);
                         }
                         // Stop and Quit are our own doing; a redirect is mpv
                         // resolving the URL, not the end of anything.
@@ -996,11 +1010,17 @@ fn advance(mpv: &Mpv, state: &State) -> Advance {
     let next = gapless.next.take().expect("advancing has a next track");
     let mut current = state.current_track.lock().expect("track mutex");
     let path = mpv.get_property::<String>("path").ok();
+    // The path is a stream URL with its signature in, so it stays out of the
+    // log: the track ids say what went wrong.
     if path.as_deref() != Some(next.url.as_str()) {
-        log::warn!("mpv went on to {path:?}, not the appended track");
+        tracing::warn!(
+            track_id = current.as_deref(),
+            expected = %next.track_id,
+            "mpv went on to something other than the appended track"
+        );
         return Advance::Missed(current.clone());
     }
-    log::info!("went on to {} with no gap", next.track_id);
+    tracing::info!(track_id = %next.track_id, "went on with no gap");
     *current = Some(next.track_id.clone());
     state.loudness.lock().expect("loudness mutex").track_db = next.loudness_db;
     Advance::Joined(next.track_id)
@@ -1019,6 +1039,26 @@ fn emit_to_observers(sink: &Sink, event: PlaybackEvent) {
     for observer in sink.observers.lock().expect("observer mutex").iter() {
         observer.send(event.clone());
     }
+}
+
+/// mpv could not play the stream: logged, and sent to the queue, which retries
+/// on another player client.
+fn report_refused(sink: &Sink, track_id: Option<String>, error: Option<&dyn std::fmt::Display>) {
+    tracing::warn!(
+        track_id = track_id.as_deref(),
+        error = error.map(tracing::field::display),
+        "mpv could not play the stream"
+    );
+    let detail = error.map(|error| format!(" ({error})")).unwrap_or_default();
+    emit(
+        sink,
+        PlaybackEvent::Error {
+            track_id,
+            message: format!(
+                "playback failed: the stream may have expired or been rejected{detail}"
+            ),
+        },
+    );
 }
 
 fn emit(sink: &Sink, event: PlaybackEvent) {

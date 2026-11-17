@@ -8,7 +8,7 @@ There is no JS side. The plugin restores the window from Rust as it is built, so
 
 ### What is saved
 
-`SAVED_STATE` in `platform/window.rs` sets the flags:
+`saved_state` in `platform/window.rs` sets the flags:
 
 - **Size, position, maximized.** While maximized, the plugin keeps the size and position from before, so un-maximizing after a restart goes back to them.
 - **Not visibility.** With "Keep playing in the tray" on, closing hides the window, and quitting from the tray menu happens while it is hidden. Saving that would bring the app back invisible, so every launch shows the window.
@@ -31,4 +31,10 @@ So `keep_on_screen` runs after the restore. When the top strip of the window, th
 
 Closing to the tray goes through `CloseRequested`, where the plugin records the window's state before it hides. Moves and resizes while minimized or maximized are not recorded, so quitting from either state keeps the last normal size and position.
 
-On Wayland the compositor places windows and does not report their position, so only the size and maximized state come back there.
+### Wayland
+
+On Wayland the compositor places windows. A window reads its position as (0, 0) and cannot move itself, so only the size and maximized state come back. GNOME centres a window each time it appears, which includes Show from the tray after closing to it.
+
+`saved_state` leaves position out there, and `keep_on_screen` does nothing: with no real position it would decide the window is off screen on every launch. Leaving it out also keeps a position saved under X11 from being overwritten with (0, 0) by a Wayland session. GTK picks its backend from `WAYLAND_DISPLAY` and `GDK_BACKEND`, and `is_wayland` reads them the same way, because the plugin is built before GTK starts.
+
+The fix is the `xdg-session-management-v1` protocol (wayland-protocols 1.48): the compositor puts a window back where it was when the app names its session. Mutter and KWin are adding it, but GTK3 will never support it, and GTK4 has no public API for it yet. It becomes possible once GTK4 publishes one and Tauri moves to GTK4 ([tauri#7335](https://github.com/tauri-apps/tauri/issues/7335)).

@@ -227,8 +227,12 @@ pub fn run() {
                         .kind(MessageDialogKind::Error)
                         // Not `AppHandle::exit`: on that path the window-state
                         // plugin saves the never-shown window's creation-time
-                        // geometry over where the user last left it.
-                        .show(|_| std::process::exit(1));
+                        // geometry over where the user last left it. Nothing
+                        // else has an exit hook with work to do yet.
+                        .show(|_| {
+                            log::logger().flush();
+                            std::process::exit(1)
+                        });
                     false
                 }
             };
@@ -237,12 +241,13 @@ pub fn run() {
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
-            tray::sync(app.handle(), startup_settings.close_to_tray);
             // Last, so nothing the page invokes finds its state missing. With
-            // no mpv the window stays hidden behind the error dialog.
+            // no mpv the window stays hidden behind the error dialog, and
+            // there is no tray icon whose Quit would exit the app the way
+            // the dialog must not.
             if started {
-                app.manage(platform::window::Shown);
-                let _ = window.show();
+                tray::sync(app.handle(), startup_settings.close_to_tray);
+                platform::window::reveal(&window);
             }
             Ok(())
         })

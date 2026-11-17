@@ -93,6 +93,25 @@ describe("parseRadioId", () => {
     ],
     ["RDATpYvBJwovrr6XzI", { songs: ["BJwovrr6XzI" as VideoId], filter: "popular" }],
     [
+      // A mix made in the Android app, one past a multiple of four with no z.
+      "RDATiXrZa11svx3kx26I11pkb0819tI0q94tmtI0slzk74I012z2_tzI11hdsch370I11tc8lkllhI0h1ggxnI11np34hxcyE",
+      {
+        artists: [
+          "11svx3kx26",
+          "11pkb0819t",
+          "0q94tmt",
+          "0slzk74",
+          "012z2_tz",
+          "11hdsch370",
+          "11tc8lkllh",
+          "0h1ggxn",
+          "11np34hxcy",
+        ],
+        discovery: "discover",
+        variety: "high",
+      },
+    ],
+    [
       "RDATa0kr_tEvBJwovrr6XzIvIO_GLvVB5Vc",
       { artists: ["0kr_t"], songs: ["BJwovrr6XzI", "IO_GLvVB5Vc"] as VideoId[] },
     ],
@@ -106,6 +125,7 @@ describe("parseRadioId", () => {
     ["no seeds", "RDATpY"],
     ["a missing z", "RDATa0_yc88vE"],
     ["a misplaced z", "RDATa0kr_tEz"],
+    ["a z on a long id", "RDATiXrZa11svx3kx26I11pkb0819tEz"],
     ["a decade", "RDATd0Xa0kr_tE"],
     ["a genre", "RDATg9Xa0kr_tE"],
     ["new releases with a popularity", "RDATdXpYa0kr_tE"],

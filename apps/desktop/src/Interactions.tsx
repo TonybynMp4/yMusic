@@ -21,6 +21,7 @@ import {
   IconThumbUp,
   IconThumbUpFilled,
   IconTrash,
+  IconShare3,
   IconUser,
   IconUserMinus,
   IconUserPlus,
@@ -90,7 +91,10 @@ import {
   type Picked,
 } from "./cover.ts";
 import { CoverCropper } from "./CoverCropper.tsx";
+import { shareText } from "@choochmeque/tauri-plugin-sharekit-api";
 import { engine } from "./engine.ts";
+import { shareUrl, type Shared } from "./share.ts";
+import { ShareDialog, type Sharing } from "./ShareDialog.tsx";
 import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 import { toggled } from "./Rating.tsx";
@@ -138,6 +142,8 @@ interface Context extends Interactions {
   editPlaylist: (page: PlaylistPage) => void;
   /** Asks before deleting one of your playlists. */
   deletePlaylist: (page: PlaylistPage) => void;
+  /** Opens the system's share sheet for a link, or the app's own where there is none. */
+  share: (sharing: Sharing) => void;
 }
 
 const InteractionsContext = createContext<Context | null>(null);
@@ -190,11 +196,17 @@ export function InteractionsProvider({
   }, [open, menu]);
   const [editing, setEditing] = useState<PlaylistPage | null>(null);
   const [deleting, setDeleting] = useState<PlaylistPage | null>(null);
+  const [sharing, setSharing] = useState<Sharing | null>(null);
   const context: Context = {
     ...value,
     createPlaylist: (ids) => setSongs(() => ids),
     editPlaylist: setEditing,
     deletePlaylist: setDeleting,
+    // Windows and macOS have a share sheet; Linux, and the browser in
+    // development, refuse, and get the dialog instead.
+    share: (shared) => {
+      shareText(shared.url).catch(() => setSharing(shared));
+    },
   };
   return (
     <OpenMenuContext.Provider value={openMenu}>
@@ -222,6 +234,11 @@ export function InteractionsProvider({
           <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
           <EditPlaylistDialog page={editing} onClose={() => setEditing(null)} />
           <DeletePlaylistDialog page={deleting} onClose={() => setDeleting(null)} />
+          <ShareDialog
+            sharing={sharing}
+            onClose={() => setSharing(null)}
+            onError={(error) => value.notify(errorMessage(error))}
+          />
         </InteractionsContext.Provider>
       </RatingOfContext.Provider>
     </OpenMenuContext.Provider>
@@ -538,6 +555,7 @@ function SongItems({
         </DropdownMenuItem>
       )}
       <GoToArtist artists={track.artists} />
+      <ShareItem shared={videoId ? { kind: "song", videoId } : null} title={track.title} />
       {sourceOf(track.id) === "local" && (
         <>
           <DropdownMenuSeparator />
@@ -548,6 +566,22 @@ function SongItems({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * "Share": the music.youtube.com link, in the system's share sheet or the
+ * app's own dialog. Nothing for a local file or for Liked Music.
+ */
+function ShareItem({ shared, title }: { shared: Shared | null; title: string | null }) {
+  const x = useInteractions();
+  const url = shared && shareUrl(shared);
+  if (!url) return null;
+  return (
+    <DropdownMenuItem onClick={() => x.share({ url, title })}>
+      <IconShare3 />
+      Share
+    </DropdownMenuItem>
   );
 }
 
@@ -653,6 +687,10 @@ function CollectionItems({ route }: { route: Route }) {
           <GoToArtist artists={page.page.artists} />
         </>
       )}
+      <ShareItem
+        shared={route}
+        title={page ? (page.kind === "artist" ? page.page.name : page.page.title) : null}
+      />
     </>
   );
 }

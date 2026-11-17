@@ -193,6 +193,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@choochmeque/tauri-plugin-sharekit-api':
+        specifier: ^0.3.1
+        version: 0.3.1
       '@tabler/icons-react':
         specifier: ^3.51.0
         version: 3.51.0(react@19.3.1)
@@ -367,6 +370,9 @@ packages:
 
   '@bufbuild/protobuf@2.15.0':
     resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
+
+  '@choochmeque/tauri-plugin-sharekit-api@0.3.1':
+    resolution: {integrity: sha512-Cdd1wPW9Arang3sapz1LXDdklY06wnaf+zqsT+iS1c64cyozjhKYwAzLdirJY0HtlPlaZ7G5PsCfqgLoXkpqlg==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -2245,6 +2251,10 @@ snapshots:
       '@types/react': 19.3.0
 
   '@bufbuild/protobuf@2.15.0': {}
+
+  '@choochmeque/tauri-plugin-sharekit-api@0.3.1':
+    dependencies:
+      '@tauri-apps/api': 2.12.4
 
   '@emnapi/core@1.11.2':
     dependencies:

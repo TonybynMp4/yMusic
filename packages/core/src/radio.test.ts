@@ -17,6 +17,11 @@ describe("radioId", () => {
     ["one artist", { artists: ["0kr_t"] }, "RDATa0kr_tE"],
     ["an artist padded with z", { artists: ["0_yc88v"] }, "RDATa0_yc88vEz"],
     ["two artists", { artists: ["0kr_t", "0187x8"] }, "RDATa0kr_tI0187x8E"],
+    [
+      "a long id one past a multiple of four, with no z",
+      { artists: ["11svx3kx26", "11pkb0819t"], discovery: "discover", variety: "high" },
+      "RDATiXrZa11svx3kx26I11pkb0819tE",
+    ],
     ["popular", { artists: ["0kr_t"], filter: "popular" }, "RDATpYa0kr_tEz"],
     ["latest", { artists: ["0kr_t"], filter: "latest" }, "RDATdXa0kr_tEz"],
     ["discover", { artists: ["0187x8"], discovery: "discover" }, "RDATiXa0187x8E"],

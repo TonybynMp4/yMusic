@@ -96,6 +96,9 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
   const hidden = useTrayIdle(view);
+  // The search box unmounts with the rest and never blurs, which would leave
+  // the recent searches open over the page when the window comes back.
+  if (hidden && searchFocused) setSearchFocused(false);
 
   const toggleSidebar = () => {
     if (narrow) return setNarrowExpanded((e) => !e);

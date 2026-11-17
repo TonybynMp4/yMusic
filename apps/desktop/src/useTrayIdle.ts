@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 
 import { inUse, queryClient } from "./query.ts";
-import { dropIdlePages, type View } from "./useBrowse.ts";
+import { clearBrowseCache, type View } from "./useBrowse.ts";
 import { useWindowHidden } from "./useWindowHidden.ts";
 
 /**
  * What the pages fetch and only a visible window reads: library lists, search
  * results and the playlists a song can be added to. Browse pages go through
- * `dropIdlePages`. Stream leases (`stream`) are not here, because the player
+ * `clearBrowseCache`. Stream leases (`stream`) are not here, because the player
  * reads them, and neither are song years, which are small and which the
  * player bar would fetch again as soon as it is drawn.
  */
@@ -22,7 +22,7 @@ const PAGE_DATA = ["saved", "search", "playlist-targets"] as const;
 export function dropPageData(view: View | null): void {
   const browsing =
     view?.kind === "album" || view?.kind === "artist" || view?.kind === "playlist" ? view : null;
-  dropIdlePages(browsing);
+  clearBrowseCache(browsing);
   for (const prefix of PAGE_DATA) {
     if (prefix === "saved" && view?.kind === "library") continue;
     queryClient.removeQueries({ queryKey: [prefix], predicate: (query) => !inUse(query) });

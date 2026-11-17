@@ -95,11 +95,11 @@ When the window is shown, the engine asks once at once, playing or paused, so th
 
 While hidden, `App` returns `null` (`useTrayIdle`). It still runs every hook it calls, and those are what playback needs: `usePlayer`, `useMediaSession`, `useResume`, `useSavedQueue`, the watch history inside `usePlayer`. So the title bar, the sidebar, the open page, the full player and the player bar unmount, and with them their DOM, their decoded images and the queries they observed. Nothing playback needs is in that tree. BotGuard's frame is appended to `document.body` by `botguard.ts`, the engine worker is a module singleton, and ratings and the queue live in `usePlayer`.
 
-What the window comes back with is the state `App` and its hooks hold: the history of views, the scroll offset of each (`scrolls`), the search box and its filter, the sidebar, and whether the full player is open. The offset is restored by the same layout effect that restores it on Back, which runs again when the new scroll area mounts. State inside the views is lost: an open menu or dialog and what was typed in it, the full player's tab, "Show all" on local search results, an expanded description.
+What the window comes back with is the state `App` and its hooks hold: the history of views, the scroll offset of each (`scrolls`), the search box and its filter, the sidebar, and whether the full player is open. The offset is restored by the same layout effect that restores it on Back, which runs again when the new scroll area mounts. The search box loses focus without a blur event when it unmounts, so `App` clears `searchFocused` itself, or the recent searches would float over the page on return. State inside the views is lost: an open menu or dialog and what was typed in it, the full player's tab, "Show all" on local search results, an expanded description.
 
 Once the views have let go of their queries, `dropPageData` removes what only they read:
 
-- Browse pages, through `dropIdlePages`, apart from the page the window comes back on, so that page is not fetched again.
+- Browse pages, through `clearBrowseCache`, apart from the page the window comes back on, so that page is not fetched again.
 - The library lists (`saved`), unless the window comes back on the library.
 - Search results nothing observes, and the playlists a song can be added to.
 

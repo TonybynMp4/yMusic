@@ -108,22 +108,12 @@ function browseOptions(route: Route) {
 }
 
 /**
- * Forgets every page nothing shows or follows, so the next visit fetches it
- * again.
+ * Forgets every page nothing shows, follows or is still loading, so the next
+ * visit fetches it again. `keep` is a page to hold on to although nothing
+ * shows it: with the window hidden in the tray no page is on screen, and the
+ * one it comes back on would otherwise be fetched again.
  */
-export function clearBrowseCache(): void {
-  queryClient.removeQueries({
-    queryKey: ["browse"],
-    predicate: (query) => query.getObserversCount() === 0,
-  });
-}
-
-/**
- * Forgets the pages nothing shows, follows or is loading, apart from `keep`.
- * For the window hidden in the tray: by then nothing shows any page, so `keep`
- * is the one the window comes back on, which would otherwise be fetched again.
- */
-export function dropIdlePages(keep: Route | null): void {
+export function clearBrowseCache(keep: Route | null = null): void {
   const kept = keep && hashKey(keyOf(keep));
   queryClient.removeQueries({
     queryKey: ["browse"],

@@ -234,7 +234,7 @@ function Builder({
       }}
     >
       <DialogHeader>
-        <DialogTitle>Create a radio</DialogTitle>
+        <DialogTitle>Create a mix</DialogTitle>
       </DialogHeader>
       {/* Header and footer stay put; the rest scrolls when the window is short. */}
       <div className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-0.5">
@@ -316,7 +316,7 @@ function Builder({
         <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
         <Button type="submit" disabled={!playable || radio.isFetching}>
           <IconBroadcast />
-          Start radio
+          Start mix
         </Button>
       </DialogFooter>
     </form>
@@ -350,7 +350,7 @@ function SeedChip({
         "flex h-8 max-w-56 items-center gap-1.5 rounded-full bg-secondary py-1 pr-1 pl-1 text-sm",
         unusable && "text-muted-foreground",
       )}
-      title={unusable ? "YouTube Music can't tune a radio for this artist" : undefined}
+      title={unusable ? "YouTube Music can't make a mix from this artist" : undefined}
     >
       <Art
         thumbnails={seed.thumbnails}
@@ -390,19 +390,19 @@ function Preview({
   if (empty) {
     body = <p className="text-muted-foreground">Add artists or songs to start from.</p>;
   } else if (loading && tracks === null) {
-    body = <Spinner label="Tuning the radio" />;
+    body = <Spinner label="Tuning the mix" />;
   } else if (error) {
     body = <p className="text-destructive">{error}</p>;
   } else if (tracks !== null && tracks.length === 0) {
     body = (
       <p className="text-muted-foreground">
-        YouTube Music can't make this radio. Try fewer filters or other seeds.
+        YouTube Music can't make this mix. Try fewer filters or other seeds.
       </p>
     );
   } else if (tracks !== null) {
     body = (
       <div className="min-w-0">
-        <p className="truncate font-medium">{cover?.title ?? "Radio"}</p>
+        <p className="truncate font-medium">{cover?.title ?? "Mix"}</p>
         <p className="truncate text-xs text-muted-foreground">
           {cover?.subtitle || `${tracks.length} songs`}
         </p>
@@ -419,7 +419,7 @@ function Preview({
         fallback={<IconBroadcast size={20} />}
       />
       {body}
-      {loading && tracks !== null && <Spinner size={14} label="Tuning the radio" />}
+      {loading && tracks !== null && <Spinner size={14} label="Tuning the mix" />}
     </div>
   );
 }

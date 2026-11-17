@@ -5,7 +5,6 @@ import { MpvPlaybackEngine } from "@ymusic/ipc";
 export interface PlaybackState {
   status: PlaybackStatus;
   durationMs: number | null;
-  error: string | null;
 }
 
 /**
@@ -50,7 +49,6 @@ export function usePlayback() {
   const [state, setState] = useState<PlaybackState>({
     status: "idle",
     durationMs: null,
-    error: null,
   });
   const [position] = useState(createPositionStore);
 
@@ -74,9 +72,9 @@ export function usePlayback() {
               return { ...previous, status: "ended" };
             // Still playing; the new song reports its own duration.
             case "advanced":
-              return { ...previous, durationMs: null, error: null };
+              return { ...previous, durationMs: null };
             case "error":
-              return { ...previous, status: "idle", error: event.message };
+              return { ...previous, status: "idle" };
           }
         });
       }),
@@ -86,25 +84,22 @@ export function usePlayback() {
   const load = useCallback(
     async (lease: StreamLease, paused = false, startMs?: number, attempt?: number) => {
       position.set(startMs ?? 0);
-      setState({ status: "loading", durationMs: null, error: null });
-      try {
-        await engine.load(lease, paused, startMs, attempt);
-      } catch (error) {
-        const message = String(error);
-        setState((previous) => ({ ...previous, status: "idle", error: message }));
-      }
+      setState({ status: "loading", durationMs: null });
+      // A refused load throws on to the caller, which reports it with the
+      // track it was for.
+      await engine.load(lease, paused, startMs, attempt);
     },
     [engine, position],
   );
 
   /**
-   * Reports a failure that never reached mpv, such as a lease that could not be
-   * resolved, say. Without this those failures are only a console line, and
-   * the UI just sits there having silently not played anything.
+   * Marks a failure that never reached mpv, such as a lease that could not be
+   * resolved, as stopped. Without this the UI would sit in "loading" for a
+   * song that is never going to play.
    */
-  const reportError = useCallback((message: string) => {
-    setState((previous) => ({ ...previous, status: "idle", error: message }));
+  const markFailed = useCallback(() => {
+    setState((previous) => ({ ...previous, status: "idle" }));
   }, []);
 
-  return { state, position, engine, load, reportError };
+  return { state, position, engine, load, markFailed };
 }

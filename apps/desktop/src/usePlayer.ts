@@ -16,12 +16,13 @@ import {
   type VideoId,
   videoIdFromTrackId,
 } from "@ymusic/core";
-import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
+import { playerLogFailure, type QueueFrom, type QueuePosition, type SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
+import { classifyFailure, type PlaybackFailure } from "./playbackFailure.ts";
 import { queryClient } from "./query.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
@@ -79,7 +80,7 @@ export function usePlayer(
   savedVolume: number,
 ) {
   const [queue, dispatch] = useReducer(queueReducer, emptyQueue);
-  const { state, position, engine, load, reportError } = usePlayback();
+  const { state, position, engine, load, markFailed } = usePlayback();
   /**
    * The slider position in 0..1. Held here rather than in the player bar
    * because the OS can set it too, from the MPRIS volume control. It starts
@@ -144,6 +145,26 @@ export function usePlayer(
     }
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
+  });
+  /** The last song that failed for good. Each failure is a new object, even for the same song. */
+  const [failure, setFailure] = useState<PlaybackFailure | null>(null);
+  /** Bumped by Retry, so the load effect runs again for the same track. */
+  const [attempt, setAttempt] = useState(0);
+  /**
+   * Records a song that failed for good: the raw error goes to the log, and
+   * the kind of failure to whatever tells the user.
+   */
+  const fail = useEffectEvent((id: TrackId, error: unknown) => {
+    const message = errorMessage(error);
+    console.error(`could not play ${id}`, error);
+    void playerLogFailure(id, message).catch(logPlaybackFailure);
+    markFailed();
+    const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
+    setFailure({
+      trackId: id,
+      kind: classifyFailure(message, navigator.onLine),
+      canSkip: landing !== null && landing.id !== id,
+    });
   });
   /** The YouTube playlist `id` plays from, when the queue came from one and holds it. */
   const playlistOf = useCallback((id: TrackId) => {
@@ -234,17 +255,18 @@ export function usePlayer(
       setStreaming(lease);
       if (!paused) await engine.play();
     })().catch((error: unknown) => {
-      logPlaybackFailure(error);
       // Resolution happens before mpv is involved, so its failures have no
       // event stream to arrive on. Put them where the player's errors go.
-      if (!cancelled) reportError(errorMessage(error));
+      if (!cancelled) fail(trackId, error);
+      else logPlaybackFailure(error);
     });
 
     return () => {
       // oxlint-disable-next-line react/immutability -- a local of the effect, never read in render
       cancelled = true;
     };
-  }, [trackId, engine, load, reportError, leaseFor]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- attempt reloads the track on Retry
+  }, [trackId, attempt, engine, load, leaseFor]);
 
   // Hand mpv the next track while this one plays, so it opens it ahead of
   // time and goes on to it with no gap. Only once playing, so resolving it
@@ -296,7 +318,10 @@ export function usePlayer(
         if (event.type !== "error") return;
         const failed = event.trackId;
         if (failed === null || failed !== loadedId.current) return;
-        if (sourceOf(failed) !== "youtube" || retried.current === failed) return;
+        if (sourceOf(failed) !== "youtube" || retried.current === failed) {
+          fail(failed, event.message);
+          return;
+        }
         retried.current = failed;
         // The lease mpv refused: `streaming` may not have reached it yet.
         const key = leaseKey(quality.current, failed);
@@ -319,13 +344,11 @@ export function usePlayer(
           setStreaming(lease);
           if (!paused) await engine.play();
         })().catch((error: unknown) => {
-          logPlaybackFailure(error);
-          if (loadedId.current === failed) {
-            reportError(errorMessage(error));
-          }
+          if (loadedId.current === failed) fail(failed, error);
+          else logPlaybackFailure(error);
         });
       }),
-    [engine, load, reportError],
+    [engine, load],
   );
 
   // Auto-advance. `trackEnded` rather than `user` so repeat-one holds here and
@@ -611,6 +634,18 @@ export function usePlayer(
   }, []);
 
   /**
+   * Loads the current song again from the start of its resolution: a fresh
+   * lease, and the fallback client retry with it.
+   */
+  const retry = useCallback(() => {
+    if (trackId === null) return;
+    loadedId.current = null;
+    queryClient.removeQueries({ queryKey: leaseKey(quality.current, trackId), exact: true });
+    cameUp.current = false;
+    setAttempt((n) => n + 1);
+  }, [trackId]);
+
+  /**
    * Restarting rather than going back is what every other player does once you
    * are a few seconds into a track, and it is what the hardware previous key
    * is usually meant to do.
@@ -676,6 +711,8 @@ export function usePlayer(
     /** The playing song's stream, once mpv has it. */
     lease: streaming !== null && streaming.trackId === trackId ? streaming : null,
     playback: state,
+    failure,
+    retry,
     position,
     loadedTrack,
     volume,

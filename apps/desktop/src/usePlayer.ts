@@ -145,14 +145,7 @@ export function usePlayer(
     const from = source.current;
     return from?.ids.has(id) ? from.playlistId : null;
   }, []);
-  useWatchHistory(
-    trackId,
-    state.status,
-    position,
-    settings.pauseWatchHistory,
-    playlistOf,
-    state.durationMs,
-  );
+  useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory, playlistOf);
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that

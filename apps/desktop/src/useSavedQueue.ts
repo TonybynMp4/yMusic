@@ -61,7 +61,16 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
       return;
     }
     if (status !== "playing") return;
-    const timer = setInterval(save, POSITION_EVERY_MS);
-    return () => clearInterval(timer);
+    // Saved as a position arrives, not on a timer of its own: with the window
+    // hidden in the tray one arrives every ten seconds, and a timer would save
+    // one that is up to ten seconds old. Half a second of slack, so a position
+    // that lands a moment early is not left for the one after.
+    let saved = performance.now();
+    return position.subscribe(() => {
+      const now = performance.now();
+      if (now - saved < POSITION_EVERY_MS - 500) return;
+      saved = now;
+      save();
+    });
   }, [enabled, trackId, status, position, loadedTrack]);
 }

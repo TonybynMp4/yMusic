@@ -57,6 +57,9 @@ export async function playerStats(): Promise<AudioStats | null> {
  */
 export const HIDDEN_POLL_MS = 10_000;
 
+/** How often `syncPosition` asks again when a status drops its reply. */
+const SYNC_TRIES = 3;
+
 function loadRequest(lease: StreamLease): LoadRequest {
   return {
     trackId: lease.trackId,
@@ -84,6 +87,8 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   #window: WindowHiddenStore;
   // Bumped whenever a reply in flight would be stale, so it gets dropped.
   #asked = 0;
+  /** The `syncPosition` in flight, shared by every caller until it settles. */
+  #syncing: Promise<void> | null = null;
   #poll: ReturnType<typeof setTimeout> | null = null;
 
   constructor(window: WindowHiddenStore = windowHidden) {
@@ -175,13 +180,24 @@ export class MpvPlaybackEngine implements PlaybackEngine {
 
   /**
    * Asks for the position now, outside the poll. For a reader that acts on it
-   * while the window is hidden (a media key that seeks by an offset), when
-   * the last one polled can be ten seconds old.
+   * while the window is hidden (a media key that skips or seeks), when the
+   * last one polled can be ten seconds old.
+   *
+   * Callers that overlap share one question, so each of them resumes with the
+   * fresh position. A status that arrives meanwhile drops the reply (see
+   * `#askPosition`), and the question is asked again.
    */
-  async syncPosition(): Promise<void> {
-    if (this.#seeking || !this.#loaded) return;
-    this.#stopPolling();
-    await this.#askPosition();
+  syncPosition(): Promise<void> {
+    this.#syncing ??= this.#sync().finally(() => (this.#syncing = null));
+    return this.#syncing;
+  }
+
+  async #sync(): Promise<void> {
+    for (let tries = 0; tries < SYNC_TRIES; tries++) {
+      if (this.#seeking || !this.#loaded) return;
+      this.#stopPolling();
+      if ((await this.#askPosition()) !== "superseded") return;
+    }
   }
 
   /**
@@ -195,7 +211,8 @@ export class MpvPlaybackEngine implements PlaybackEngine {
   }
 
   /**
-   * The core only pushes the position when a song starts or after a seek.
+   * The core only pushes the position when a song starts, after a seek, on a
+   * pause and when the song ends.
    * Every message it pushes reaches the page as a script WebKit compiles and
    * keeps, while a command's reply leaves nothing behind, so while a song
    * plays the page asks for the position instead.
@@ -211,23 +228,33 @@ export class MpvPlaybackEngine implements PlaybackEngine {
     this.#asked++;
   }
 
-  async #askPosition(): Promise<void> {
+  async #askPosition(): Promise<"delivered" | "empty" | "superseded"> {
     this.#poll = null;
     const asked = this.#asked;
     let position: Position | null = null;
+    let failed = false;
     try {
       position = await call("playerPosition");
     } catch (error) {
+      failed = true;
       console.error("could not read the playback position", error);
     }
     // A pause, a seek or a new song since the question bumps `#asked`, and the
-    // reply is dropped. Nothing loaded: the next "playing" status starts the
-    // polling again.
-    if (this.#seeking || asked !== this.#asked || !position) return;
+    // reply is dropped: whatever bumped it starts the polling again if it
+    // should run.
+    if (this.#seeking || asked !== this.#asked) return "superseded";
+    if (!position) {
+      // Nothing loaded: the next "playing" status starts the polling again. A
+      // question that failed is asked again, or one lost reply would end the
+      // polling for the rest of the song.
+      if (failed && this.#playing) this.#pollIn(this.#hidden ? HIDDEN_POLL_MS : 1000);
+      return "empty";
+    }
     this.#deliver({ type: "position", ...position });
-    if (!this.#playing) return;
+    if (!this.#playing) return "delivered";
     // Just after the next whole second, so the time label ticks on time.
     this.#pollIn(this.#hidden ? HIDDEN_POLL_MS : 1000 - (position.positionMs % 1000) + 20);
+    return "delivered";
   }
 }
 

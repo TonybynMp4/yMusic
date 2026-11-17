@@ -64,7 +64,7 @@ In the `DOCUMENT_VIEWER` runs, the core's PSS rose 28 MB while the memory it hol
 
 ### The playback position
 
-mpv reports `time-pos` many times a second, and the core used to send each one to the page over a Tauri channel. Each message runs as a script in the page and updates its state. Now the core sends the page the position only when mpv restarts playback: when a song starts, and after a seek, including one while paused. While a song plays, `MpvPlaybackEngine` in `packages/ipc` asks for it with the `player_position` command just after each whole second, so the time label still ticks on the second. A command's reply comes back over Tauri's `ipc://` protocol, not as a script. Rust code that watches playback, such as MPRIS, still gets every position.
+mpv reports `time-pos` many times a second, and the core used to send each one to the page over a Tauri channel. Each message runs as a script in the page and updates its state. Now the core sends the page the position only a few times a song: when mpv restarts playback (a song starts, or a seek lands, including one while paused), on a pause, and when the song ends. While a song plays, `MpvPlaybackEngine` in `packages/ipc` asks for it with the `player_position` command just after each whole second, so the time label still ticks on the second. A command's reply comes back over Tauri's `ipc://` protocol, not as a script. Rust code that watches playback, such as MPRIS, still gets every position.
 
 The web process ends the scenario 81 MB lower, 199 MB against 280, and all processes 75 MB lower (`docs/memory/position-pull/`). The peak doesn't move: the gain is what the web process used to keep building up during playback and the last idle minutes. Its three runs also land within 5 MB of each other, where the build before spread over 42 MB.
 
@@ -76,15 +76,18 @@ Synced lyrics will need the position more often than once a second. They should 
 
 With "Keep playing in the tray", closing the window hides it. The webview stays, because the queue, the engine worker and BotGuard live in the page and playback needs all three. What the page can drop is the work only a visible window needs.
 
-`visibility.rs` is the one place that hides and shows the main window. `hide` is what closing does. `show` is behind the tray menu, a click on the tray icon, a second launch and MPRIS Raise. Both record the state in `WindowVisibility` and tell the page over a channel (`window_subscribe`), once per change. `show` tells the page before it shows the window, so the page has started on its first frame by then. A page that subscribes while the window is hidden, after a reload, is told at once. `visibilitychange` is not used: nobody has checked what WebKitGTK and WebView2 report for a hidden window.
+`visibility.rs` is the one place that hides and shows the main window. `hide` is what closing does, and what startup does when libmpv fails and only an error dialog is left. `show` is behind the tray menu, a click on the tray icon, a second launch and MPRIS Raise. Both record the state in `WindowVisibility` and tell the page over a channel (`window_subscribe`), once per change. `show` tells the page before it shows the window, so the page has started on its first frame by then. A page that subscribes while the window is hidden, after a reload, is told at once. `visibilitychange` is not used: nobody has checked what WebKitGTK and WebView2 report for a hidden window.
 
 In the page, `windowHidden` in `packages/ipc` is a store shaped for `useSyncExternalStore`, and `useWindowHidden` is the hook over it.
 
 `MpvPlaybackEngine` asks for the position every ten seconds while hidden (`HIDDEN_POLL_MS`), where it asks every second otherwise. Nothing draws it then. What still reads it:
 
-- The saved queue position, which `useSavedQueue` writes every ten seconds anyway.
+- The saved queue position. `useSavedQueue` saves when a position arrives, at most every ten seconds, so what it writes is never older than the request that brought it.
 - Watch time, which `WatchTime` carries across the gap ([the data engine](engine.md)).
-- The Previous media key, which restarts the song past three seconds, and a seek by an offset. Both start from the position, so `useMediaSession` asks for a fresh one first (`syncPosition`).
+- Anything that acts on a pause or a song's end: the save and the watch report that go out then. Rust sends the position ahead of both, so they never read the polled one.
+- The media keys that move playback: Next, Previous (which restarts the song past three seconds), a seek by an offset and a seek to a position. `useMediaSession` asks for a fresh position first (`syncPosition`). Callers that overlap share one request, and a reply that a status drops is asked for again.
+
+A position request that fails is asked again at the next interval. One that finds nothing loaded stops the polling until a song plays.
 
 When the window is shown, the engine asks once at once, playing or paused, so the bar is right when it is drawn.
 

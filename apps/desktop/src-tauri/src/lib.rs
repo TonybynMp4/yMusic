@@ -208,7 +208,7 @@ pub fn run() {
                 }
                 Err(error) => {
                     log::error!("{error}");
-                    let _ = window.hide();
+                    visibility::hide(app.handle());
                     let handle = app.handle().clone();
                     app.dialog()
                         .message(format!(

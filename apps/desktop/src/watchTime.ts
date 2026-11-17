@@ -13,38 +13,43 @@ const SLACK_MS = 1500;
  * `Listened` reads any step over `MAX_STEP_MS` as a seek, which holds while
  * the position arrives every second. With the window hidden in the tray it
  * arrives every ten (`HIDDEN_POLL_MS`), and every stretch would be dropped.
- * So each position comes with its time on `performance.now()`'s clock:
+ * So each position comes with its time on `performance.now()`'s clock. A seek
+ * moves the position further than the clock moved, or back. A step forward no
+ * longer than the time since the last position is playback that carried on,
+ * and it is fed to `Listened` in steps it accepts.
  *
- * - A seek moves the position further than the clock moved, or back. A step
- *   forward no longer than the time since the last position is playback that
- *   carried on, and it is fed to `Listened` in steps it accepts.
- * - When a stretch closes (a seek, a pause, the song ending) and the last
- *   position is old, the song had played on since. The time since is added
- *   first, up to the song's end, which needs its length.
+ * Nothing is estimated from the clock. Where a stretch closes, the position it
+ * closed at has to arrive first: Rust sends it ahead of a pause and of a
+ * song's end, and a media key that skips or seeks asks for it
+ * (`syncPosition`).
  */
 export class WatchTime {
   #listened = new Listened();
   /** The position `#listened` saw last, until a pause closes the stretch. */
   #last: { positionMs: number; at: number } | null = null;
 
-  /** A position reached while playing. `durationMs` is the song's length, if known. */
-  observe(positionMs: number, at: number, durationMs: number | null): void {
+  /** A position reached while playing, and when on `performance.now()`'s clock. */
+  observe(positionMs: number, at: number): void {
     const last = this.#last;
     if (last) {
       const advanced = positionMs - last.positionMs;
-      if (advanced >= 0 && advanced <= at - last.at + SLACK_MS) this.#walkTo(positionMs);
-      else this.#playOn(at, durationMs);
+      if (advanced >= 0 && advanced <= at - last.at + SLACK_MS) {
+        // The way from the last position up to this one, which follows below.
+        for (
+          let step = last.positionMs + Listened.MAX_STEP_MS;
+          step < positionMs;
+          step += Listened.MAX_STEP_MS
+        ) {
+          this.#listened.observe(step);
+        }
+      }
     }
     this.#listened.observe(positionMs);
     this.#last = { positionMs, at };
   }
 
-  /**
-   * Playback stopped, so the next position starts a stretch of its own. `at`
-   * is when it stopped if it was playing until then, and null if it was not.
-   */
-  pause(at: number | null, durationMs: number | null): void {
-    if (at !== null) this.#playOn(at, durationMs);
+  /** Playback stopped, so the next position starts a stretch of its own. */
+  pause(): void {
     this.#listened.pause();
     this.#last = null;
   }
@@ -52,32 +57,5 @@ export class WatchTime {
   /** The stretches since the last call, as `Listened.take`. */
   take(): [number, number][] {
     return this.#listened.take();
-  }
-
-  /** Extends the open stretch by the time since an old last position. */
-  #playOn(at: number, durationMs: number | null): void {
-    const last = this.#last;
-    if (!last || durationMs === null) return;
-    const elapsed = at - last.at;
-    // Recent enough to stand, as it always is at one position a second.
-    if (elapsed <= Listened.MAX_STEP_MS) return;
-    const reached = Math.min(last.positionMs + elapsed, durationMs);
-    if (reached <= last.positionMs) return;
-    this.#walkTo(reached);
-    this.#listened.observe(reached);
-    this.#last = { positionMs: reached, at };
-  }
-
-  /** Feeds the way from the last position up to, not including, `positionMs`. */
-  #walkTo(positionMs: number): void {
-    const last = this.#last;
-    if (!last) return;
-    for (
-      let step = last.positionMs + Listened.MAX_STEP_MS;
-      step < positionMs;
-      step += Listened.MAX_STEP_MS
-    ) {
-      this.#listened.observe(step);
-    }
   }
 }

@@ -399,7 +399,10 @@ pub async fn memory_tray<R: Runtime>(
         }
         if let Some(player) = app.try_state::<Player>() {
             let track = player.position().map(|(track, _)| track);
-            println!("ymemory-mark tray-track {}", track.as_deref().unwrap_or("none"));
+            println!(
+                "ymemory-mark tray-track {}",
+                track.as_deref().unwrap_or("none")
+            );
             skip_to_tail(&player);
         }
         let rest = (beat - beat / 2).min(hidden_secs - waited);

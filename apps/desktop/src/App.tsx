@@ -457,6 +457,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                   onRemove={(trackId) => player.dispatch({ type: "remove", trackId })}
                   onMove={(from, to) => player.dispatch({ type: "move", from, to })}
                   onClear={() => player.dispatch({ type: "clear" })}
+                  onTune={player.tune}
                   onCollapse={() => setExpanded(false)}
                   rating={rating}
                   onOpen={go}

@@ -59,6 +59,9 @@ export interface EngineWorkerApi {
   libraryCards: YouTubeEngine["libraryCards"];
   librarySongs: YouTubeEngine["librarySongs"];
   mix: YouTubeEngine["mix"];
+  radioArtist: YouTubeEngine["radioArtist"];
+  radioChips: YouTubeEngine["radioChips"];
+  radioCover: YouTubeEngine["radioCover"];
   setSaved: YouTubeEngine["setSaved"];
   setSubscribed: YouTubeEngine["setSubscribed"];
   playlistTargets: YouTubeEngine["playlistTargets"];

@@ -162,6 +162,17 @@ describe("queueReducer", () => {
     expect(apply(idle, { type: "clear" }).items).toEqual([]);
   });
 
+  it("replaces what comes after the current track, leaving out what already played", () => {
+    const state = apply(
+      loaded(1),
+      { type: "setSuggestions", tracks: [track("z")] },
+      { type: "replaceUpcoming", tracks: ["a", "b", "e", "f"].map(track) },
+    );
+    expect(titles(state)).toEqual(["a", "b", "e", "f"]);
+    expect(currentTrack(state)?.id).toBe("local:b");
+    expect(state.suggestions).toEqual([]);
+  });
+
   it("shuffles without interrupting the current track", () => {
     const rng = () => 0.5;
     const state = apply(loaded(2), { type: "setShuffle", shuffle: true, rng });

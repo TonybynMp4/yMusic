@@ -62,6 +62,12 @@ export type QueueAction =
    * so turning shuffle off later does not bring a played song back as next.
    */
   | { type: "clear" }
+  /**
+   * Swaps everything after the playing track for `tracks`, as picking a
+   * tuning chip above a radio's queue does. Tracks already played or playing
+   * are left out, so they don't come round again.
+   */
+  | { type: "replaceUpcoming"; tracks: readonly Track[]; rng?: () => number }
   | { type: "setRepeat"; repeat: RepeatMode }
   | { type: "setShuffle"; shuffle: boolean; rng?: () => number };
 
@@ -208,6 +214,17 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       }
       const items = state.order.slice(0, state.cursor + 1).map((i) => state.items[i]!);
       return { ...state, items, order: items.map((_, i) => i), suggestions: [] };
+    }
+
+    case "replaceUpcoming": {
+      const kept = queueReducer(state, { type: "clear" });
+      const played = new Set(kept.items.map((t) => t.id));
+      const tracks = action.tracks.filter((t) => !played.has(t.id));
+      return queueReducer(kept, {
+        type: "extend",
+        tracks,
+        ...(action.rng ? { rng: action.rng } : {}),
+      });
     }
 
     case "setRepeat":

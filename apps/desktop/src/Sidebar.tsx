@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  IconBroadcast,
   IconDeviceDesktop,
   IconFolder,
   IconFolderPlus,
@@ -22,7 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { InteractionArea, useNewPlaylist, type Subject } from "./Interactions.tsx";
+import { InteractionArea, useCreateRadio, useNewPlaylist, type Subject } from "./Interactions.tsx";
 import { viewKey, type View } from "./useBrowse.ts";
 import { folderName } from "./useLocalLibrary.ts";
 import { LIKED_MUSIC } from "./libraryPlaylists.ts";
@@ -63,6 +64,7 @@ interface Props {
 export function Sidebar(props: Props) {
   const { collapsed } = props;
   const newPlaylist = useNewPlaylist();
+  const createRadio = useCreateRadio();
   const entries: Entry[] = [
     ...props.playlists
       .filter((p) => p.id === LIKED_MUSIC)
@@ -146,6 +148,9 @@ export function Sidebar(props: Props) {
                 <IconPlaylistAdd size={15} />
               </IconButton>
             )}
+            <IconButton label="Create a radio" onClick={createRadio}>
+              <IconBroadcast size={15} />
+            </IconButton>
             <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>
               {props.loading ? <Spinner size={15} /> : <IconRefresh size={15} />}
             </IconButton>

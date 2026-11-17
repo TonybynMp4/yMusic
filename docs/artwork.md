@@ -1,6 +1,6 @@
 # Artwork
 
-Remote artwork goes through the core rather than the webview: the page asks for `img://localhost/<encoded url>` and `images.rs` answers. Only Google's image hosts are fetched.
+Remote artwork goes through the core rather than the webview: the page asks for `img://localhost/<encoded url>` and `images.rs` answers. Only Google's image hosts are fetched, plus the radio covers YouTube Music draws at `music.youtube.com/image/radioart` (see [Tuned radios](radio.md)), which have no WebP option and are fetched as they are.
 
 ## Fetching
 

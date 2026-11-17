@@ -13,6 +13,10 @@ export interface PlaybackState {
  * times a second, and as state it re-rendered the whole app on every tick,
  * a two-thousand-row playlist included. Only what shows the position
  * subscribes to it, through `usePosition`.
+ *
+ * Listeners hear of every position that arrives, one equal to the last too:
+ * `WatchTime` sets each against the clock, and a stream that stalls has to
+ * read as time passing with no progress, not as no news.
  */
 export interface PositionStore {
   get(): number;
@@ -25,7 +29,6 @@ function createPositionStore(): PositionStore & { set(positionMs: number): void 
   return {
     get: () => position,
     set(next) {
-      if (next === position) return;
       position = next;
       for (const listener of listeners) listener();
     },

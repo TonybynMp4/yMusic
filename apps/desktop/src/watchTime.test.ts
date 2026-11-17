@@ -91,6 +91,19 @@ describe("WatchTime.observe", () => {
     expect(watched.take()).toEqual([[30_000, 32_000]]);
   });
 
+  it("reads a seek after a stall as a seek, however long the stall", () => {
+    const watched = listen([
+      [30_000, 0],
+      // Stalled: the same position arrives with every poll.
+      [30_000, 10_000],
+      [30_000, 20_000],
+      // A seek 18 s on, a second later. The 20 s stalled do not cover it.
+      [48_000, 21_000],
+      [49_000, 22_000],
+    ]);
+    expect(watched.take()).toEqual([[48_000, 49_000]]);
+  });
+
   it("runs to the end on the position Rust sends as a song ends", () => {
     const watched = listen([
       [185_000, 0],

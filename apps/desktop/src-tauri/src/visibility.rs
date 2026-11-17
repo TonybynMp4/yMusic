@@ -78,12 +78,16 @@ fn send(channel: &Channel<Visibility>, visibility: Visibility) {
     }
 }
 
-/// Hides the main window in the tray.
+/// Hides the main window in the tray. A window that would not hide is still
+/// on screen, so the page is not told it is hidden.
 pub fn hide<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return;
     };
-    let _ = window.hide();
+    if let Err(error) = window.hide() {
+        log::warn!("could not hide the main window: {error}");
+        return;
+    }
     if let Some(visibility) = app.try_state::<WindowVisibility>() {
         visibility.set(true);
     }

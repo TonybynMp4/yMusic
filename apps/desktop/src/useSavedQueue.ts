@@ -44,7 +44,7 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
   }, [enabled, items, order, cursor, repeat, shuffle, playingFrom, shared, savedSource]);
 
   const trackId = track?.id ?? null;
-  const status = player.playback.status;
+  const { status, durationMs } = player.playback;
   useEffect(() => {
     if (!enabled || trackId === null) return;
     const save = () => {
@@ -54,6 +54,9 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
       // Nothing worth keeping, and before a restored song has loaded, its
       // saved position would be lost to the 0 the player starts from.
       if (positionMs === 0) return;
+      // Rust sends a song's length as its last position, just before it ends.
+      // Resuming there would end the song at once.
+      if (durationMs !== null && positionMs >= durationMs) return;
       void queueSavePosition({ trackId, positionMs }).catch(logSaveFailure);
     };
     if (status === "paused") {
@@ -72,5 +75,5 @@ export function useSavedQueue(player: ReturnType<typeof usePlayer>, enabled: boo
       saved = now;
       save();
     });
-  }, [enabled, trackId, status, position, loadedTrack]);
+  }, [enabled, trackId, status, durationMs, position, loadedTrack]);
 }

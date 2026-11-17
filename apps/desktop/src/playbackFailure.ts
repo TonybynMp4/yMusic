@@ -39,7 +39,7 @@ export function classifyFailure(message: string, online = true): FailureKind {
 }
 
 /** Whether a failure is for good, so the queue moves on instead of offering Retry. */
-export function isForGood(kind: FailureKind): boolean {
+function isForGood(kind: FailureKind): boolean {
   return kind === "missing" || kind === "unavailable";
 }
 

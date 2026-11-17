@@ -5,7 +5,7 @@ export const SNACKBAR_MS = 4000;
 /** Long enough to read the message and reach the button. */
 export const SNACKBAR_ACTION_MS = 6000;
 
-export interface SnackbarAction {
+interface SnackbarAction {
   label: string;
   onClick: () => void;
 }

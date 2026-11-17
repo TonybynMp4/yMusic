@@ -110,7 +110,12 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Shows the main window, unless setup has not shown it yet: it is still
+/// starting, or mpv failed and it stays hidden behind the error dialog.
 pub fn show_window<R: Runtime>(app: &AppHandle<R>) {
+    if app.try_state::<crate::platform::window::Shown>().is_none() {
+        return;
+    }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();

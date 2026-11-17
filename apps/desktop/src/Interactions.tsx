@@ -285,6 +285,11 @@ export function useCreateRadio(): () => void {
   return () => x.createRadio([]);
 }
 
+/** Whether an account is signed in. */
+export function useSignedIn(): boolean {
+  return useInteractions().signedIn;
+}
+
 /** Shows a short message at the bottom of the window. */
 export function useNotify(): (message: string) => void {
   return useInteractions().notify;

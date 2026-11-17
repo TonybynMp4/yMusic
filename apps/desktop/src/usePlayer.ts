@@ -46,6 +46,12 @@ function logPlaybackFailure(error: unknown): void {
  * play a search result). A list that is a mix or radio names it in `radio`,
  * for the tuning chips above the queue.
  */
+/** A playing radio as changed in the radio builder: its new name and cover. */
+export interface RadioEdit {
+  title: string;
+  thumbnails: Thumbnail[];
+}
+
 export type PlayFrom =
   | { kind: "playlist"; id: string; title: string }
   | { kind: "list"; title: string; thumbnails?: Thumbnail[]; radio?: string }
@@ -480,13 +486,23 @@ export function usePlayer(
 
   /**
    * Plays the radio of a tuning chip after the playing song, in place of
-   * what was to come, and marks the chip as picked.
+   * what was to come, and marks the chip as picked. A radio changed in the
+   * builder (`edited`) becomes the mix the queue plays, with its own name,
+   * cover and chips.
    */
   const tune = useCallback(
-    (playlistId: string, tracks: Track[]) => {
+    (playlistId: string, tracks: Track[], edited?: RadioEdit) => {
       stopFollowing();
       dispatch({ type: "replaceUpcoming", tracks });
       setPlayingFrom((from) => {
+        if (edited) {
+          return {
+            title: edited.title,
+            device: null,
+            radio: playlistId,
+            ...(edited.thumbnails.length > 0 ? { thumbnails: edited.thumbnails } : {}),
+          };
+        }
         if (!from?.radio) return from;
         const picked: QueueFrom = { ...from, tuned: playlistId };
         if (playlistId === from.radio) delete picked.tuned;

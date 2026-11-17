@@ -39,6 +39,12 @@ function logPlaybackFailure(error: unknown): void {
   console.error("playback command failed", error);
 }
 
+/** A playing radio as changed in the radio builder: its new name and cover. */
+export interface RadioEdit {
+  title: string;
+  thumbnails: Thumbnail[];
+}
+
 /**
  * Where a queue came from, so it can keep growing and be named under
  * "Playing from": a playlist still loading its later pages, a fixed list
@@ -46,12 +52,6 @@ function logPlaybackFailure(error: unknown): void {
  * play a search result). A list that is a mix or radio names it in `radio`,
  * for the tuning chips above the queue.
  */
-/** A playing radio as changed in the radio builder: its new name and cover. */
-export interface RadioEdit {
-  title: string;
-  thumbnails: Thumbnail[];
-}
-
 export type PlayFrom =
   | { kind: "playlist"; id: string; title: string }
   | { kind: "list"; title: string; thumbnails?: Thumbnail[]; radio?: string }

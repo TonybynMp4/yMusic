@@ -303,11 +303,7 @@ fn handle<R: Runtime>(session: &MediaSession, app: &AppHandle<R>, event: MediaCo
             volume: volume.clamp(0.0, 1.0),
         },
         MediaControlEvent::Raise => {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            crate::tray::show_window(app);
             return;
         }
         MediaControlEvent::Quit => {

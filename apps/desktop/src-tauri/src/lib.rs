@@ -148,6 +148,15 @@ pub fn run() {
                 .level_for("cookie_store", log::LevelFilter::Warn)
                 .build(),
         )
+        // Before the windows are built, so the main window is resized and
+        // placed while still hidden. It starts hidden (tauri.conf.json) and
+        // `setup` shows it once it is where it was.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(platform::window::saved_state())
+                .with_filter(|label| label == "main")
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
@@ -179,6 +188,7 @@ pub fn run() {
                     context.set_cache_model(CacheModel::DocumentBrowser);
                 }
             });
+            platform::window::keep_on_screen(&window);
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);
@@ -188,7 +198,7 @@ pub fn run() {
             // 0.35), so what can still fail here is mpv itself. The app is a
             // music player without it, so say so and quit rather than open a
             // window where nothing plays.
-            match Player::new() {
+            let started = match Player::new() {
                 Ok(player) => {
                     // Media keys are a nicety; `attach` logs and carries on
                     // without them rather than failing startup.
@@ -202,11 +212,10 @@ pub fn run() {
                     app.manage(volume);
                     app.manage(player);
                     app.manage(media);
+                    true
                 }
                 Err(error) => {
                     log::error!("{error}");
-                    let _ = window.hide();
-                    let handle = app.handle().clone();
                     app.dialog()
                         .message(format!(
                             "yMusic plays audio through libmpv, and it would not start.\n\n\
@@ -216,23 +225,50 @@ pub fn run() {
                         ))
                         .title("yMusic cannot play audio")
                         .kind(MessageDialogKind::Error)
-                        .show(move |_| handle.exit(1));
+                        // Not `AppHandle::exit`: on that path the window-state
+                        // plugin saves the never-shown window's creation-time
+                        // geometry over where the user last left it. Nothing
+                        // else has an exit hook with work to do yet.
+                        .show(|_| {
+                            log::logger().flush();
+                            std::process::exit(1)
+                        });
+                    false
                 }
-            }
+            };
 
             app.manage(http::Http::new());
             app.manage(images::Images::new(cache_dir(app.handle()).join("images")));
             app.manage(open_library(app.handle()));
             app.manage(open_account(app.handle()));
-            tray::sync(app.handle(), startup_settings.close_to_tray);
+            // Last, so nothing the page invokes finds its state missing. With
+            // no mpv the window stays hidden behind the error dialog, and
+            // there is no tray icon whose Quit would exit the app the way
+            // the dialog must not.
+            if started {
+                tray::sync(app.handle(), startup_settings.close_to_tray);
+                platform::window::reveal(&window);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" && tray::keeps_playing(window.app_handle()) {
-                    api.prevent_close();
-                    let _ = window.hide();
+            if window.label() != "main" {
+                return;
+            }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    // Hidden in the tray, the app may next end in a logout
+                    // or a kill, which skips the plugin's save on exit.
+                    platform::window::save_state(window);
+                    if tray::keeps_playing(window.app_handle()) {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
+                tauri::WindowEvent::Focused(false) => {
+                    platform::window::save_state(window);
+                }
+                _ => {}
             }
         })
         .invoke_handler(ymusic_invoke_handler!(tauri::Wry))

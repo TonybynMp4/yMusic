@@ -8,7 +8,7 @@ A YouTube Music player that feels native on Windows and Linux and stays in the T
 
 - React and TypeScript. No Electron, no Flutter, no C#.
 - Windows and Linux are both first-class targets, shipped together. Mobile later.
-- Playback uses libmpv.
+- Playback uses libmpv on Linux and Media Foundation on Windows.
 - Preferred libs: Tauri, tRPC, shadcn/ui, zod.
 - Layout and behaviour follow YouTube Music, not Spotify.
 
@@ -33,6 +33,26 @@ The t3code mirror (`/home/tony/code/t3code/mirror-fixes`) already does this in p
 - A `.deb` needs real package metadata: maintainer, section, dependencies, and an AppStream metainfo file so GNOME Software and Discover can describe the app (mirror patches `0002` and `0003`).
 
 Sign release assets with the updater's minisign key so the download is verified before dpkg sees it.
+
+## Playback on Windows
+
+Windows plays through Media Foundation instead of a bundled `libmpv-2.dll`. There is no large FFmpeg DLL to ship, and it decodes with the codecs the system already has. It is part of the MVP, since the MVP needs a Windows build.
+
+Media Foundation's high-level player, `IMFMediaEngine`, is the wrong layer. It plays one URL at a time with its own network stack, so it can't join two songs, overlap them, or tell us a request came back 403. Media Foundation only decodes. Rust fetches the bytes and plays the samples.
+
+- **One player, two backends.** `playback/mod.rs` splits into a `Player` with an `mpv` module for Linux and an `mf` module for Windows, picked by `cfg`. Both take the same commands and send the same events, so the frontend keeps one engine; `MpvPlaybackEngine` becomes `NativePlaybackEngine`.
+- **Fetching.** A custom `IMFByteStream` reads the stream URL through reqwest with range requests and a read-ahead buffer, with the lease's headers when it has any. Content-Length gives the length, so the stream is seekable. A 403 surfaces as its own error, and the fallback-client retry works as it does on mpv. Local files open straight from disk.
+- **Decoding.** `IMFSourceReader` over that byte stream, asking for 32-bit float PCM. Anything not at the device's rate is resampled in Rust (`rubato`), so a 44.1 kHz local file after a 48 kHz YouTube track does not reopen the device.
+- **Output.** WASAPI shared mode through `cpal`. The output device setting lists WASAPI endpoints, and an unplugged device falls back to the default, like mpv.
+- **The mixer.** One output stream that pulls from the current decoder, and from the next one when there is one. Volume, stable volume's gain and fades are multiplies here. The cubic volume curve is applied here too, once, since mpv isn't there to do it.
+- **Position.** Samples played, minus the device's reported latency.
+- **Gapless for free.** When the next track's lease resolves, the queue hands it to the player, which opens its decoder ahead of time. The mixer moves to it on the current track's last sample and emits `Advanced { trackId }`, the same event mpv's gapless sends. Any change to what plays next replaces the waiting decoder.
+- **Crossfade for free.** The same mixer overlaps the two decoders for N seconds with opposite gain ramps, under the same setting and rules as the mpv plan. No second player and no timer.
+- **Media controls.** Unchanged: `souvlaki` drives SMTC from the same player events.
+
+**Opus.** YouTube's best formats are Opus in WebM, including Premium's itag 774. Windows 10 and 11 decode Opus, but WebM support has come from the Web Media Extensions package, which some installs lack or have outdated. At startup the player checks for an Opus decoder (`MFTEnumEx`) and a WebM byte-stream handler, and reports what it can play. If either is missing, `bestAudioFormat` skips Opus and takes the best AAC format, and a notice in the player bar explains the lower quality and links to Web Media Extensions in the Microsoft Store. Once the check passes, the notice goes away.
+
+**Tests.** The mixer takes a decoder trait, so gapless joins, crossfades, gain and the volume curve run as plain Rust tests against fake decoders on any OS. The byte stream is tested against a local HTTP server that serves ranges and 403s. The Windows CI job runs both, plus a real decode of a short Opus and AAC fixture.
 
 ## Next
 
@@ -73,8 +93,8 @@ Sign release assets with the updater's minisign key so the download is verified 
   - Pin albums, playlists and artists to a quick-access row on the home page.
   - A button to dismiss the whole queue.
   - A song credits dialog, from a song's menu and from an album's when YouTube has credits for it.
-- **Crossfade.** One mpv instance can't overlap two files, so crossfade needs a second libmpv handle, with the two taking turns as the current player. The system mixer (PipeWire, PulseAudio, WASAPI) mixes their streams.
-  - **The setting.** One "Crossfade" choice: Off, or 1 to 12 seconds. Off keeps gapless playback. Crossfade replaces the gapless append, because the next song plays on the other handle.
+- **Crossfade** on Linux. On Windows it is the mixer's job. One mpv instance can't overlap two files, so crossfade needs a second libmpv handle, with the two taking turns as the current player. The system mixer (PipeWire, PulseAudio, WASAPI) mixes their streams.
+  - **The setting.** One "Crossfade" choice: Off, or 1 to 12 seconds. Off keeps gapless. Crossfade replaces the gapless append, because the next song plays on the other handle.
   - **The fade.** N seconds before the end, Rust loads the next track on the idle handle with its own stable volume `af`, starts it at volume 0, and ramps the two handles' `volume` in opposite directions from a timer. mpv applies the cubic curve to `volume`, so a linear ramp of the slider fraction already sounds even. The user's volume scales both handles.
   - **When it fades.** Only automatic advances fade. A skip, a picked track or Previous cuts straight to the new song, and a seek or pause during a fade ends it on the incoming song. No fade when a track is shorter than twice N, or has no known duration.
   - **What the rest of the app sees.** Position, duration, media controls and the `Advanced` event follow the incoming handle from the moment the fade starts. The output device and the 403 retry apply to whichever handle is current.
@@ -120,6 +140,8 @@ Plugin ideas:
 - **WebView2 is not WinUI.** Accepted. If native controls ever become essential, `packages/core` and `packages/youtube` move to another shell unchanged.
 - **WebKitGTK is the weaker webview**, and it carries BotGuard on Linux. It lags Chromium, needs `WEBKIT_DISABLE_DMABUF_RENDERER=1` on some drivers to avoid a blank window, and Google fingerprints it differently. Expect the PO-token path to degrade on Linux first.
 - **Linux fragmentation.** libmpv version skew, a missing Secret Service, and WebKitGTK 4.0 against 4.1. Pin floor versions, detect at startup, and name the missing piece in the error.
+- **Two playback engines.** mpv and Media Foundation can drift apart in behaviour. Both sit behind the same commands and events, and the Windows mixer's logic is tested on every OS.
+- **Opus on Windows** depends on Web Media Extensions. The fallback to AAC keeps playback working, at lower quality for Premium.
 - **The worker boundary matters; Comlink does not.** If the engine ever moves back to the main thread, nothing above it should notice.
 - **Terms of service.** Personal and educational use. Downloading commercial music can break YouTube's terms; that call is the user's.
 

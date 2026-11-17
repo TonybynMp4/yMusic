@@ -96,6 +96,9 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
   const hidden = useTrayIdle(view);
+  // Held here because the player bar unmounts while hidden, and would come
+  // back unmuting to the level saved at launch.
+  const [unmuted, setUnmuted] = useState(props.volume.unmuted);
   // The search box unmounts with the rest and never blurs, which would leave
   // the recent searches open over the page when the window comes back.
   if (hidden && searchFocused) setSearchFocused(false);
@@ -489,7 +492,8 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
           onPrevious={player.previous}
           onSeek={player.seek}
           volume={player.volume}
-          unmutedVolume={props.volume.unmuted}
+          unmutedVolume={unmuted}
+          onUnmutedVolume={setUnmuted}
           onVolume={player.setVolume}
           onRepeat={player.setRepeat}
           onShuffle={player.setShuffle}

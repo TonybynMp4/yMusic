@@ -1,4 +1,4 @@
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import {
   IconArrowsShuffle,
   IconChevronUp,
@@ -40,8 +40,13 @@ interface Props {
   onSeek: (positionMs: number) => void;
   /** A slider position in 0..1, not an amplitude. See `@ymusic/core`. */
   volume: number;
-  /** The saved level to unmute to, for a launch that starts muted. */
+  /** The level to unmute to when this mounts: the saved one at launch. */
   unmutedVolume: number;
+  /**
+   * Told the level to unmute to as it changes. This unmounts while the window
+   * is hidden in the tray, and comes back with what it last said here.
+   */
+  onUnmutedVolume: (position: number) => void;
   onVolume: (position: number) => void;
   onRepeat: (repeat: RepeatMode) => void;
   onShuffle: (shuffle: boolean) => void;
@@ -120,6 +125,8 @@ export function NowPlaying(props: Props) {
   const [unmuted, setUnmuted] = useState(props.unmutedVolume);
   const [draggingVolume, setDraggingVolume] = useState(false);
   if (volume > 0 && !draggingVolume && unmuted !== props.volume) setUnmuted(props.volume);
+  const { onUnmutedVolume } = props;
+  useEffect(() => onUnmutedVolume(unmuted), [unmuted, onUnmutedVolume]);
   // Shared by the inline slider and the vertical one in the narrow popup.
   const volumeSlider = {
     min: 0,

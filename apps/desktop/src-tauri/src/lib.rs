@@ -188,9 +188,7 @@ pub fn run() {
                     context.set_cache_model(CacheModel::DocumentBrowser);
                 }
             });
-            let saved_window = platform::window::SavedState::read(app.handle());
-            platform::window::keep_on_screen(&window, &saved_window);
-            app.manage(saved_window);
+            platform::window::keep_on_screen(&window);
             let settings = open_settings(app.handle());
             let startup_settings = settings.get();
             app.manage(settings);
@@ -218,7 +216,6 @@ pub fn run() {
                 }
                 Err(error) => {
                     log::error!("{error}");
-                    let handle = app.handle().clone();
                     app.dialog()
                         .message(format!(
                             "yMusic plays audio through libmpv, and it would not start.\n\n\
@@ -228,7 +225,10 @@ pub fn run() {
                         ))
                         .title("yMusic cannot play audio")
                         .kind(MessageDialogKind::Error)
-                        .show(move |_| handle.exit(1));
+                        // Not `AppHandle::exit`: on that path the window-state
+                        // plugin saves the never-shown window's creation-time
+                        // geometry over where the user last left it.
+                        .show(|_| std::process::exit(1));
                     false
                 }
             };
@@ -254,14 +254,14 @@ pub fn run() {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     // Hidden in the tray, the app may next end in a logout
                     // or a kill, which skips the plugin's save on exit.
-                    platform::window::save_state(window.app_handle());
+                    platform::window::save_state(window);
                     if tray::keeps_playing(window.app_handle()) {
                         api.prevent_close();
                         let _ = window.hide();
                     }
                 }
                 tauri::WindowEvent::Focused(false) => {
-                    platform::window::save_state(window.app_handle());
+                    platform::window::save_state(window);
                 }
                 _ => {}
             }
@@ -271,12 +271,6 @@ pub fn run() {
         .expect("error while building ymusic")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
-                // Runs after the plugin has saved the window on its way out.
-                if app.try_state::<platform::window::Shown>().is_none() {
-                    if let Some(saved) = app.try_state::<platform::window::SavedState>() {
-                        saved.put_back();
-                    }
-                }
                 save_position(app);
                 if let Some(player) = app.try_state::<Player>() {
                     player.flush_volume();

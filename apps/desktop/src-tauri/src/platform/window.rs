@@ -2,7 +2,9 @@
 //! flat themed surface the stylesheet paints, because there is no portable
 //! vibrancy. Also how a touchpad pinch reaches the page.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use serde::Deserialize;
 use tauri::{
@@ -25,31 +27,51 @@ pub fn saved_state() -> StateFlags {
 }
 
 /// Writes the window's state now rather than only on a clean exit, which a
-/// logout, a kill or a crash skips.
-pub fn save_state<R: Runtime>(app: &AppHandle<R>) {
-    if let Err(error) = app.save_window_state(saved_state()) {
-        log::warn!("could not save the window state: {error}");
+/// logout, a kill or a crash skips. Called on every focus loss, so it only
+/// writes when the window has moved, resized or (un)maximized since.
+pub fn save_state(window: &tauri::Window) {
+    type Geometry = (PhysicalSize<u32>, PhysicalPosition<i32>, bool);
+    static LAST_SAVED: Mutex<Option<Geometry>> = Mutex::new(None);
+
+    let (Ok(size), Ok(position), Ok(maximized)) = (
+        window.inner_size(),
+        window.outer_position(),
+        window.is_maximized(),
+    ) else {
+        return;
+    };
+    let geometry = Some((size, position, maximized));
+    let mut last = LAST_SAVED.lock().expect("window geometry mutex");
+    if *last == geometry {
+        return;
+    }
+    match window.app_handle().save_window_state(saved_state()) {
+        Ok(()) => *last = geometry,
+        Err(error) => log::warn!("could not save the window state: {error}"),
     }
 }
 
-/// Whether GTK opens its windows on Wayland. Worked out from the environment
-/// the way GDK does it, because the plugin is built before GTK starts.
+/// Whether GTK opens its windows on Wayland. Worked out once from the
+/// environment the way GDK does it, because the plugin is built before GTK
+/// starts.
+#[cfg(target_os = "linux")]
 fn is_wayland() -> bool {
-    if !cfg!(target_os = "linux") {
-        return false;
-    }
-    let display = std::env::var("WAYLAND_DISPLAY").ok();
-    let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
-    let backend = std::env::var("GDK_BACKEND").ok();
-    wayland_first(backend.as_deref())
-        && wayland_socket(display.as_deref(), runtime_dir.as_deref()).is_some_and(|socket| {
-            // GDK falls back to X11 when it cannot connect, as it does with a
-            // `WAYLAND_DISPLAY` left over from another session.
-            #[cfg(unix)]
-            return std::os::unix::net::UnixStream::connect(socket).is_ok();
-            #[cfg(not(unix))]
-            return false;
-        })
+    static IS_WAYLAND: OnceLock<bool> = OnceLock::new();
+    *IS_WAYLAND.get_or_init(|| {
+        let display = std::env::var("WAYLAND_DISPLAY").ok();
+        let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+        let backend = std::env::var("GDK_BACKEND").ok();
+        // GDK falls back to X11 when it cannot connect, as it does with a
+        // `WAYLAND_DISPLAY` left over from another session.
+        wayland_first(backend.as_deref())
+            && wayland_socket(display.as_deref(), runtime_dir.as_deref())
+                .is_some_and(|socket| std::os::unix::net::UnixStream::connect(socket).is_ok())
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn is_wayland() -> bool {
+    false
 }
 
 /// GDK tries the backends in `GDK_BACKEND` in order, and Wayland first when it
@@ -71,14 +93,8 @@ fn wayland_socket(display: Option<&str>, runtime_dir: Option<&Path>) -> Option<P
     Some(runtime_dir.join(display))
 }
 
-/// The plugin's file as it was at launch, before anything wrote it.
-pub struct SavedState {
-    path: Option<PathBuf>,
-    bytes: Option<Vec<u8>>,
-}
-
-/// The main window's entry in that file, as far as placing it goes. `width`
-/// and `height` are the inner size.
+/// The main window's entry in the plugin's file, as far as placing it goes.
+/// `width` and `height` are the inner size.
 #[derive(Deserialize)]
 struct SavedWindow {
     width: u32,
@@ -89,41 +105,11 @@ struct SavedWindow {
     maximized: bool,
 }
 
-impl SavedState {
-    pub fn read<R: Runtime>(app: &AppHandle<R>) -> Self {
-        let path = app
-            .path()
-            .app_config_dir()
-            .ok()
-            .map(|dir| dir.join(app.filename()));
-        let bytes = path.as_ref().and_then(|path| std::fs::read(path).ok());
-        Self { path, bytes }
-    }
-
-    fn main_window(&self) -> Option<SavedWindow> {
-        let mut windows: std::collections::HashMap<String, SavedWindow> =
-            serde_json::from_slice(self.bytes.as_deref()?).ok()?;
-        windows.remove("main")
-    }
-
-    /// Puts the file back as it was. The plugin saves on every exit, and a
-    /// window that was never shown has only its creation-time geometry to
-    /// save, which would replace where the user last left it.
-    pub fn put_back(&self) {
-        let Some(path) = &self.path else {
-            return;
-        };
-        let result = match &self.bytes {
-            Some(bytes) => crate::files::write_atomically(path, bytes),
-            None => match std::fs::remove_file(path) {
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                other => other,
-            },
-        };
-        if let Err(error) = result {
-            log::warn!("could not put the window state back: {error}");
-        }
-    }
+fn read_saved<R: Runtime>(app: &AppHandle<R>) -> Option<SavedWindow> {
+    let path = app.path().app_config_dir().ok()?.join(app.filename());
+    let mut windows: HashMap<String, SavedWindow> =
+        serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    windows.remove("main")
 }
 
 /// Managed once the main window has been shown at the end of setup. Until
@@ -203,13 +189,13 @@ pub fn forward_touchpad_pinch(window: &WebviewWindow) {
 /// It works from the saved state, not the window: on Linux the plugin's moves
 /// are still queued at this point, and a window that has never been mapped
 /// reads its creation-time geometry. Its own moves queue behind the plugin's.
-pub fn keep_on_screen(window: &WebviewWindow, saved: &SavedState) {
+pub fn keep_on_screen(window: &WebviewWindow) {
     // Wayland reports no position to check, and ignores one set. Maximizing
     // places the window on a screen.
     if is_wayland() {
         return;
     }
-    let Some(saved) = saved.main_window().filter(|saved| !saved.maximized) else {
+    let Some(saved) = read_saved(window.app_handle()).filter(|saved| !saved.maximized) else {
         return;
     };
     if saved.width == 0 || saved.height == 0 {

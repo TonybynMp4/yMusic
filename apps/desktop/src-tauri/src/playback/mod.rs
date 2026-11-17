@@ -948,7 +948,11 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                                 // A pause comes with where it paused: the
                                 // page's last position can be ten seconds old,
                                 // and it saves and reports the one it has.
-                                if paused {
+                                // Not with a seek under way: `time-pos` is
+                                // still where the seek left from, and the
+                                // restart that follows sends the new one.
+                                let seeking = mpv.get_property::<bool>("seeking").unwrap_or(false);
+                                if paused && !seeking {
                                     if let Some(Position {
                                         position_ms,
                                         duration_ms,
@@ -1048,12 +1052,22 @@ fn read_position(mpv: &Mpv) -> Option<Position> {
     })
 }
 
-/// The position a song that played to its end is reported at: its length, or
-/// where it was last seen when mpv never gave one.
+/// How close to its length a song was last seen for it to count as played
+/// through. mpv reports `time-pos` many times a second, so a song that ran to
+/// its end is well within this.
+const END_SLACK_MS: u64 = 1000;
+
+/// The position a song that reached end of file is reported at: its length
+/// when it played through, and where it was last seen when mpv never gave a
+/// length or the stream ran out early.
 fn end_position(last: Option<Position>) -> Option<PlaybackEvent> {
     let last = last?;
+    let position_ms = match last.duration_ms {
+        Some(duration_ms) if last.position_ms + END_SLACK_MS >= duration_ms => duration_ms,
+        _ => last.position_ms,
+    };
     Some(PlaybackEvent::Position {
-        position_ms: last.duration_ms.unwrap_or(last.position_ms),
+        position_ms,
         duration_ms: last.duration_ms,
     })
 }
@@ -1078,13 +1092,28 @@ mod tests {
     #[test]
     fn a_song_that_ends_is_reported_at_its_length() {
         let event = end_position(Some(Position {
-            position_ms: 193_400,
+            position_ms: 199_400,
             duration_ms: Some(200_000),
         }));
         assert!(matches!(
             event,
             Some(PlaybackEvent::Position {
                 position_ms: 200_000,
+                duration_ms: Some(200_000),
+            })
+        ));
+    }
+
+    #[test]
+    fn a_stream_that_runs_out_early_ends_where_it_was_last_seen() {
+        let event = end_position(Some(Position {
+            position_ms: 60_000,
+            duration_ms: Some(200_000),
+        }));
+        assert!(matches!(
+            event,
+            Some(PlaybackEvent::Position {
+                position_ms: 60_000,
                 duration_ms: Some(200_000),
             })
         ));

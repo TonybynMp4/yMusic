@@ -12,7 +12,7 @@ A tuned radio is an ordinary radio playlist whose id spells out the seeds and th
 2. Artists: `a<id>` for the first, `I<id>` for each one after, then `E`. The id is the artist's Knowledge Graph id without its `/m/` or `/g/` prefix, so The Beatles (`/m/07c0j`) are `a07c0jE`.
 3. Songs: `v<videoId>` each.
 
-An id that ends with its artists, and whose part after `RDAT` is one character past a multiple of four, ends in a `z` (`RDATpYa0kr_tEz`). YouTube's own chip ids all follow this rule. Leaving the `z` out, or adding it anywhere else, gives an empty radio.
+An id 13 characters long ends in a `z` (`RDATpYa0kr_tEz`, `RDATa0_yc88vEz`), as YouTube's own chip ids do. YouTube reads `RD` followed by 11 characters as the radio of a video, so without the `z` it plays another radio, or none. A `z` on any other id gives an empty radio, so a longer id, such as a mix made in the Android app (`RDATiXrZa11svx3kx26I…E`), has none. Checked against `/next` and the radio's page with no account signed in, over one to nine artists, with and without modifiers (2026-11-17).
 
 The chips carry decades (`d0X` 2010s, `d1X` 2020s, `d-` 2000s) and genres (`g9X` pop, or `G<id>E` for a Knowledge Graph genre). Genres come before moods and decades before popularity. The builder doesn't offer these yet.
 

@@ -42,10 +42,10 @@ const variety = { low: "rX", medium: "", high: "rZ" } as const;
  * The modifiers come first, in the order YouTube itself writes them (it
  * answers an empty radio for any other), and the defaults are left out. Then
  * the artists, the first as `a<id>` and each further one as `I<id>`, closed by
- * `E`; then each song as `v<videoId>`. An id that ends with its artists, one
- * character past a multiple of four after `RDAT`, takes a closing `z`, as on
- * every such id YouTube hands out; without it, or with it anywhere else, the
- * radio is empty.
+ * `E`; then each song as `v<videoId>`. An id 13 characters long takes a
+ * closing `z`, as YouTube's own do (`RDATpYa0kr_tEz`): YouTube reads `RD` and
+ * 11 characters as the radio of a video, so without it the radio is another
+ * one, or empty. A `z` on any other id empties the radio.
  */
 export function radioId(tuning: RadioTuning): string | null {
   if (tuning.artists.length === 0 && tuning.songs.length === 0) return null;
@@ -57,8 +57,8 @@ export function radioId(tuning: RadioTuning): string | null {
   if (tuning.artists.length > 0) {
     body += tuning.artists.map((id, i) => (i === 0 ? "a" : "I") + id).join("") + "E";
   }
-  if (tuning.songs.length === 0) return `RDAT${body}${body.length % 4 === 1 ? "z" : ""}`;
-  return `RDAT${body}${tuning.songs.map((id) => `v${id}`).join("")}`;
+  const id = `RDAT${body}${tuning.songs.map((song) => `v${song}`).join("")}`;
+  return id.length === 13 ? `${id}z` : id;
 }
 
 /**

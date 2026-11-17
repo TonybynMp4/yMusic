@@ -12,6 +12,7 @@ expression: file
   "includePrereleases": false,
   "pauseWatchHistory": false,
   "searchHistory": "youtube",
+  "shuffleWith": "ymusic",
   "skipDisliked": false,
   "stableVolume": "off",
   "statsForNerds": false

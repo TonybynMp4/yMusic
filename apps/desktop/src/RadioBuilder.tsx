@@ -448,6 +448,7 @@ function Builder({
       </div>
       <Preview
         empty={seeds.length === 0}
+        unusable={!resolving && id === null && seeds.length > 0}
         loading={resolving || radio.isFetching}
         error={radio.error?.message ?? null}
         tracks={tracks}
@@ -455,7 +456,7 @@ function Builder({
       />
       <DialogFooter>
         <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
-        <Button type="submit" disabled={!playable || radio.isFetching}>
+        <Button type="submit" disabled={!playable || radio.isFetching || cover.isFetching}>
           <IconBroadcast />
           {editing ? "Update mix" : "Start mix"}
         </Button>
@@ -516,12 +517,14 @@ function SeedChip({
 
 function Preview({
   empty,
+  unusable,
   loading,
   error,
   tracks,
   cover,
 }: {
   empty: boolean;
+  unusable: boolean;
   loading: boolean;
   error: string | null;
   tracks: Track[] | null;
@@ -530,6 +533,10 @@ function Preview({
   let body: ReactNode;
   if (empty) {
     body = <p className="text-muted-foreground">Add artists or songs to start from.</p>;
+  } else if (unusable) {
+    body = (
+      <p className="text-muted-foreground">YouTube Music can't make a mix from these artists.</p>
+    );
   } else if (loading && tracks === null) {
     body = <Spinner label="Tuning the mix" />;
   } else if (error) {
@@ -629,6 +636,10 @@ function SeedSearch({
           placeholder="Search for artists and songs"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          // The search runs as you type; Enter would submit the form and start the mix.
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
           className="pl-8"
         />
         {search.isFetching && (

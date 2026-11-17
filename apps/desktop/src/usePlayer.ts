@@ -118,6 +118,11 @@ export function usePlayer(
   // Removing the last song empties the queue without a `clear`, and a song
   // added after that plays from nothing.
   if (queue.items.length === 0 && playingFrom !== null) setPlayingFrom(null);
+  /** `playingFrom` for callbacks that finish after a request, such as {@link tune}. */
+  const playingFromNow = useRef(playingFrom);
+  useEffect(() => {
+    playingFromNow.current = playingFrom;
+  }, [playingFrom]);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -491,10 +496,13 @@ export function usePlayer(
    * Plays the radio of a tuning chip after the playing song, in place of
    * what was to come, and marks the chip as picked. A radio changed in the
    * builder (`edited`) becomes the mix the queue plays, with its own name,
-   * cover and chips.
+   * cover and chips. `radio` is the radio the chip or edit belongs to: when
+   * the queue has moved on to something else while the songs loaded,
+   * nothing changes.
    */
   const tune = useCallback(
-    (playlistId: string, tracks: Track[], edited?: RadioEdit) => {
+    (radio: string, playlistId: string, tracks: Track[], edited?: RadioEdit) => {
+      if (playingFromNow.current?.radio !== radio) return;
       stopFollowing();
       dispatch({ type: "replaceUpcoming", tracks });
       setPlayingFrom((from) => {

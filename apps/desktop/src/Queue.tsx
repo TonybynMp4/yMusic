@@ -44,7 +44,7 @@ interface Props {
   onMove: (from: number, to: number) => void;
   onClear: () => void;
   /** Plays a tuning chip's radio after the playing song, in place of what was to come. */
-  onTune: (playlistId: string, tracks: Track[], edited?: RadioEdit) => void;
+  onTune: (radio: string, playlistId: string, tracks: Track[], edited?: RadioEdit) => void;
 }
 
 /** Where the playing row is, relative to what the list shows. */
@@ -227,12 +227,13 @@ export function Queue({
             <EditRadio
               radio={playingFrom.tuned ?? playingFrom.radio}
               variant="icon"
-              onPlay={(tracks, cover, id) =>
-                onTune(id, tracks, {
+              onPlay={(tracks, cover, id) => {
+                if (!playingFrom.radio) return;
+                onTune(playingFrom.radio, id, tracks, {
                   title: cover?.title ?? "Radio",
                   thumbnails: cover?.thumbnails ?? [],
-                })
-              }
+                });
+              }}
             />
           )}
         </div>

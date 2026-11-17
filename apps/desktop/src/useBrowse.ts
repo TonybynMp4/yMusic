@@ -13,7 +13,7 @@ import type { AlbumPage, ArtistPage, PlaylistPage, Track } from "@ymusic/core";
 
 import { engine } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
-import { capQueries, queryClient } from "./query.ts";
+import { capQueries, inUse, queryClient } from "./query.ts";
 
 /** A browse page, by what opens it. The app's navigation stack holds these. */
 export type Route =
@@ -115,6 +115,19 @@ export function clearBrowseCache(): void {
   queryClient.removeQueries({
     queryKey: ["browse"],
     predicate: (query) => query.getObserversCount() === 0,
+  });
+}
+
+/**
+ * Forgets the pages nothing shows, follows or is loading, apart from `keep`.
+ * For the window hidden in the tray: by then nothing shows any page, so `keep`
+ * is the one the window comes back on, which would otherwise be fetched again.
+ */
+export function dropIdlePages(keep: Route | null): void {
+  const kept = keep && hashKey(keyOf(keep));
+  queryClient.removeQueries({
+    queryKey: ["browse"],
+    predicate: (query) => !inUse(query) && query.queryHash !== kept,
   });
 }
 

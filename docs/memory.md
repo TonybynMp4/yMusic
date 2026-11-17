@@ -88,6 +88,22 @@ In the page, `windowHidden` in `packages/ipc` is a store shaped for `useSyncExte
 
 When the window is shown, the engine asks once at once, playing or paused, so the bar is right when it is drawn.
 
+#### Nothing drawn
+
+While hidden, `App` returns `null` (`useTrayIdle`). It still runs every hook it calls, and those are what playback needs: `usePlayer`, `useMediaSession`, `useResume`, `useSavedQueue`, the watch history inside `usePlayer`. So the title bar, the sidebar, the open page, the full player and the player bar unmount, and with them their DOM, their decoded images and the queries they observed. Nothing playback needs is in that tree. BotGuard's frame is appended to `document.body` by `botguard.ts`, the engine worker is a module singleton, and ratings and the queue live in `usePlayer`.
+
+What the window comes back with is the state `App` and its hooks hold: the history of views, the scroll offset of each (`scrolls`), the search box and its filter, the sidebar, and whether the full player is open. The offset is restored by the same layout effect that restores it on Back, which runs again when the new scroll area mounts. State inside the views is lost: an open menu or dialog and what was typed in it, the full player's tab, "Show all" on local search results, an expanded description.
+
+Once the views have let go of their queries, `dropPageData` removes what only they read:
+
+- Browse pages, through `dropIdlePages`, apart from the page the window comes back on, so that page is not fetched again.
+- The library lists (`saved`), unless the window comes back on the library.
+- Search results nothing observes, and the playlists a song can be added to.
+
+It keeps anything in use (`inUse` in `query.ts`), which covers a playlist the queue follows, a page still loading, and the search in the box, which `App` observes. It never touches stream leases, which the player reads, or song years, which are small and which the bar would ask for again at once. The browse cap (`capQueries`) is not what runs here: it only acts when a page is added, and it would keep ten.
+
+How much this saves is not measured yet. The tray scenario of the harness below is what decides whether it stays.
+
 ## Measuring
 
 The numbers come from a harness that runs a scripted 11 minute session against two release builds and samples each process from `/proc`. It is not merged: it adds hooks to the app (a scenario module, a core feature and a command), and it lives on the `chore/memory-harness` branch ([#49](https://github.com/TonybynMp4/yMusic/pull/49)), with its own guide in this file there. To measure a branch, rebase the harness onto it.

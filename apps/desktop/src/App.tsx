@@ -36,6 +36,7 @@ import { useResume } from "./useResume.ts";
 import { useSavedQueue } from "./useSavedQueue.ts";
 import { searchHistoryIn, useSearchHistory, type RecentSearch } from "./useSearchHistory.ts";
 import { useSettings } from "./useSettings.ts";
+import { useTrayIdle } from "./useTrayIdle.ts";
 import { useUpdates } from "./useUpdates.ts";
 import { usePlayer, type PlayFrom } from "./usePlayer.ts";
 import { useYouTubeSearch, type YouTubeSearchState } from "./useYouTubeSearch.ts";
@@ -94,6 +95,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   useSavedQueue(player, resumed);
   const notice = useNotice();
   const updates = useUpdates(props.settings.checkForUpdates);
+  const hidden = useTrayIdle(view);
 
   const toggleSidebar = () => {
     if (narrow) return setNarrowExpanded((e) => !e);
@@ -269,6 +271,11 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     ratingOf: player.ratingOf,
     rate,
   };
+
+  // Hidden in the tray, the hooks above keep the music going and nothing is
+  // drawn. The state they and this component hold is what the window comes
+  // back with: the view, its scroll offset, the search and the open player.
+  if (hidden) return null;
 
   return (
     <InteractionsProvider value={interactions}>

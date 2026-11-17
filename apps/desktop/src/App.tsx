@@ -423,7 +423,12 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
                           actions={browse}
                         />
                       ) : view ? (
-                        <BrowseView route={view} actions={browse} />
+                        <BrowseView
+                          route={view}
+                          actions={browse}
+                          account={account.account?.name ?? null}
+                          local={library.all}
+                        />
                       ) : (
                         <SearchResults
                           query={query}

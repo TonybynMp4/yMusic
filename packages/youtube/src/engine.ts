@@ -25,6 +25,7 @@ import {
   createPlaylist,
   getAlbum,
   getArtist,
+  getLibraryArtistSongs,
   getLibraryCards,
   getLibraryPlaylists,
   getPlaylistTargets,
@@ -470,6 +471,15 @@ export class YouTubeEngine {
     if (this.#cookie === null) return { tracks: [], more: null, sorts: [], sort: null };
     const songs = await openLibrarySongs(await this.#browseClient(), sort);
     return { ...songs, more: this.#hold(songs.more) };
+  }
+
+  /**
+   * The songs in the library by the artist with channel id `id` (`UC…`).
+   * Empty when signed out.
+   */
+  async libraryArtistSongs(id: string): Promise<Track[]> {
+    if (this.#cookie === null) return [];
+    return getLibraryArtistSongs(await this.#browseClient(), id);
   }
 
   /**

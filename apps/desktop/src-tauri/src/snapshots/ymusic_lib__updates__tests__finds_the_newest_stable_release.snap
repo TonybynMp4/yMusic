@@ -1,0 +1,9 @@
+---
+source: src/updates.rs
+expression: "newest(releases(), &current, false)"
+---
+{
+  "version": "0.3.0",
+  "url": "https://github.com/TonybynMp4/yMusic/releases/tag/v0.3.0",
+  "prerelease": false
+}

@@ -1,0 +1,6 @@
+---
+source: src/platform/media.rs
+expression: "table.join(\"\\n\")"
+---
+/home/me/My Music/art/ab#c.jpg -> file:///home/me/My%20Music/art/ab%23c.jpg
+/tmp/é.png -> file:///tmp/%C3%A9.png

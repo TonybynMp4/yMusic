@@ -1,0 +1,9 @@
+---
+source: tests/library.rs
+expression: "table.join(\"\\n\")"
+---
+"first" -> ["First Light"]
+"nebula" -> ["First Light", "Second Light"]
+"drift" -> ["First Light", "Second Light"]
+"  " -> ["First Light", "Second Light", "untagged"]
+"nothing here" -> []

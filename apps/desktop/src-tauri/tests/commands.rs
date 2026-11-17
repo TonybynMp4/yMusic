@@ -86,19 +86,10 @@ fn every_command_is_reachable_over_ipc() {
         .expect("platform_summary should succeed")
         .deserialize::<serde_json::Value>()
         .expect("summary json");
-    for field in [
-        "os",
-        "arch",
-        "appVersion",
-        "installFlavor",
-        "supportsInAppUpdate",
-        "hasTray",
-    ] {
-        assert!(
-            summary.get(field).is_some(),
-            "missing `{field}` in {summary}"
-        );
-    }
+    // The values depend on the machine, so only the field names are pinned.
+    let mut fields: Vec<_> = summary.as_object().expect("an object").keys().collect();
+    fields.sort();
+    insta::assert_json_snapshot!("platform_summary_fields", fields);
 
     let volume = get_ipc_response(
         &webview,
@@ -107,7 +98,7 @@ fn every_command_is_reachable_over_ipc() {
     .expect("player_saved_volume should succeed")
     .deserialize::<serde_json::Value>()
     .expect("volume json");
-    assert_eq!(volume, serde_json::json!({ "volume": 1.0, "unmuted": 1.0 }));
+    insta::assert_json_snapshot!("player_saved_volume", volume);
 
     // player_load carries the one non-trivial payload: the lease, headers and
     // all. It goes first because mpv rejects a seek with nothing loaded, which
@@ -328,7 +319,18 @@ fn library_commands_round_trip_over_ipc() {
     .expect("library_search should succeed")
     .deserialize::<serde_json::Value>()
     .expect("search json");
-    assert_eq!(found.as_array().expect("array").len(), 2);
+    let found: Vec<_> = found
+        .as_array()
+        .expect("array")
+        .iter()
+        .map(|track| {
+            format!(
+                "{} / {} / {}",
+                track["title"], track["artist"], track["album"]
+            )
+        })
+        .collect();
+    insta::assert_snapshot!("library_search_nebula", found.join("\n"));
 
     let id = tracks[0]["id"].as_str().expect("a track id");
     let lease = get_ipc_response(
@@ -361,7 +363,9 @@ fn library_commands_round_trip_over_ipc() {
     .expect("library_folder_cover should succeed")
     .deserialize::<serde_json::Value>()
     .expect("cover json");
-    assert_eq!((&cover["width"], &cover["height"]), (&2.into(), &1.into()));
+    insta::assert_json_snapshot!("library_folder_cover", cover, {
+        ".path" => "[art cache]",
+    });
     assert!(
         tracks
             .iter()

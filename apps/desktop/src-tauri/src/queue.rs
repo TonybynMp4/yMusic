@@ -143,9 +143,7 @@ mod tests {
         };
         store.save_position(&position).unwrap();
 
-        let saved = QueueStore::open(dir).load();
-        assert_eq!(saved.queue, Some(queue));
-        assert_eq!(saved.position, Some(position));
+        insta::assert_json_snapshot!(QueueStore::open(dir).load());
     }
 
     #[test]

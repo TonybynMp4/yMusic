@@ -1,0 +1,13 @@
+---
+source: src/botguard.rs
+expression: "table.join(\"\\n\")"
+---
+/index.html -> 200 OK
+  cache-control: no-store
+  content-security-policy: default-src 'none'; script-src 'self' 'unsafe-eval'
+  content-type: text/html; charset=utf-8
+/frame.js -> 200 OK
+  cache-control: no-store
+  content-security-policy: default-src 'none'; script-src 'self' 'unsafe-eval'
+  content-type: text/javascript; charset=utf-8
+/secrets -> 404 Not Found

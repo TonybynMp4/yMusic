@@ -1,0 +1,18 @@
+---
+source: src/queue.rs
+expression: "QueueStore::open(dir).load()"
+---
+{
+  "queue": {
+    "cursor": 0,
+    "items": [
+      {
+        "id": "yt:one"
+      }
+    ]
+  },
+  "position": {
+    "trackId": "yt:one",
+    "positionMs": 61500
+  }
+}

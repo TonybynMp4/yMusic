@@ -64,16 +64,29 @@ mod tests {
         for base in ["botguard://localhost", "http://botguard.localhost"] {
             let page = get(&format!("{base}/index.html"));
             assert_eq!(page.status(), StatusCode::OK);
-            assert_eq!(page.headers()[header::CONTENT_SECURITY_POLICY], CSP);
             assert!(String::from_utf8_lossy(page.body()).contains("frame.js"));
-
-            let script = get(&format!("{base}/frame.js"));
-            assert_eq!(script.status(), StatusCode::OK);
-            assert!(script.headers()[header::CONTENT_TYPE]
-                .to_str()
-                .unwrap()
-                .contains("javascript"));
+            assert_eq!(get(&format!("{base}/frame.js")).status(), StatusCode::OK);
         }
+    }
+
+    /// Comparing against `CSP` would pass whatever the constant says, so a
+    /// loosened policy only shows up as a change to this snapshot.
+    #[test]
+    fn serves_each_document_with_these_headers() {
+        let table: Vec<_> = ["/index.html", "/frame.js", "/secrets"]
+            .iter()
+            .map(|path| {
+                let response = get(&format!("botguard://localhost{path}"));
+                let mut headers: Vec<_> = response
+                    .headers()
+                    .iter()
+                    .map(|(name, value)| format!("  {name}: {}", value.to_str().unwrap()))
+                    .collect();
+                headers.sort();
+                format!("{path} -> {}\n{}", response.status(), headers.join("\n"))
+            })
+            .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 
     #[test]

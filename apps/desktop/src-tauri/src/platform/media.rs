@@ -361,16 +361,14 @@ fn percent_encode_path(path: &str) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn file_urls_are_percent_encoded_for_mpris() {
-        if cfg!(target_os = "windows") {
-            return;
-        }
-        assert_eq!(
-            file_cover_url("/home/me/My Music/art/ab#c.jpg"),
-            "file:///home/me/My%20Music/art/ab%23c.jpg"
-        );
-        assert_eq!(file_cover_url("/tmp/é.png"), "file:///tmp/%C3%A9.png");
+        let table: Vec<_> = ["/home/me/My Music/art/ab#c.jpg", "/tmp/é.png"]
+            .iter()
+            .map(|path| format!("{path} -> {}", file_cover_url(path)))
+            .collect();
+        insta::assert_snapshot!(table.join("\n"));
     }
 
     #[test]

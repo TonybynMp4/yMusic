@@ -1,0 +1,11 @@
+---
+source: src/http.rs
+expression: "table.join(\"\\n\")"
+---
+https://music.youtube.com/youtubei/v1/browse -> true
+https://rr1---sn-abc.googlevideo.com/videoplayback -> true
+https://www.google.com/js/th/abc.js -> true
+https://www.google.com/search?q=x -> false
+http://www.youtube.com/ -> false
+https://evilgooglevideo.com/ -> false
+https://example.com/ -> false

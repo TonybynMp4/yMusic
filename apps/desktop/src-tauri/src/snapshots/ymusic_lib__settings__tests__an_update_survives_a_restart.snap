@@ -1,0 +1,17 @@
+---
+source: src/settings.rs
+expression: "SettingsStore::open(path).get()"
+---
+{
+  "autoplay": false,
+  "audioQuality": "low",
+  "stableVolume": "off",
+  "audioDevice": "auto",
+  "skipDisliked": false,
+  "pauseWatchHistory": false,
+  "searchHistory": "youtube",
+  "closeToTray": false,
+  "checkForUpdates": true,
+  "includePrereleases": false,
+  "statsForNerds": false
+}

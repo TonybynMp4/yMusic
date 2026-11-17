@@ -139,22 +139,15 @@ mod tests {
         let set = SetCookie::parse(
             "__Secure-1PSIDTS=new; Domain=.youtube.com; Path=/; Secure; HttpOnly; Max-Age=31536000",
         );
-        assert_eq!(
-            set,
-            Some(SetCookie {
-                name: "__Secure-1PSIDTS".into(),
-                domain: Some(".youtube.com".into()),
-                value: Some("new".into()),
-            })
-        );
+        insta::assert_debug_snapshot!(set);
     }
 
     #[test]
     fn a_past_expiry_is_a_deletion() {
-        let set = SetCookie::parse("SIDCC=; Expires=Thu, 01 Jan 1970 00:00:00 GMT").unwrap();
-        assert_eq!(set.value, None);
-        let set = SetCookie::parse("SIDCC=x; Max-Age=0").unwrap();
-        assert_eq!(set.value, None);
+        insta::assert_debug_snapshot!([
+            SetCookie::parse("SIDCC=; Expires=Thu, 01 Jan 1970 00:00:00 GMT"),
+            SetCookie::parse("SIDCC=x; Max-Age=0"),
+        ]);
     }
 
     #[test]

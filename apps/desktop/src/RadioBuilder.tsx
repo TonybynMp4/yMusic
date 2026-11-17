@@ -161,6 +161,14 @@ export function EditRadioDialog({
  * page of a radio of that artist alone ("Coldplay Mix"), and a song's from
  * the head of its own radio.
  */
+function unnamedArtist(radioArtist: string): Extract<RadioSeed, { kind: "artist" }> {
+  return { kind: "artist", channelId: null, radioArtist, name: "Unknown artist", thumbnails: [] };
+}
+
+function unnamedSong(videoId: VideoId): RadioSeed {
+  return { kind: "song", videoId, title: "Unknown song", thumbnails: [] };
+}
+
 function EditLoader({
   radio,
   signedIn,
@@ -171,16 +179,15 @@ function EditLoader({
   onPlay: OnPlay;
 }) {
   const parsed = parseRadioId(radio);
+  // A failed lookup is not cached, so the next opening asks again.
   const artists = useQueries({
     queries: (parsed?.artists ?? []).map((id) => ({
       queryKey: ["radio-artist-seed", id],
       queryFn: async (): Promise<RadioSeed> => {
         const solo = radioId({ ...defaultTuning, artists: [id], songs: [] })!;
-        const cover = await engine.radioCover(solo).catch(() => null);
+        const cover = await engine.radioCover(solo);
         return {
-          kind: "artist",
-          channelId: null,
-          radioArtist: id,
+          ...unnamedArtist(id),
           name: cover?.title.replace(/ Mix$/, "") || "Unknown artist",
           thumbnails: cover?.thumbnails ?? [],
         };
@@ -192,26 +199,27 @@ function EditLoader({
     queries: (parsed?.songs ?? []).map((videoId) => ({
       queryKey: ["radio-song-seed", videoId],
       queryFn: async (): Promise<RadioSeed> => {
-        const tracks = await engine.radio(videoId).catch(() => []);
+        // A song radio leaves its song out; the same radio as a mix, started on it, leads with it.
+        const tracks = await engine.mix(`RDAMVM${videoId}`, videoId);
         const track = tracks.find((t) => videoIdFromTrackId(t.id) === videoId);
-        return {
-          kind: "song",
-          videoId,
-          title: track?.title ?? "Unknown song",
-          thumbnails: track?.thumbnails ?? [],
-        };
+        return track
+          ? { kind: "song", videoId, title: track.title, thumbnails: track.thumbnails }
+          : unnamedSong(videoId);
       },
       staleTime: Infinity,
     })),
   });
-  const all = [...artists, ...songs];
-  if (all.some((q) => q.isPending)) {
+  if ([...artists, ...songs].some((q) => q.isPending)) {
     return (
       <div className="flex min-h-40 items-center justify-center">
         <Spinner label="Reading the radio" />
       </div>
     );
   }
+  const seeds = [
+    ...artists.map((q, i) => q.data ?? unnamedArtist(parsed!.artists[i]!)),
+    ...songs.map((q, i) => q.data ?? unnamedSong(parsed!.songs[i]!)),
+  ];
   const tuning: Tuning = parsed
     ? {
         discovery: parsed.discovery,
@@ -220,14 +228,7 @@ function EditLoader({
         mood: parsed.mood,
       }
     : defaultTuning;
-  return (
-    <Builder
-      initial={{ seeds: all.flatMap((q) => (q.data ? [q.data] : [])), tuning }}
-      editing
-      signedIn={signedIn}
-      onPlay={onPlay}
-    />
-  );
+  return <Builder initial={{ seeds, tuning }} editing signedIn={signedIn} onPlay={onPlay} />;
 }
 
 function seedKey(seed: RadioSeed): string {
@@ -332,6 +333,20 @@ function Builder({
   });
   const tokenOf = new Map(artistSeeds.map((s, i) => [seedKey(s), artistTokens[i]!]));
   const resolving = artistTokens.some((q) => q.isPending);
+  // An artist read back from the radio is known by its Knowledge Graph id and
+  // the same artist picked in the search by its channel, so the two only
+  // turn out to match once the channel resolves. Keep the first.
+  const seen = new Set<string>();
+  const repeated = new Set(
+    artistSeeds.flatMap((s, i) => {
+      const token = artistTokens[i]!.data;
+      if (!token) return [];
+      if (seen.has(token)) return [seedKey(s)];
+      seen.add(token);
+      return [];
+    }),
+  );
+  if (repeated.size > 0) setSeeds((all) => all.filter((s) => !repeated.has(seedKey(s))));
 
   const id = resolving
     ? null

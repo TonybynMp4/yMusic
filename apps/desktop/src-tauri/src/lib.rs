@@ -240,6 +240,9 @@ pub fn run() {
                 // would be no way back to the window, so it shows then too.
                 let in_tray = autostart::launched_at_login() && tray::keeps_playing(app.handle());
                 platform::window::reveal(&window, !in_tray);
+                if in_tray {
+                    tray::show_window_without_host(app.handle());
+                }
             }
             autostart::refresh(app.handle());
             Ok(())
@@ -268,6 +271,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building ymusic")
         .run(|app, event| {
+            // Before `Exit`, where the window-state plugin saves.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                platform::window::forget_unshown(app);
+            }
             if let tauri::RunEvent::Exit = event {
                 save_position(app);
                 if let Some(player) = app.try_state::<Player>() {

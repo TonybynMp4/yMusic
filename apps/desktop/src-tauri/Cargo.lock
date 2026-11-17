@@ -6260,6 +6260,7 @@ dependencies = [
  "webkit2gtk",
  "window-vibrancy",
  "windows-registry",
+ "zbus",
 ]
 
 [[package]]

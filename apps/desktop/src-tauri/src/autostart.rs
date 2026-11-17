@@ -3,20 +3,45 @@
 //! The entry itself is the setting, not a field in `settings.json`, so turning
 //! it off from the desktop's own startup list is respected. On Linux it is an
 //! XDG autostart file, `ymusic.desktop` in `$XDG_CONFIG_HOME/autostart`. On
-//! Windows it is a `yMusic` value under the user's `Run` key.
+//! Windows it is a `yMusic` value under the user's `Run` key. A dev build
+//! writes its own entry (`ymusic-dev.desktop`, `yMusic (dev)`), so it never
+//! points the installed app's entry at `target/debug`.
 //!
 //! The entry runs the binary with `--autostart`, so the launch can tell it came
 //! from login and start in the tray.
 
 use std::path::{Path, PathBuf};
 
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 
 /// Passed by the login entry.
 pub const ARG: &str = "--autostart";
 
 /// Whether this platform has a login entry to write.
 pub const SUPPORTED: bool = cfg!(any(target_os = "linux", windows));
+
+/// The entry's name: its file name without `.desktop` on Linux, its registry
+/// value on Windows. Kept apart for dev builds.
+#[cfg(target_os = "linux")]
+const NAME: &str = if cfg!(debug_assertions) {
+    "ymusic-dev"
+} else {
+    "ymusic"
+};
+#[cfg(windows)]
+const NAME: &str = if cfg!(debug_assertions) {
+    "yMusic (dev)"
+} else {
+    "yMusic"
+};
+
+/// What one read of the entry finds.
+struct Entry {
+    /// Whether the desktop will run it.
+    runs: bool,
+    /// The binary it starts, when that can be read back.
+    exe: Option<PathBuf>,
+}
 
 /// Whether this process was started by the login entry.
 pub fn launched_at_login() -> bool {
@@ -25,7 +50,7 @@ pub fn launched_at_login() -> bool {
 
 /// Whether the login entry is there and the desktop will run it.
 pub fn is_enabled<R: Runtime>(app: &AppHandle<R>) -> Result<bool, String> {
-    imp::is_enabled(app)
+    Ok(imp::read_entry(app)?.is_some_and(|entry| entry.runs))
 }
 
 /// Adds or removes the login entry. Adding one the desktop had turned off
@@ -40,37 +65,51 @@ pub fn set<R: Runtime>(app: &AppHandle<R>, on: bool) -> Result<(), String> {
 
 /// Points an enabled entry at this binary when the one it names is gone, as
 /// after a reinstall to another folder. A path that still works is left
-/// alone, since it may be a symlink or launcher chosen on purpose. Release
-/// builds only: a dev build would point it at `target/debug`.
+/// alone, since it may be a symlink or launcher chosen on purpose. Runs on a
+/// thread of its own, off the startup path.
 pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
-    if cfg!(debug_assertions) {
-        return;
-    }
-    let result = is_enabled(app).and_then(|on| {
-        let stale = on && imp::recorded_exe(app)?.is_some_and(|path| !path.exists());
-        if stale {
-            set(app, true)
-        } else {
-            Ok(())
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let result = imp::read_entry(&app).and_then(|entry| match entry {
+            Some(Entry {
+                runs: true,
+                exe: Some(path),
+            }) if !path.exists() => set(&app, true),
+            _ => Ok(()),
+        });
+        if let Err(error) = result {
+            tracing::warn!(%error, "could not refresh the login entry");
         }
     });
-    if let Err(error) = result {
-        tracing::warn!(%error, "could not refresh the login entry");
-    }
 }
 
 /// The path that starts this app. An AppImage runs from a mount that changes
-/// each launch, so its entry names the AppImage file instead.
+/// each launch, so its entry names the AppImage file instead. `APPIMAGE` is
+/// only trusted when this binary sits inside the AppImage's mount (`APPDIR`):
+/// a build started from another AppImage's environment inherits both.
 fn exe() -> Result<PathBuf, String> {
-    if let Some(appimage) = std::env::var_os("APPIMAGE").filter(|path| !path.is_empty()) {
-        return Ok(PathBuf::from(appimage));
-    }
-    std::env::current_exe().map_err(|error| format!("could not find the app's binary: {error}"))
+    let current = std::env::current_exe()
+        .map_err(|error| format!("could not find the app's binary: {error}"))?;
+    let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+    let appdir = std::env::var_os("APPDIR").map(PathBuf::from);
+    Ok(appimage_file(&current, appimage, appdir.as_deref()).unwrap_or(current))
+}
+
+fn appimage_file(
+    current: &Path,
+    appimage: Option<PathBuf>,
+    appdir: Option<&Path>,
+) -> Option<PathBuf> {
+    let appimage = appimage.filter(|path| !path.as_os_str().is_empty())?;
+    let appdir = appdir.filter(|path| !path.as_os_str().is_empty())?;
+    current.starts_with(appdir).then_some(appimage)
 }
 
 #[cfg(target_os = "linux")]
 mod imp {
     use std::{fs, io::ErrorKind};
+
+    use tauri::Manager;
 
     use super::*;
 
@@ -79,36 +118,27 @@ mod imp {
             .path()
             .config_dir()
             .map_err(|error| format!("no config directory: {error}"))?;
-        Ok(config.join("autostart").join("ymusic.desktop"))
+        Ok(config.join("autostart").join(format!("{NAME}.desktop")))
     }
 
-    fn read<R: Runtime>(app: &AppHandle<R>) -> Result<Option<String>, String> {
+    pub(super) fn read_entry<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Entry>, String> {
         let path = entry(app)?;
         match fs::read_to_string(&path) {
-            Ok(contents) => Ok(Some(contents)),
+            Ok(contents) => Ok(Some(Entry {
+                runs: runs(&contents),
+                exe: exec_path(&contents),
+            })),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
             Err(error) => Err(format!("{}: {error}", path.display())),
         }
     }
 
-    pub fn is_enabled<R: Runtime>(app: &AppHandle<R>) -> Result<bool, String> {
-        Ok(read(app)?.is_some_and(|contents| runs(&contents)))
-    }
-
-    pub fn recorded_exe<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
-        Ok(read(app)?.and_then(|contents| exec_path(&contents)))
-    }
-
     pub fn enable<R: Runtime>(app: &AppHandle<R>, exe: &Path) -> Result<(), String> {
         let path = entry(app)?;
-        let contents = desktop_file(exe);
-        if read(app)?.is_some_and(|current| current == contents) {
-            return Ok(());
-        }
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
         }
-        fs::write(&path, contents).map_err(|error| format!("{}: {error}", path.display()))
+        fs::write(&path, desktop_file(exe)).map_err(|error| format!("{}: {error}", path.display()))
     }
 
     pub fn disable<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
@@ -128,7 +158,7 @@ mod imp {
         format!(
             "[Desktop Entry]\n\
              Type=Application\n\
-             Name=yMusic\n\
+             Name={}\n\
              Comment=A native YouTube Music player\n\
              TryExec={}\n\
              Exec={} {}\n\
@@ -136,6 +166,11 @@ mod imp {
              Terminal=false\n\
              StartupNotify=false\n\
              X-GNOME-Autostart-enabled=true\n",
+            if cfg!(debug_assertions) {
+                "yMusic (dev)"
+            } else {
+                "yMusic"
+            },
             escape_string(&exe),
             escape_string(&quote_exec(&exe)),
             super::ARG,
@@ -207,9 +242,20 @@ mod imp {
         quoted
     }
 
-    /// A desktop entry string value doubles each backslash.
+    /// A desktop entry string value writes backslash, newline, tab and
+    /// carriage return as escapes, so the value stays on its line.
     fn escape_string(value: &str) -> String {
-        value.replace('\\', "\\\\")
+        let mut out = String::new();
+        for c in value.chars() {
+            match c {
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\t' => out.push_str("\\t"),
+                '\r' => out.push_str("\\r"),
+                _ => out.push(c),
+            }
+        }
+        out
     }
 
     fn unescape_string(value: &str) -> String {
@@ -244,16 +290,8 @@ mod imp {
     /// without touching `Run`.
     const APPROVED: &str =
         r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
-    const NAME: &str = "yMusic";
     /// What Windows writes there for an entry that is on.
     const APPROVED_ON: [u8; 12] = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-    fn command<R: Runtime>(_app: &AppHandle<R>) -> Option<String> {
-        CURRENT_USER
-            .open(RUN)
-            .and_then(|key| key.get_string(NAME))
-            .ok()
-    }
 
     /// An odd first byte means Task Manager turned the entry off.
     fn approved() -> bool {
@@ -266,15 +304,17 @@ mod imp {
         }
     }
 
-    pub fn is_enabled<R: Runtime>(app: &AppHandle<R>) -> Result<bool, String> {
-        Ok(command(app).is_some() && approved())
-    }
-
-    pub fn recorded_exe<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
-        Ok(command(app).and_then(|command| {
-            let quoted = command.strip_prefix('"')?;
-            let (path, _) = quoted.split_once('"')?;
-            Some(PathBuf::from(path))
+    pub(super) fn read_entry<R: Runtime>(_app: &AppHandle<R>) -> Result<Option<Entry>, String> {
+        let Ok(command) = CURRENT_USER.open(RUN).and_then(|key| key.get_string(NAME)) else {
+            return Ok(None);
+        };
+        let exe = command
+            .strip_prefix('"')
+            .and_then(|quoted| quoted.split_once('"'))
+            .map(|(path, _)| PathBuf::from(path));
+        Ok(Some(Entry {
+            runs: approved(),
+            exe,
         }))
     }
 
@@ -294,9 +334,11 @@ mod imp {
         Ok(())
     }
 
+    /// Opens rather than creates each key, so turning the switch off never
+    /// adds a key that was not there.
     pub fn disable<R: Runtime>(_app: &AppHandle<R>) -> Result<(), String> {
         for path in [RUN, APPROVED] {
-            let Ok(key) = CURRENT_USER.create(path) else {
+            let Ok(key) = CURRENT_USER.options().read().write().open(path) else {
                 continue;
             };
             if key.get_value(NAME).is_ok() {
@@ -311,11 +353,7 @@ mod imp {
 mod imp {
     use super::*;
 
-    pub fn is_enabled<R: Runtime>(_app: &AppHandle<R>) -> Result<bool, String> {
-        Ok(false)
-    }
-
-    pub fn recorded_exe<R: Runtime>(_app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
+    pub(super) fn read_entry<R: Runtime>(_app: &AppHandle<R>) -> Result<Option<Entry>, String> {
         Ok(None)
     }
 
@@ -332,6 +370,7 @@ mod imp {
 mod tests {
     use std::path::{Path, PathBuf};
 
+    use super::appimage_file;
     use super::imp::{desktop_file, exec_path, quote_exec, runs};
 
     #[test]
@@ -361,6 +400,43 @@ mod tests {
         }
         let unquoted = "[Desktop Entry]\nExec=/usr/bin/ymusic --autostart\n";
         assert_eq!(exec_path(unquoted), Some(PathBuf::from("/usr/bin/ymusic")));
+    }
+
+    #[test]
+    fn keeps_control_characters_on_their_line() {
+        let path = "/odd\nname\tdir/ymusic";
+        let file = desktop_file(Path::new(path));
+        assert_eq!(
+            file.lines()
+                .filter(|line| line.starts_with("Exec="))
+                .count(),
+            1
+        );
+        assert!(file.contains("TryExec=/odd\\nname\\tdir/ymusic\n"));
+        assert_eq!(exec_path(&file), Some(PathBuf::from(path)));
+    }
+
+    #[test]
+    fn trusts_appimage_only_from_inside_its_mount() {
+        let appimage = || Some(PathBuf::from("/home/u/Apps/yMusic.AppImage"));
+        let mount = Some(Path::new("/tmp/.mount_yMusic"));
+        assert_eq!(
+            appimage_file(
+                Path::new("/tmp/.mount_yMusic/usr/bin/ymusic"),
+                appimage(),
+                mount
+            ),
+            appimage()
+        );
+        // A .deb build started from another AppImage's environment.
+        assert_eq!(
+            appimage_file(Path::new("/usr/bin/ymusic"), appimage(), mount),
+            None
+        );
+        assert_eq!(
+            appimage_file(Path::new("/usr/bin/ymusic"), appimage(), None),
+            None
+        );
     }
 
     #[test]

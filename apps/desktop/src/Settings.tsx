@@ -46,6 +46,7 @@ import type { LocalLibrary } from "./useLocalLibrary.ts";
 import { clearBrowseCache } from "./useBrowse.ts";
 import { clearSongYears } from "./useSongYear.ts";
 import { queryClient } from "./query.ts";
+import { errorMessage } from "./errors.ts";
 import type { UpdatesState } from "./useUpdates.ts";
 import type { SettingsState } from "./useSettings.ts";
 
@@ -403,7 +404,11 @@ function AccountSection({ state }: { state: AccountState }) {
 function AutostartRow(props: { supported: boolean; inTray: boolean }) {
   const entry = useQuery({
     queryKey: ["autostart"],
-    queryFn: autostartGet,
+    queryFn: () =>
+      autostartGet().catch((error: unknown) => {
+        console.warn("could not read the login entry", error);
+        throw error;
+      }),
     enabled: props.supported,
     staleTime: 0,
   });
@@ -419,6 +424,7 @@ function AutostartRow(props: { supported: boolean; inTray: boolean }) {
   let description = props.inTray
     ? "Starts yMusic in the tray when you log in."
     : "Opens yMusic when you log in.";
+  if (entry.error) description = `Could not read the login entry: ${errorMessage(entry.error)}`;
   if (!props.supported) description = "Not available on this system yet.";
   return (
     <Row

@@ -478,7 +478,7 @@ pub fn autostart_get<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool, Strin
 #[specta::specta]
 pub fn autostart_set<R: Runtime>(app: tauri::AppHandle<R>, on: bool) -> Result<bool, String> {
     crate::autostart::set(&app, on)?;
-    crate::autostart::is_enabled(&app)
+    Ok(on)
 }
 
 /// How many bytes the artwork cache takes on disk, the only cache with a size

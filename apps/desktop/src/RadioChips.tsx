@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { parseRadioId, type Track } from "@ymusic/core";
+import { parseRadioId, type RadioCover, type Track } from "@ymusic/core";
 
 import { Chip } from "@/components/Chip";
 import { IconButton } from "@/components/IconButton";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { engine } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
 import { useNotify, useSignedIn } from "./Interactions.tsx";
 import { EditRadioDialog } from "./RadioBuilder.tsx";
-import type { RadioEdit } from "./usePlayer.ts";
 
 /**
  * The tuning chips above the queue of a mix or radio, as YouTube Music shows
@@ -73,37 +73,41 @@ export function RadioChips({
 }
 
 /**
- * Opens the radio builder on the playing radio, as YouTube Music's Android
- * app does for a mix it made or a tuned one of YouTube's. Shown only for a
- * tuned radio (`RDAT…`) whose id the builder can read back; a song radio or
- * an artist's mix names no tuning to edit. The edited radio plays after the
- * current song, like a chip.
+ * Opens the radio builder on a tuned radio, as YouTube Music's Android app
+ * does for a mix it made or a tuned one of YouTube's. Shown only for a tuned
+ * radio (`RDAT…`) whose id the builder can read back; a song radio or an
+ * artist's mix names no tuning to edit. `onPlay` gets the edited radio.
  */
 export function EditRadio({
   radio,
-  onTune,
+  variant,
+  onPlay,
 }: {
   radio: string;
-  onTune: (playlistId: string, tracks: Track[], edited?: RadioEdit) => void;
+  /** An icon, above the queue, or a labelled button, in a playlist's header. */
+  variant: "icon" | "button";
+  onPlay: (tracks: Track[], cover: RadioCover | null, radio: string) => void;
 }) {
   const signedIn = useSignedIn();
   const [editing, setEditing] = useState<string | null>(null);
   if (parseRadioId(radio) === null) return null;
   return (
     <>
-      <IconButton label="Edit radio" onClick={() => setEditing(radio)}>
-        <IconAdjustmentsHorizontal />
-      </IconButton>
+      {variant === "icon" ? (
+        <IconButton label="Edit radio" onClick={() => setEditing(radio)}>
+          <IconAdjustmentsHorizontal />
+        </IconButton>
+      ) : (
+        <Button variant="outline" className="rounded-full" onClick={() => setEditing(radio)}>
+          <IconAdjustmentsHorizontal size={16} stroke={1.75} />
+          Edit radio
+        </Button>
+      )}
       <EditRadioDialog
         radio={editing}
         signedIn={signedIn}
         onClose={() => setEditing(null)}
-        onPlay={(tracks, cover, id) =>
-          onTune(id, tracks, {
-            title: cover?.title ?? "Radio",
-            thumbnails: cover?.thumbnails ?? [],
-          })
-        }
+        onPlay={onPlay}
       />
     </>
   );

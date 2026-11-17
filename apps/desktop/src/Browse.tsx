@@ -33,6 +33,7 @@ import {
   usePlaylistEditing,
   type Subject,
 } from "./Interactions.tsx";
+import { EditRadio } from "./RadioChips.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import { LIKED_MUSIC } from "./libraryPlaylists.ts";
@@ -64,10 +65,14 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     );
   }
   const { page } = state;
-  /** Every play on the page queues from it, which also names the queue. */
+  /**
+   * Every play on the page queues from it, which also names the queue, unless
+   * it plays something else (an edited radio).
+   */
   const playingFrom = (from: PlayFrom): BrowseActions => ({
     ...actions,
-    onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
+    onPlay: (tracks: Track[], id: TrackId | null, other?: PlayFrom) =>
+      actions.onPlay(tracks, id, other ?? from),
   });
   switch (page.kind) {
     case "album": {
@@ -185,12 +190,26 @@ function Playlist({
         actions={actions}
         subject={{ kind: "collection", route }}
         extra={
-          editing && (
-            <Button variant="outline" className="rounded-full" onClick={editing.edit}>
-              <IconPencil size={16} stroke={1.75} />
-              Edit
-            </Button>
-          )
+          <>
+            {editing && (
+              <Button variant="outline" className="rounded-full" onClick={editing.edit}>
+                <IconPencil size={16} stroke={1.75} />
+                Edit
+              </Button>
+            )}
+            <EditRadio
+              radio={route.id}
+              variant="button"
+              onPlay={(tracks, cover, radio) =>
+                actions.onPlay(tracks, tracks[0]!.id, {
+                  kind: "list",
+                  title: cover?.title ?? "Radio",
+                  radio,
+                  ...(cover ? { thumbnails: cover.thumbnails } : {}),
+                })
+              }
+            />
+          </>
         }
       />
       <TrackList

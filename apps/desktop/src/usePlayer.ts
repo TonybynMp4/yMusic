@@ -446,6 +446,9 @@ export function usePlayer(
           device: null,
           ...(from.kind === "list" && from.thumbnails ? { thumbnails: from.thumbnails } : {}),
           ...(from.kind === "list" && from.radio ? { radio: from.radio } : {}),
+          // A mix opened as a playlist (a tuned radio, or one of YouTube's
+          // mixes) gets its chips and its edit button like one started here.
+          ...(from.kind === "playlist" && from.id.startsWith("RD") ? { radio: from.id } : {}),
         });
       }
       if (from?.kind !== "playlist") {

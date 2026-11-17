@@ -224,7 +224,16 @@ export function Queue({
             </p>
           </div>
           {playingFrom.radio && (
-            <EditRadio radio={playingFrom.tuned ?? playingFrom.radio} onTune={onTune} />
+            <EditRadio
+              radio={playingFrom.tuned ?? playingFrom.radio}
+              variant="icon"
+              onPlay={(tracks, cover, id) =>
+                onTune(id, tracks, {
+                  title: cover?.title ?? "Radio",
+                  thumbnails: cover?.thumbnails ?? [],
+                })
+              }
+            />
           )}
         </div>
       )}

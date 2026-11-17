@@ -108,16 +108,20 @@ function browseOptions(route: Route) {
 }
 
 /**
- * Forgets every page nothing shows, follows or is still loading, so the next
- * visit fetches it again. `keep` is a page to hold on to although nothing
- * shows it: with the window hidden in the tray no page is on screen, and the
- * one it comes back on would otherwise be fetched again.
+ * Forgets every page nothing shows or follows, so the next visit fetches it
+ * again. That takes a page still loading with it, which stops its load.
+ *
+ * `hidden` is for the window hidden in the tray, when no page is on screen.
+ * Its `keep` is the page the window comes back on, which would otherwise be
+ * fetched again, and a page still loading stays too: whatever asked for it is
+ * still waiting.
  */
-export function clearBrowseCache(keep: Route | null = null): void {
-  const kept = keep && hashKey(keyOf(keep));
+export function clearBrowseCache(hidden?: { keep: Route | null }): void {
+  const kept = hidden?.keep ? hashKey(keyOf(hidden.keep)) : null;
   queryClient.removeQueries({
     queryKey: ["browse"],
-    predicate: (query) => !inUse(query) && query.queryHash !== kept,
+    predicate: (query) =>
+      hidden ? !inUse(query) && query.queryHash !== kept : query.getObserversCount() === 0,
   });
 }
 

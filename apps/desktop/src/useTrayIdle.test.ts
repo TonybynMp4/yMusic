@@ -19,6 +19,7 @@ vi.mock("./engine.ts", () => ({ engine }));
 let browse: typeof import("./useBrowse.ts");
 let queryClient: typeof import("./query.ts").queryClient;
 let dropPageData: typeof import("./useTrayIdle.ts").dropPageData;
+let dropPageDataWhileHidden: typeof import("./useTrayIdle.ts").dropPageDataWhileHidden;
 
 const album = (id: string) => ({ kind: "album", id }) as const;
 const playlistPage = { title: "Mix", tracks: [], itemIds: [] } as unknown as PlaylistPage;
@@ -31,7 +32,7 @@ beforeEach(async () => {
   engine.playlist.mockReset().mockResolvedValue({ page: playlistPage, more: null });
   browse = await import("./useBrowse.ts");
   ({ queryClient } = await import("./query.ts"));
-  ({ dropPageData } = await import("./useTrayIdle.ts"));
+  ({ dropPageData, dropPageDataWhileHidden } = await import("./useTrayIdle.ts"));
 });
 
 describe("hiding in the tray", () => {
@@ -75,6 +76,43 @@ describe("hiding in the tray", () => {
     await loading;
 
     expect(engine.album).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a page loading with nothing showing it, and drops it once it has loaded", async () => {
+    const key = ["browse", "album", "slow"];
+    let arrive!: (page: AlbumPage) => void;
+    engine.album.mockReturnValueOnce(new Promise((resolve) => (arrive = resolve)));
+    // Starts the load with no observer, as a menu or the queue does.
+    browse.browseState(album("slow"));
+
+    const stop = dropPageDataWhileHidden(null);
+    expect(queryClient.getQueryState(key)?.fetchStatus).toBe("fetching");
+
+    arrive({ title: "slow" } as AlbumPage);
+    await vi.waitFor(() => expect(queryClient.getQueryState(key)).toBeUndefined());
+    expect(engine.album).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("drops a playlist the queue stops following while hidden", async () => {
+    const unfollow = browse.followPlaylist("mix", () => {});
+    await vi.waitFor(() => expect(has("browse", "playlist", "mix")).toBe(true));
+
+    const stop = dropPageDataWhileHidden(null);
+    expect(has("browse", "playlist", "mix")).toBe(true);
+
+    unfollow();
+    await vi.waitFor(() => expect(has("browse", "playlist", "mix")).toBe(false));
+    stop();
+  });
+
+  it("clears a page still loading from Settings, which stops its load", () => {
+    engine.album.mockReturnValueOnce(new Promise(() => {}));
+    browse.browseState(album("slow"));
+
+    browse.clearBrowseCache();
+
+    expect(queryClient.getQueryState(["browse", "album", "slow"])).toBeUndefined();
   });
 
   it("keeps stream leases and song years", () => {

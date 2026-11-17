@@ -12,6 +12,7 @@ import { useWindowHidden } from "./useWindowHidden.ts";
  * player bar would fetch again as soon as it is drawn.
  */
 const PAGE_DATA = ["saved", "search", "playlist-targets"] as const;
+const DROPPED: readonly unknown[] = ["browse", ...PAGE_DATA];
 
 /**
  * Drops the fetched pages a hidden window has no use for, and keeps what the
@@ -22,11 +23,28 @@ const PAGE_DATA = ["saved", "search", "playlist-targets"] as const;
 export function dropPageData(view: View | null): void {
   const browsing =
     view?.kind === "album" || view?.kind === "artist" || view?.kind === "playlist" ? view : null;
-  clearBrowseCache(browsing);
+  clearBrowseCache({ keep: browsing });
   for (const prefix of PAGE_DATA) {
     if (prefix === "saved" && view?.kind === "library") continue;
     queryClient.removeQueries({ queryKey: [prefix], predicate: (query) => !inUse(query) });
   }
+}
+
+/**
+ * Drops the page data now, and again each time a query is let go of: one that
+ * was still loading finishes, or the queue stops following a playlist. Without
+ * that, whatever was in use at the moment of hiding would stay for as long as
+ * the window is hidden. Returns what stops it.
+ */
+export function dropPageDataWhileHidden(view: View | null): () => void {
+  dropPageData(view);
+  return queryClient.getQueryCache().subscribe((event) => {
+    if (!DROPPED.includes(event.query.queryKey[0])) return;
+    const released =
+      event.type === "observerRemoved" ||
+      (event.type === "updated" && event.query.state.fetchStatus === "idle");
+    if (released && !inUse(event.query)) dropPageData(view);
+  });
 }
 
 /**
@@ -37,7 +55,7 @@ export function dropPageData(view: View | null): void {
 export function useTrayIdle(view: View | null): boolean {
   const hidden = useWindowHidden();
   useEffect(() => {
-    if (hidden) dropPageData(view);
+    if (hidden) return dropPageDataWhileHidden(view);
     // `view` cannot change while hidden: nothing is on screen to navigate with.
   }, [hidden, view]);
   return hidden;

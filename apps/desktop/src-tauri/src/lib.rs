@@ -40,6 +40,7 @@ macro_rules! ymusic_specta {
                 player_subscribe,
                 player_load,
                 player_queue_next,
+                player_log_failure,
                 player_play,
                 player_pause,
                 player_seek,

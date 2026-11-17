@@ -30,6 +30,12 @@ export async function playerAudioDevices(): Promise<AudioDevice[]> {
   return call("playerAudioDevices");
 }
 
+/** Writes a song's failure, with its raw error, to the app's log file. Nothing outside Tauri. */
+export async function playerLogFailure(trackId: string, message: string): Promise<void> {
+  if (!isTauri) return;
+  return call("playerLogFailure", trackId, message);
+}
+
 /**
  * The volume the last run left off at, and the last one above zero, for
  * Unmute. Both are slider positions in 0..1.

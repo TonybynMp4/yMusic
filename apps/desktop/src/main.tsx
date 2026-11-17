@@ -4,6 +4,7 @@ import { defaultSettings, fullVolume, playerSavedVolume, settingsGet } from "@ym
 import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App.tsx";
 import { queryClient } from "./query.ts";
+import { SnackbarProvider } from "@/components/ui/snackbar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
 
@@ -33,7 +34,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         immediately instead of waiting out the delay again. */}
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delay={400}>
-        <App settings={settings} volume={volume} />
+        <SnackbarProvider>
+          <App settings={settings} volume={volume} />
+        </SnackbarProvider>
       </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>,

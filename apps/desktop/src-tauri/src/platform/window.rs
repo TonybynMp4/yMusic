@@ -8,10 +8,35 @@ use tauri_plugin_window_state::StateFlags;
 /// What the window-state plugin saves and restores. Visibility stays out: with
 /// "Keep playing in the tray" the window is often hidden when the app quits,
 /// and a launch should always show it. Decorations are always off (the title
-/// bar is ours) and there is no fullscreen mode.
-pub const SAVED_STATE: StateFlags = StateFlags::SIZE
-    .union(StateFlags::POSITION)
-    .union(StateFlags::MAXIMIZED);
+/// bar is ours) and there is no fullscreen mode. Position stays out on
+/// Wayland, where the window always reads (0, 0) and cannot move itself:
+/// saving it there would overwrite a real position saved under X11.
+pub fn saved_state() -> StateFlags {
+    let state = StateFlags::SIZE | StateFlags::MAXIMIZED;
+    if is_wayland() {
+        state
+    } else {
+        state | StateFlags::POSITION
+    }
+}
+
+/// Whether GTK opens its windows on Wayland. Read from the environment, as GDK
+/// itself decides, because the plugin is built before GTK starts.
+fn is_wayland() -> bool {
+    cfg!(target_os = "linux")
+        && on_wayland(
+            std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
+            std::env::var("GDK_BACKEND").ok().as_deref(),
+        )
+}
+
+/// GDK tries the backends in `GDK_BACKEND` in order, and Wayland first when it
+/// is unset or `*`. Wayland only wins when there is a display to connect to.
+fn on_wayland(wayland_display: Option<&str>, gdk_backend: Option<&str>) -> bool {
+    let first = gdk_backend.and_then(|list| list.split(',').map(str::trim).find(|b| !b.is_empty()));
+    matches!(first, None | Some("wayland" | "*"))
+        && wayland_display.is_some_and(|display| !display.is_empty())
+}
 
 /// How much of the top of the window has to be on a screen to count as
 /// reachable: the custom title bar's height, the part you drag it by. Keep it
@@ -83,7 +108,8 @@ pub fn forward_touchpad_pinch(window: &WebviewWindow) {
 /// title bar on none, which happens when the monitor it was on is gone. The
 /// plugin only checks that one corner of the window lands on a monitor.
 pub fn keep_on_screen(window: &WebviewWindow) {
-    if window.is_maximized().unwrap_or(false) {
+    // Wayland reports no position to check, and ignores one set.
+    if is_wayland() || window.is_maximized().unwrap_or(false) {
         return;
     }
     let (Ok(position), Ok(size), Ok(monitors)) = (
@@ -166,6 +192,17 @@ mod tests {
         width: 1100,
         height: 720,
     };
+
+    #[test]
+    fn finds_wayland_the_way_gdk_does() {
+        assert!(on_wayland(Some("wayland-0"), None));
+        assert!(on_wayland(Some("wayland-0"), Some("wayland,x11")));
+        assert!(on_wayland(Some("wayland-0"), Some("*")));
+        assert!(!on_wayland(Some("wayland-0"), Some("x11")));
+        assert!(!on_wayland(Some("wayland-0"), Some("x11,wayland")));
+        assert!(!on_wayland(None, None));
+        assert!(!on_wayland(Some(""), Some("wayland")));
+    }
 
     #[test]
     fn leaves_a_window_whose_title_bar_is_on_a_screen() {

@@ -153,7 +153,7 @@ pub fn run() {
         // `setup` shows it once it is where it was.
         .plugin(
             tauri_plugin_window_state::Builder::new()
-                .with_state_flags(platform::window::SAVED_STATE)
+                .with_state_flags(platform::window::saved_state())
                 .with_filter(|label| label == "main")
                 .build(),
         )

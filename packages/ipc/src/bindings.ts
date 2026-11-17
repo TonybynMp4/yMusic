@@ -147,6 +147,10 @@ export const commands = {
 	 *  returns all of them.
 	 */
 	settingsSet: (patch: SettingsPatch) => __TAURI_INVOKE<Settings>("settings_set", { patch }),
+	/**  Whether the app opens when the user logs in. */
+	autostartGet: () => __TAURI_INVOKE<boolean>("autostart_get"),
+	/**  Adds or removes the login entry, and returns whether it is there after. */
+	autostartSet: (on: boolean) => __TAURI_INVOKE<boolean>("autostart_set", { on }),
 	/**  The queue saved by the last run, and the playing song's position in it. */
 	queueLoad: () => __TAURI_INVOKE<SavedQueue>("queue_load"),
 	/**  Replaces the saved queue. Null clears it. */
@@ -356,6 +360,8 @@ export type PlatformSummary = {
 	supportsInAppUpdate: boolean,
 	/**  False without a system tray library, so the page can't offer the tray. */
 	hasTray: boolean,
+	/**  False where the app has no login entry to write. */
+	hasAutostart: boolean,
 };
 
 export type PlaybackEvent = { type: "status"; status: PlaybackStatus } | { type: "position"; positionMs: number; durationMs: number | null } | { type: "ended"; trackId: string | null } | 

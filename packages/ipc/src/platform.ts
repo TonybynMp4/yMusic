@@ -38,3 +38,16 @@ export async function cacheSize(): Promise<number> {
 export async function cacheClear(): Promise<void> {
   await call("cacheClear");
 }
+
+/**
+ * Whether the app opens when the user logs in. The desktop's own login entry
+ * is the setting, so turning it off in the system's startup list counts.
+ */
+export async function autostartGet(): Promise<boolean> {
+  return call("autostartGet");
+}
+
+/** Adds or removes the login entry, and returns whether it is there after. */
+export async function autostartSet(on: boolean): Promise<boolean> {
+  return call("autostartSet", on);
+}

@@ -5,6 +5,7 @@ expression: fields
 [
   "appVersion",
   "arch",
+  "hasAutostart",
   "hasTray",
   "installFlavor",
   "os",

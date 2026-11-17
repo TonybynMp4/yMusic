@@ -1,4 +1,5 @@
 pub mod account;
+mod autostart;
 pub mod botguard;
 pub mod commands;
 pub mod files;
@@ -70,6 +71,8 @@ macro_rules! ymusic_specta {
                 account_sign_out,
                 settings_get,
                 settings_set::<$r>,
+                autostart_get::<$r>,
+                autostart_set::<$r>,
                 queue_load,
                 queue_save,
                 queue_save_position,
@@ -233,8 +236,15 @@ pub fn run() {
             // the dialog must not.
             if started {
                 tray::sync(app.handle(), startup_settings.close_to_tray);
-                platform::window::reveal(&window);
+                // A login launch stays in the tray. Without the tray there
+                // would be no way back to the window, so it shows then too.
+                let in_tray = autostart::launched_at_login() && tray::keeps_playing(app.handle());
+                platform::window::reveal(&window, !in_tray);
+                if in_tray {
+                    tray::show_window_without_host(app.handle());
+                }
             }
+            autostart::refresh(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -261,6 +271,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building ymusic")
         .run(|app, event| {
+            // Before `Exit`, where the window-state plugin saves.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                platform::window::forget_unshown(app);
+            }
             if let tauri::RunEvent::Exit = event {
                 save_position(app);
                 if let Some(player) = app.try_state::<Player>() {

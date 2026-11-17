@@ -27,6 +27,8 @@ pub struct PlatformSummary {
     supports_in_app_update: bool,
     /// False without a system tray library, so the page can't offer the tray.
     has_tray: bool,
+    /// False where the app has no login entry to write.
+    has_autostart: bool,
 }
 
 #[tauri::command]
@@ -40,6 +42,7 @@ pub fn platform_summary<R: Runtime>(app: tauri::AppHandle<R>) -> PlatformSummary
         install_flavor: flavor,
         supports_in_app_update: flavor.supports_in_app_update(),
         has_tray: crate::tray::has_tray_support(),
+        has_autostart: crate::autostart::SUPPORTED,
     }
 }
 
@@ -461,6 +464,21 @@ pub async fn open_logs_folder<R: Runtime>(app: tauri::AppHandle<R>) -> Result<()
     let dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Whether the app opens when the user logs in.
+#[tauri::command]
+#[specta::specta]
+pub fn autostart_get<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool, String> {
+    crate::autostart::is_enabled(&app)
+}
+
+/// Adds or removes the login entry, and returns whether it is there after.
+#[tauri::command]
+#[specta::specta]
+pub fn autostart_set<R: Runtime>(app: tauri::AppHandle<R>, on: bool) -> Result<bool, String> {
+    crate::autostart::set(&app, on)?;
+    Ok(on)
 }
 
 /// How many bytes the artwork cache takes on disk, the only cache with a size

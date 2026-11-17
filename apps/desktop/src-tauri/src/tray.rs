@@ -110,6 +110,53 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Shows the window if no tray host turns up to draw the icon. Building the
+/// icon only proves the library loaded: stock GNOME without the AppIndicator
+/// extension has no host, and at login the host may start after the app. The
+/// host owns `org.kde.StatusNotifierWatcher` on the session bus, so this waits
+/// up to ten seconds for that name. A desktop with only an older XEmbed tray
+/// gets the window too, which is the safe side to err on.
+#[cfg(target_os = "linux")]
+pub fn show_window_without_host<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if !wait_for_host(std::time::Duration::from_secs(10)) {
+            tracing::warn!("no tray host showed up, so the window is shown instead");
+            show_window(&app);
+        }
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn show_window_without_host<R: Runtime>(_app: &AppHandle<R>) {}
+
+#[cfg(target_os = "linux")]
+fn wait_for_host(timeout: std::time::Duration) -> bool {
+    let connection = match zbus::blocking::Connection::session() {
+        Ok(connection) => connection,
+        Err(error) => {
+            tracing::warn!(%error, "no session bus to look for a tray host on");
+            return false;
+        }
+    };
+    let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection) else {
+        return false;
+    };
+    let Ok(watcher) = zbus::names::BusName::try_from("org.kde.StatusNotifierWatcher") else {
+        return false;
+    };
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if bus.name_has_owner(watcher.clone()).unwrap_or(false) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
 /// Shows the main window, unless setup has not shown it yet: it is still
 /// starting, and focuses it once it shows, or mpv failed and it stays hidden
 /// behind the error dialog.

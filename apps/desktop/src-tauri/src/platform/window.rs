@@ -123,33 +123,57 @@ fn read_saved<R: Runtime>(app: &AppHandle<R>) -> Option<SavedWindow> {
 struct Startup {
     shown: bool,
     requested: bool,
+    /// Whether the window has been on screen at all. A login launch into the
+    /// tray ends setup with it still hidden.
+    on_screen: bool,
 }
 
 static STARTUP: Mutex<Startup> = Mutex::new(Startup {
     shown: false,
     requested: false,
+    on_screen: false,
 });
 
-/// Shows the main window at the end of setup, and focuses it when a second
-/// launch, the tray or the media controls asked for it while setup ran.
-pub fn reveal(window: &WebviewWindow) {
+/// Ends setup's hold on the main window: from here on others may show it.
+/// Shows it when `visible` (false for a login launch into the tray), and
+/// shows and focuses it when a second launch, the tray or the media controls
+/// asked for it while setup ran.
+pub fn reveal(window: &WebviewWindow, visible: bool) {
     let requested = {
         let mut startup = STARTUP.lock().expect("startup mutex");
         startup.shown = true;
+        startup.on_screen |= visible || startup.requested;
         startup.requested
     };
-    let _ = window.show();
+    if visible || requested {
+        let _ = window.show();
+    }
     if requested {
         let _ = window.set_focus();
     }
 }
 
 /// Whether setup has shown the main window, so others may show it too. Before
-/// then the request is kept for `reveal`.
+/// then the request is kept for `reveal`. A yes counts as the window going on
+/// screen, since the caller shows it next.
 pub fn may_show() -> bool {
     let mut startup = STARTUP.lock().expect("startup mutex");
     startup.requested |= !startup.shown;
+    startup.on_screen |= startup.shown;
     startup.shown
+}
+
+/// Closes a main window that was never on screen, on the way out. The
+/// window-state plugin saves every open window when the app exits, and one
+/// that never showed would write its creation-time geometry over where the
+/// user last left it. A closed window is skipped, and its saved state stays.
+pub fn forget_unshown<R: Runtime>(app: &AppHandle<R>) {
+    if STARTUP.lock().expect("startup mutex").on_screen {
+        return;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.destroy();
+    }
 }
 
 /// How much of the top of the window has to be on a screen to count as

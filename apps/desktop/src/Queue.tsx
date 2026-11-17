@@ -43,7 +43,7 @@ interface Props {
   onMove: (from: number, to: number) => void;
   onClear: () => void;
   /** Plays a tuning chip's radio after the playing song, in place of what was to come. */
-  onTune: (playlistId: string, tracks: Track[]) => void;
+  onTune: (radio: string, playlistId: string, tracks: Track[]) => void;
 }
 
 /** Where the playing row is, relative to what the list shows. */

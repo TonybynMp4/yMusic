@@ -22,7 +22,7 @@ export function RadioChips({
 }: {
   radio: string;
   tuned: string | null;
-  onTune: (playlistId: string, tracks: Track[]) => void;
+  onTune: (radio: string, playlistId: string, tracks: Track[]) => void;
 }) {
   const notify = useNotify();
   const chips = useQuery({
@@ -34,7 +34,7 @@ export function RadioChips({
     mutationFn: (playlistId: string) => engine.mix(playlistId),
     onSuccess: (tracks, playlistId) => {
       if (tracks.length === 0) notify("YouTube Music has nothing for this one");
-      else onTune(playlistId, tracks);
+      else onTune(radio, playlistId, tracks);
     },
     onError: (error) => notify(errorMessage(error)),
   });

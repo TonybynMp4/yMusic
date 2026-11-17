@@ -328,14 +328,14 @@ const SEARCH_HISTORY_DETAIL: Record<SearchHistory, string> = {
 };
 
 const SHUFFLE_WITH: { value: ShuffleWith; label: string }[] = [
-  { value: "ymusic", label: "Every song once" },
+  { value: "ymusic", label: "New each time" },
   { value: "youtube", label: "YouTube Music's" },
 ];
 
 const SHUFFLE_DESCRIPTION: Record<ShuffleWith, string> = {
-  ymusic: "Shuffle plays every song in the list once before any comes back.",
+  ymusic: "Shuffle picks a new order every time.",
   youtube:
-    "Shuffle on a playlist, album or artist asks YouTube Music for its order. On a long playlist it picks some songs more than once and leaves others out, so repeats are dropped.",
+    "Shuffle on a playlist, album or artist plays YouTube Music's order, which stays the same for a while, as it does in YouTube Music.",
 };
 
 const STABLE_VOLUME: { value: StableVolume; label: string }[] = [

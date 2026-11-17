@@ -508,9 +508,9 @@ export function usePlayer(
       setFilling(true);
       void followShuffle(first, {
         more: (token) => youtube.shuffleMore(token),
-        onPage: (added) => {
-          for (const t of added) ids.add(t.id);
-          dispatch({ type: "extend", tracks: added });
+        onPage: (page) => {
+          for (const t of page) ids.add(t.id);
+          dispatch({ type: "extend", tracks: page });
         },
         stopped: () => stopped,
       }).then(() => {

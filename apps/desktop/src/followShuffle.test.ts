@@ -4,7 +4,7 @@ import type { Track } from "@ymusic/core";
 import { followShuffle, type ShufflePage } from "./followShuffle.ts";
 
 type More = (token: string) => Promise<ShufflePage>;
-type OnPage = (added: Track[]) => void;
+type OnPage = (tracks: Track[]) => void;
 
 const track = (id: string) => ({ id: `yt:${id}` }) as Track;
 const page = (ids: string[], more: string | null): ShufflePage => ({
@@ -19,23 +19,23 @@ function server(pages: ShufflePage[]) {
 }
 
 describe("followShuffle", () => {
-  it("hands on each page's new songs and drops ones already seen", async () => {
+  it("hands on each page as it is, a song the playlist repeats included", async () => {
     const more = server([page(["c", "a", "d"], "2"), page(["e"], null)]);
     const pages: Track[][] = [];
     const end = await followShuffle(page(["a", "b"], "1"), {
       more,
-      onPage: (added) => pages.push(added),
+      onPage: (tracks) => pages.push(tracks),
       stopped: () => false,
     });
     expect(end).toBe("end");
-    expect(ids(pages)).toEqual([["yt:c", "yt:d"], ["yt:e"]]);
+    expect(ids(pages)).toEqual([["yt:c", "yt:a", "yt:d"], ["yt:e"]]);
   });
 
-  it("stops at a page of nothing but repeats", async () => {
-    const more = server([page(["a", "b"], "2"), page(["c"], null)]);
+  it("ends at an empty page", async () => {
+    const more = server([page([], "2"), page(["c"], null)]);
     const onPage = vi.fn<OnPage>();
-    const end = await followShuffle(page(["a", "b"], "1"), { more, onPage, stopped: () => false });
-    expect(end).toBe("repeats");
+    const end = await followShuffle(page(["a"], "1"), { more, onPage, stopped: () => false });
+    expect(end).toBe("end");
     expect(onPage).not.toHaveBeenCalled();
     expect(more).toHaveBeenCalledTimes(1);
   });

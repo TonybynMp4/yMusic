@@ -54,6 +54,11 @@ describe("shufflePageFrom", () => {
     expect(page.more).toBe("token");
   });
 
+  it("keeps a song the playlist holds twice", () => {
+    const page = shufflePageFrom({ contents: [row("one", "One"), row("one", "One")] });
+    expect(page.tracks.map((t) => t.id)).toEqual(["yt:one", "yt:one"]);
+  });
+
   it("ends when the last page has no token", () => {
     expect(shufflePageFrom({ contents: [row("one", "One")], continuation: null }).more).toBeNull();
     expect(shufflePageFrom(undefined)).toEqual({ tracks: [], more: null });

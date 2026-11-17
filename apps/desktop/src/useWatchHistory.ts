@@ -77,6 +77,7 @@ export function useWatchHistory(
   // not when it is queued up or still loading.
   useEffect(() => {
     if (play.current && play.current.trackId !== trackId) finish();
+    const resumed = status === "playing" && !playing.current;
     playing.current = status === "playing";
     if (status === "ended") {
       finish();
@@ -95,8 +96,13 @@ export function useWatchHistory(
         reports: 0,
         nextReportAt: Date.now() + reportDelay(0),
       };
+      play.current.listened.observe(position.get(), performance.now());
       return;
     }
+    // The stretch opens where playback picks up, which is the position Rust
+    // sent with the pause. Left to the next position, it would open up to ten
+    // seconds late with the window hidden in the tray.
+    if (play.current && resumed) play.current.listened.observe(position.get(), performance.now());
     // A pause is reported straight away, with the stretch it closed. The
     // position it paused at has arrived by now: Rust sends it ahead of the
     // status, as it does when a song ends.
@@ -105,7 +111,7 @@ export function useWatchHistory(
       current.listened.pause();
       report(current, false);
     }
-  }, [trackId, status, paused, report, finish, playlistOf]);
+  }, [trackId, status, paused, report, finish, playlistOf, position]);
 
   useEffect(
     () =>

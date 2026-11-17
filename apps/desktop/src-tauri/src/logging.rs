@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use chrono::{Local, NaiveDate};
 use tracing::level_filters::LevelFilter;
@@ -139,7 +139,7 @@ where
 /// The log file. It is written in the calling thread rather than through a
 /// worker: the log is a few lines a minute, and the release build aborts on
 /// panic, which would drop whatever a worker had not written yet.
-static FILE: LogFile = LogFile::new();
+static FILE: LogFile = LogFile::new(today);
 
 /// Installs the global subscriber, writing to stderr and to the log file, and
 /// bridges the `log` records of the crates that still use it. Call it once,
@@ -171,7 +171,7 @@ pub fn open(dir: Option<&Path>) {
         tracing::error!("no app log directory, logging to stderr only");
         return;
     };
-    if let Err(error) = FILE.open(dir, today()) {
+    if let Err(error) = FILE.open(dir) {
         tracing::error!(dir = %dir.display(), "logging to stderr only: {error}");
     }
 }
@@ -181,7 +181,11 @@ fn today() -> NaiveDate {
     Local::now().date_naive()
 }
 
-struct LogFile(Mutex<Sink>);
+struct LogFile {
+    state: Mutex<Sink>,
+    /// Which day a line belongs to. Tests set the day themselves.
+    today: fn() -> NaiveDate,
+}
 
 enum Sink {
     /// Before `open`: the lines so far, up to `MAX_WAITING`.
@@ -192,12 +196,22 @@ enum Sink {
 }
 
 impl LogFile {
-    const fn new() -> Self {
-        Self(Mutex::new(Sink::Waiting(Vec::new())))
+    const fn new(today: fn() -> NaiveDate) -> Self {
+        Self {
+            state: Mutex::new(Sink::Waiting(Vec::new())),
+            today,
+        }
     }
 
-    fn open(&self, dir: &Path, today: NaiveDate) -> io::Result<()> {
-        let mut sink = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+    /// A panic while logging leaves nothing half done that matters, so a
+    /// poisoned lock is used as it is.
+    fn sink(&self) -> MutexGuard<'_, Sink> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn open(&self, dir: &Path) -> io::Result<()> {
+        let today = (self.today)();
+        let mut sink = self.sink();
         let waiting = match std::mem::replace(&mut *sink, Sink::Closed) {
             Sink::Waiting(lines) => lines,
             _ => Vec::new(),
@@ -209,18 +223,18 @@ impl LogFile {
     }
 
     fn close(&self) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Sink::Closed;
+        *self.sink() = Sink::Closed;
     }
 
-    fn write(&self, today: NaiveDate, line: &[u8]) -> io::Result<()> {
-        match &mut *self.0.lock().unwrap_or_else(PoisonError::into_inner) {
+    fn write(&self, line: &[u8]) -> io::Result<()> {
+        match &mut *self.sink() {
             Sink::Waiting(lines) => {
                 if lines.len() + line.len() <= MAX_WAITING {
                     lines.extend_from_slice(line);
                 }
                 Ok(())
             }
-            Sink::Open(file) => file.write(today, line),
+            Sink::Open(file) => file.write((self.today)(), line),
             Sink::Closed => Ok(()),
         }
     }
@@ -229,7 +243,7 @@ impl LogFile {
 /// fmt hands over each line whole, in one call.
 impl Write for &LogFile {
     fn write(&mut self, line: &[u8]) -> io::Result<usize> {
-        LogFile::write(self, today(), line)?;
+        LogFile::write(self, line)?;
         Ok(line.len())
     }
 
@@ -464,10 +478,10 @@ mod tests {
     #[test]
     fn lines_before_open_reach_the_file() {
         let dir = temp_dir("waiting");
-        let log = LogFile::new();
-        log.write(day(15), b"early\n").expect("held in memory");
-        log.open(&dir, day(15)).expect("the file opens");
-        log.write(day(15), b"late\n").expect("written");
+        let log = LogFile::new(|| day(15));
+        log.write(b"early\n").expect("held in memory");
+        log.open(&dir).expect("the file opens");
+        log.write(b"late\n").expect("written");
         let text = fs::read_to_string(current(&dir, day(15))).expect("the file");
         assert_eq!(text, "early\nlate\n");
         let _ = fs::remove_dir_all(&dir);
@@ -518,26 +532,22 @@ mod tests {
         fs::write(earlier(&dir, day(9)), "").expect("a file");
         fs::write(dir.join("notes.txt"), "").expect("a file");
         DayFile::open(&dir, day(11)).expect("the file opens");
-        let kept = names(&dir);
-        // The 11th and the seven days before it.
-        assert_eq!(kept.len(), KEEP_DAYS + 1 + 2, "{kept:?}");
-        assert!(
-            kept.contains(&"yMusic.2026-11-04.log".to_owned()),
-            "{kept:?}"
+        // The 11th and the seven days before it, with their earlier parts.
+        assert_eq!(
+            names(&dir),
+            [
+                "notes.txt",
+                "yMusic.2026-11-04.log",
+                "yMusic.2026-11-05.log",
+                "yMusic.2026-11-06.log",
+                "yMusic.2026-11-07.log",
+                "yMusic.2026-11-08.log",
+                "yMusic.2026-11-09.1.log",
+                "yMusic.2026-11-09.log",
+                "yMusic.2026-11-10.log",
+                "yMusic.2026-11-11.log",
+            ]
         );
-        assert!(
-            !kept.contains(&"yMusic.2026-11-03.log".to_owned()),
-            "{kept:?}"
-        );
-        assert!(
-            !kept.contains(&"yMusic.2026-11-02.1.log".to_owned()),
-            "{kept:?}"
-        );
-        assert!(
-            kept.contains(&"yMusic.2026-11-09.1.log".to_owned()),
-            "{kept:?}"
-        );
-        assert!(kept.contains(&"notes.txt".to_owned()), "{kept:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 }

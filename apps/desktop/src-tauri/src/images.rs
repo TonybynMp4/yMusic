@@ -166,13 +166,15 @@ impl Images {
         self.fetch(url, ATTEMPTS).await
     }
 
-    /// Its lines number tries from 1, as the player's `load` span does. The URL
-    /// goes on the failure lines only, so a fetch that works costs no span.
+    /// The URL goes on the failure lines only, so a fetch that works costs no
+    /// span.
     async fn fetch(&self, url: &str, attempts: u32) -> Option<Vec<u8>> {
-        for attempt in 1..=attempts {
-            if attempt > 1 {
-                tokio::time::sleep(BACKOFF * 2u32.pow(attempt - 2)).await;
+        for retry in 0..attempts {
+            if retry > 0 {
+                tokio::time::sleep(BACKOFF * 2u32.pow(retry - 1)).await;
             }
+            // Counted from 1 in the log, as the player's `load` span does.
+            let attempt = retry + 1;
             match self.client.get(url).send().await {
                 Ok(response) if response.status().is_success() => match response.bytes().await {
                     Ok(bytes) if content_type(&bytes).is_some() => return Some(bytes.to_vec()),

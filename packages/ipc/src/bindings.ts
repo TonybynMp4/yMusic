@@ -35,7 +35,7 @@ export const commands = {
 	 *  1 for the first load of the track, 2 for the queue's retry on another
 	 *  player client after mpv refused the first lease. Only logged.
 	 */
-	attempt?: number,
+	attempt: number,
 } | null) => __TAURI_INVOKE<null>("player_queue_next", { after, request }),
 	playerPlay: () => __TAURI_INVOKE<null>("player_play"),
 	playerPause: () => __TAURI_INVOKE<null>("player_pause"),
@@ -286,7 +286,7 @@ export type LoadRequest = {
 	 *  1 for the first load of the track, 2 for the queue's retry on another
 	 *  player client after mpv refused the first lease. Only logged.
 	 */
-	attempt?: number,
+	attempt: number,
 };
 
 /**  Mirrors `StreamLease` in `@ymusic/core`. */

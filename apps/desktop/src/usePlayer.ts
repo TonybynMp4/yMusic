@@ -29,6 +29,9 @@ import { useRatings } from "./useRatings.ts";
 import type { SettingsState } from "./useSettings.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
+/** The `attempt` the Rust log gives the reload on another player client. */
+const RETRY_ATTEMPT = 2;
+
 /** A transport failure that has no user-visible consequence beyond not happening. */
 function logPlaybackFailure(error: unknown): void {
   console.error("playback command failed", error);
@@ -309,7 +312,7 @@ export function usePlayer(
           const paused = wantsPaused.current;
           queued.current = null;
           const startMs = resumeAt.current?.trackId === failed ? resumeAt.current.ms : undefined;
-          await load(lease, paused, startMs, 2);
+          await load(lease, paused, startMs, RETRY_ATTEMPT);
           inMpv.current = failed;
           setStreaming(lease);
           if (!paused) await engine.play();

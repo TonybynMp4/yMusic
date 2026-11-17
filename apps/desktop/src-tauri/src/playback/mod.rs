@@ -84,12 +84,7 @@ pub struct LoadRequest {
     pub itag: Option<i64>,
     /// 1 for the first load of the track, 2 for the queue's retry on another
     /// player client after mpv refused the first lease. Only logged.
-    #[serde(default = "first_attempt")]
     pub attempt: u32,
-}
-
-fn first_attempt() -> u32 {
-    1
 }
 
 /// An output mpv can play through. `name` is what `audio-device` takes.
@@ -821,22 +816,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                 let event = match event {
                     Ok(event) => event,
                     Err(error) => {
-                        let track_id = track();
-                        tracing::warn!(
-                            track_id = track_id.as_deref(),
-                            %error,
-                            "mpv could not play the stream"
-                        );
-                        emit(
-                            &sink,
-                            PlaybackEvent::Error {
-                                track_id,
-                                message: format!(
-                                    "playback failed: the stream may have expired or been \
-                                     rejected ({error})"
-                                ),
-                            },
-                        );
+                        report_refused(&sink, track(), Some(&error));
                         continue;
                     }
                 };
@@ -928,20 +908,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         // Unreachable through libmpv2 today (see above), and
                         // kept in case a release starts sending it.
                         libmpv2::mpv_end_file_reason::Error => {
-                            let track_id = track();
-                            tracing::warn!(
-                                track_id = track_id.as_deref(),
-                                "mpv could not play the stream"
-                            );
-                            emit(
-                                &sink,
-                                PlaybackEvent::Error {
-                                    track_id,
-                                    message: "playback failed: the stream may have expired or \
-                                              been rejected"
-                                        .into(),
-                                },
-                            );
+                            report_refused(&sink, track(), None);
                         }
                         // Stop and Quit are our own doing; a redirect is mpv
                         // resolving the URL, not the end of anything.
@@ -1072,6 +1039,26 @@ fn emit_to_observers(sink: &Sink, event: PlaybackEvent) {
     for observer in sink.observers.lock().expect("observer mutex").iter() {
         observer.send(event.clone());
     }
+}
+
+/// mpv could not play the stream: logged, and sent to the queue, which retries
+/// on another player client.
+fn report_refused(sink: &Sink, track_id: Option<String>, error: Option<&dyn std::fmt::Display>) {
+    tracing::warn!(
+        track_id = track_id.as_deref(),
+        error = error.map(tracing::field::display),
+        "mpv could not play the stream"
+    );
+    let detail = error.map(|error| format!(" ({error})")).unwrap_or_default();
+    emit(
+        sink,
+        PlaybackEvent::Error {
+            track_id,
+            message: format!(
+                "playback failed: the stream may have expired or been rejected{detail}"
+            ),
+        },
+    );
 }
 
 fn emit(sink: &Sink, event: PlaybackEvent) {

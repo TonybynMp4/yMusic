@@ -101,15 +101,13 @@ impl Http {
     ) -> Result<(ResponseHead, Vec<u8>), String> {
         let url = Url::parse(&head.url).map_err(|err| format!("bad url {}: {err}", head.url))?;
         let span = tracing::Span::current();
-        span.record("host", url.host_str());
-        if !is_stream_host(&url) {
-            span.record("path", url.path());
-        }
+        let host = url.host_str().unwrap_or("no host");
+        span.record("host", host);
         if !allowed(&url) {
-            return Err(format!(
-                "not a YouTube url: {}",
-                url.host_str().unwrap_or("no host")
-            ));
+            return Err(format!("not a YouTube url: {host}"));
+        }
+        if !is_stream_host(host) {
+            span.record("path", url.path());
         }
         let method = Method::from_bytes(head.method.as_bytes())
             .map_err(|_| format!("bad method {}", head.method))?;
@@ -160,12 +158,11 @@ impl Http {
     }
 }
 
-/// The hosts `capabilities/default.json` allowed the HTTP plugin, kept as they were.
-fn is_stream_host(url: &Url) -> bool {
-    url.host_str()
-        .is_some_and(|host| host.ends_with(".googlevideo.com"))
+fn is_stream_host(host: &str) -> bool {
+    host.ends_with(".googlevideo.com")
 }
 
+/// The hosts `capabilities/default.json` allowed the HTTP plugin, kept as they were.
 fn allowed(url: &Url) -> bool {
     if url.scheme() != "https" {
         return false;
@@ -179,7 +176,7 @@ fn allowed(url: &Url) -> bool {
         | "youtubei.googleapis.com"
         | "jnn-pa.googleapis.com" => true,
         "www.google.com" => url.path().starts_with("/js/"),
-        _ => host.ends_with(".googlevideo.com"),
+        _ => is_stream_host(host),
     }
 }
 

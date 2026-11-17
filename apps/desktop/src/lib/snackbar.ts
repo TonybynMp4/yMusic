@@ -16,7 +16,7 @@ export interface SnackbarOptions {
   action?: SnackbarAction | undefined;
   /** Overrides the default for the snackbar's kind. */
   timeout?: number | undefined;
-  /** Announced at once rather than politely, for failures. */
+  /** For failures: announced at once rather than politely, and styled as an error. */
   urgent?: boolean | undefined;
   /** When the snackbar goes for any reason: its time ran out, it was replaced, or its action was pressed. */
   onClose?: (() => void) | undefined;
@@ -39,6 +39,7 @@ export function showSnackbar(options: SnackbarOptions): string {
     title: options.message,
     timeout: options.timeout ?? (action ? SNACKBAR_ACTION_MS : SNACKBAR_MS),
     priority: options.urgent ? "high" : "low",
+    type: options.urgent ? "error" : undefined,
     onClose: options.onClose,
     actionProps: action && {
       children: action.label,

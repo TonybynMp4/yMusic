@@ -1,5 +1,6 @@
 "use client";
 
+import { IconAlertCircleFilled } from "@tabler/icons-react";
 import { Toast } from "@base-ui/react/toast";
 import { snackbarManager } from "@/lib/snackbar";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,11 @@ function SnackbarList() {
   return toasts.map((toast) => <Snackbar key={toast.id} toast={toast} />);
 }
 
+/** Darker than the plain destructive colour, which is too light on the snackbar's pale fill. */
+const ERROR_TEXT = "text-[color-mix(in_oklch,var(--destructive),black_25%)]";
+
 function Snackbar({ className, ...props }: Toast.Root.Props) {
+  const isError = props.toast?.type === "error";
   return (
     <Toast.Root
       data-slot="snackbar"
@@ -43,10 +48,16 @@ function Snackbar({ className, ...props }: Toast.Root.Props) {
       )}
       {...props}
     >
+      {isError && (
+        <IconAlertCircleFilled aria-hidden className={cn("-mr-2 size-5 shrink-0", ERROR_TEXT)} />
+      )}
       <Toast.Title data-slot="snackbar-message" className="min-w-0 flex-1 py-1.5" />
       <Toast.Action
         data-slot="snackbar-action"
-        className="shrink-0 rounded-md px-3 py-1.5 font-medium outline-none hover:bg-background/10 focus-visible:ring-3 focus-visible:ring-ring/50"
+        className={cn(
+          "shrink-0 rounded-md px-3 py-1.5 font-medium outline-none hover:bg-background/10 focus-visible:ring-3 focus-visible:ring-ring/50",
+          isError && ERROR_TEXT,
+        )}
       />
     </Toast.Root>
   );

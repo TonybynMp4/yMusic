@@ -8,6 +8,7 @@ interface Event {
     id?: string;
     timeout?: number;
     priority?: string;
+    type?: string;
     actionProps?: { children: string; onClick: () => void };
   };
 }
@@ -56,6 +57,7 @@ describe("showSnackbar", () => {
     });
     const added = events.find((e) => e.action === "add")!;
     expect(added.options.priority).toBe("high");
+    expect(added.options.type).toBe("error");
     expect(added.options.actionProps?.children).toBe("Retry");
     events.length = 0;
     added.options.actionProps!.onClick();

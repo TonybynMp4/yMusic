@@ -186,14 +186,14 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
       window.removeEventListener("keydown", onKey);
     };
   }, [back]);
-  const play = (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
-    if (tracks.length === 0) return;
-    if (id === null) {
-      // Shuffle first, so the queue is laid down shuffled from a random start.
-      player.setShuffle(true);
-      id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
+  const play = async (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
+    if (id !== null) {
+      if (tracks.length > 0) player.playTrack(tracks, id, from);
+      return;
     }
-    player.playTrack(tracks, id, from);
+    if ((await player.shufflePlay(tracks, from)) === "fallback") {
+      notice.show("Could not reach YouTube Music's shuffle, so this was shuffled here");
+    }
   };
   /** Rates a song, from the player bar or a song's menu, and says what happened. */
   const rate = (videoId: VideoId, value: Rating) => {
@@ -228,7 +228,7 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
     ...browse,
     onPlay: (tracks, id, from) => {
       remember(query);
-      play(tracks, id, from);
+      return play(tracks, id, from);
     },
     onOpen: (next) => {
       remember(query);

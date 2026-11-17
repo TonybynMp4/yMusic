@@ -184,7 +184,7 @@ export const commands = {
 };
 
 /* Constants */
-export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"includePrereleases":false,"pauseWatchHistory":false,"searchHistory":"youtube","skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
+export const defaultSettings = {"audioDevice":"auto","audioQuality":"high","autoplay":true,"checkForUpdates":true,"closeToTray":false,"includePrereleases":false,"pauseWatchHistory":false,"searchHistory":"youtube","shuffleWith":"ymusic","skipDisliked":false,"stableVolume":"off","statsForNerds":false} as const;
 
 /* Types */
 /**
@@ -435,6 +435,7 @@ export type Settings = {
 	/**  An mpv `audio-device` name. `auto` follows the system's default output. */
 	audioDevice: string,
 	skipDisliked: boolean,
+	shuffleWith: ShuffleWith,
 	pauseWatchHistory: boolean,
 	searchHistory: SearchHistory,
 	/**  Closing the window hides it to the tray and playback carries on. */
@@ -456,6 +457,7 @@ export type SettingsPatch = {
 	stableVolume?: StableVolume,
 	audioDevice?: string,
 	skipDisliked?: boolean,
+	shuffleWith?: ShuffleWith,
 	pauseWatchHistory?: boolean,
 	searchHistory?: SearchHistory,
 	closeToTray?: boolean,
@@ -463,6 +465,13 @@ export type SettingsPatch = {
 	includePrereleases?: boolean,
 	statsForNerds?: boolean,
 };
+
+/**  Whose shuffle a Shuffle button plays. */
+export type ShuffleWith = 
+/**  The app's own: every song once, in a uniform random order. */
+"ymusic" | 
+/**  YouTube Music's server shuffle, for a list that is a YouTube playlist. */
+"youtube";
 
 /**  How stable volume evens songs out. */
 export type StableVolume = "off" | 

@@ -8,6 +8,7 @@ expression: "SettingsStore::open(path).get()"
   "stableVolume": "off",
   "audioDevice": "auto",
   "skipDisliked": false,
+  "shuffleWith": "ymusic",
   "pauseWatchHistory": false,
   "searchHistory": "youtube",
   "closeToTray": false,

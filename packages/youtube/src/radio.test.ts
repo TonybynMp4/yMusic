@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VideoId } from "@ymusic/core";
 
-import { radioFrom } from "./radio.ts";
+import { radioFrom, shufflePageFrom } from "./radio.ts";
 
 /** Stands in for youtubei.js's `Text`, which is read through `toString`. */
 const text = (value: string) => ({ toString: () => value });
@@ -41,5 +41,26 @@ describe("radioFrom", () => {
       "seed" as VideoId,
     );
     expect(tracks.map((t) => t.title)).toEqual(["One"]);
+  });
+});
+
+describe("shufflePageFrom", () => {
+  it("keeps every row, the first included, and the token for the next page", () => {
+    const page = shufflePageFrom({
+      contents: [row("one", "One"), row("two", "Two")],
+      continuation: "token",
+    });
+    expect(page.tracks.map((t) => t.id)).toEqual(["yt:one", "yt:two"]);
+    expect(page.more).toBe("token");
+  });
+
+  it("keeps a song the playlist holds twice", () => {
+    const page = shufflePageFrom({ contents: [row("one", "One"), row("one", "One")] });
+    expect(page.tracks.map((t) => t.id)).toEqual(["yt:one", "yt:one"]);
+  });
+
+  it("ends when the last page has no token", () => {
+    expect(shufflePageFrom({ contents: [row("one", "One")], continuation: null }).more).toBeNull();
+    expect(shufflePageFrom(undefined)).toEqual({ tracks: [], more: null });
   });
 });

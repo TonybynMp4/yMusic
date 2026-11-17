@@ -1,6 +1,7 @@
 import { YTNodes, type Innertube } from "youtubei.js";
 import { trackIdForVideo, type Track, type VideoId } from "@ymusic/core";
 
+import { playlistIdFromBrowseId } from "./browse.ts";
 import { toTrack, type RawSong } from "./parse.ts";
 import type { RawThumbnail } from "./thumbnails.ts";
 
@@ -20,6 +21,8 @@ interface RawPanelVideo {
 
 interface UpNextResponse {
   contents?: readonly unknown[] | null;
+  /** A token for the next page; youtubei.js leaves it null on the last. */
+  continuation?: unknown;
 }
 
 /**
@@ -54,6 +57,58 @@ export async function getMix(
   return radioFrom((panel ?? {}) as unknown as UpNextResponse, null);
 }
 
+/** What YouTube Music's own Shuffle buttons send with a playlist. */
+const SHUFFLE_PARAMS = "wAEB8gECKAE=";
+
+/** A page of YouTube Music's shuffle and, when there is one, the token for the next. */
+export interface ShufflePage {
+  tracks: Track[];
+  more: string | null;
+}
+
+/**
+ * YouTube Music's own shuffle of a playlist or an album's `OLAK5uy…`
+ * playlist, with or without the `VL` browse prefix, fifty songs a page. It
+ * is one order of the whole playlist, a song the playlist holds twice
+ * included, and the token carries its seed, so asking for a page again
+ * gives the same songs. The token is a plain string, so unlike a youtubei.js
+ * continuation it can cross the worker boundary as it is.
+ */
+export async function getShuffle(youtube: Innertube, playlistId: string): Promise<ShufflePage> {
+  const response = await youtube.actions.execute("/next", {
+    playlistId: playlistIdFromBrowseId(playlistId),
+    params: SHUFFLE_PARAMS,
+    isAudioOnly: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  return shufflePageFrom(response.contents_memo?.getType(YTNodes.PlaylistPanel)[0]);
+}
+
+export async function getShuffleMore(youtube: Innertube, more: string): Promise<ShufflePage> {
+  const response = await youtube.actions.execute("/next", {
+    continuation: more,
+    isAudioOnly: true,
+    client: "YTMUSIC",
+    parse: true,
+  });
+  return shufflePageFrom(response.continuation_contents);
+}
+
+/** Exported for tests. Unlike a radio's, a repeated row stays: the playlist holds it twice. */
+export function shufflePageFrom(panel: unknown): ShufflePage {
+  const page = (panel ?? {}) as UpNextResponse;
+  const tracks: Track[] = [];
+  for (const item of page.contents ?? []) {
+    const track = trackFromRow(item);
+    if (track !== null) tracks.push(track);
+  }
+  return {
+    tracks,
+    more: typeof page.continuation === "string" ? page.continuation : null,
+  };
+}
+
 /**
  * The year `videoId`'s album came out, from the song's own row in its up-next
  * panel: the one place YouTube puts it for a song on its own. Null when the
@@ -74,27 +129,32 @@ export async function getSongYear(youtube: Innertube, videoId: VideoId): Promise
 /** Exported for tests, like `songsFrom`. `seed`, the song the radio grew from, is left out. */
 export function radioFrom(panel: UpNextResponse, seed: VideoId | null): Track[] {
   const tracks: Track[] = [];
-  const seen = new Set<string>(seed ? [seed] : []);
+  const seen = new Set<string>(seed ? [trackIdForVideo(seed)] : []);
   for (const item of panel.contents ?? []) {
-    const row = item as RawPanelVideo | null;
-    const video = row?.primary ?? row;
-    if (!video || typeof video.video_id !== "string" || seen.has(video.video_id)) continue;
-    seen.add(video.video_id);
-    const raw: RawSong = {
-      id: video.video_id,
-      title: video.title?.toString(),
-      duration: video.duration ?? null,
-      album: video.album ?? null,
-      artists: video.artists ?? null,
-      thumbnails: video.thumbnail ?? null,
-      badges: video.badges ?? null,
-      // youtubei.js only reads an album off a byline with an album run, and
-      // takes the last run as its year. With no year run that is the album's
-      // own name, which an album called "1999" would pass off as a year.
-      year: video.album?.year === video.album?.name ? undefined : video.album?.year,
-    };
-    const track = toTrack(raw);
-    if (track !== null) tracks.push(track);
+    const track = trackFromRow(item);
+    if (track === null || seen.has(track.id)) continue;
+    seen.add(track.id);
+    tracks.push(track);
   }
   return tracks;
+}
+
+/** A row of the up-next panel as a track, or null for a row that is not a song. */
+function trackFromRow(item: unknown): Track | null {
+  const row = item as RawPanelVideo | null;
+  const video = row?.primary ?? row;
+  if (!video || typeof video.video_id !== "string") return null;
+  return toTrack({
+    id: video.video_id,
+    title: video.title?.toString(),
+    duration: video.duration ?? null,
+    album: video.album ?? null,
+    artists: video.artists ?? null,
+    thumbnails: video.thumbnail ?? null,
+    badges: video.badges ?? null,
+    // youtubei.js only reads an album off a byline with an album run, and
+    // takes the last run as its year. With no year run that is the album's
+    // own name, which an album called "1999" would pass off as a year.
+    year: video.album?.year === video.album?.name ? undefined : video.album?.year,
+  } satisfies RawSong);
 }

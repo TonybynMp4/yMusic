@@ -37,6 +37,17 @@ pub enum StableVolume {
     LoudOnly,
 }
 
+/// Whose shuffle a Shuffle button plays.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ShuffleWith {
+    /// The app's own: every song once, in a uniform random order.
+    #[default]
+    Ymusic,
+    /// YouTube Music's server shuffle, for a list that is a YouTube playlist.
+    Youtube,
+}
+
 /// Where searches are remembered.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -119,6 +130,7 @@ settings! {
     /// An mpv `audio-device` name. `auto` follows the system's default output.
     audio_device: String = "auto".into(),
     skip_disliked: bool = false,
+    shuffle_with: ShuffleWith = ShuffleWith::Ymusic,
     pause_watch_history: bool = false,
     search_history: SearchHistory = SearchHistory::Youtube,
     /// Closing the window hides it to the tray and playback carries on.

@@ -8,6 +8,7 @@ expression: settings
   "stableVolume": "loudOnly",
   "audioDevice": "pipewire/speakers",
   "skipDisliked": false,
+  "shuffleWith": "ymusic",
   "pauseWatchHistory": false,
   "searchHistory": "youtube",
   "closeToTray": true,

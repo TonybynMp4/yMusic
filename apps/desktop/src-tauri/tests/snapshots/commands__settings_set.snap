@@ -11,6 +11,7 @@ expression: changed
   "includePrereleases": false,
   "pauseWatchHistory": true,
   "searchHistory": "youtube",
+  "shuffleWith": "ymusic",
   "skipDisliked": false,
   "stableVolume": "off",
   "statsForNerds": false

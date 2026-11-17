@@ -48,7 +48,7 @@ export interface BrowseActions {
    * Plays `tracks` from `id`; with no `id`, from a random track, shuffled.
    * `from` lets the queue keep growing, with the rest of a playlist or a radio.
    */
-  onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => void;
+  onPlay: (tracks: Track[], id: TrackId | null, from?: PlayFrom) => void | Promise<void>;
   onOpen: (route: Route) => void;
 }
 
@@ -71,7 +71,8 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
   });
   switch (page.kind) {
     case "album": {
-      const from: PlayFrom = { kind: "list", title: page.page.title };
+      const { title, audioPlaylistId } = page.page;
+      const from: PlayFrom = { kind: "list", title, playlistId: audioPlaylistId };
       return <Album page={page.page} actions={playingFrom(from)} route={route} />;
     }
     case "playlist": {
@@ -88,7 +89,8 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
       );
     }
     case "artist": {
-      const from: PlayFrom = { kind: "list", title: page.page.name };
+      const { name, topSongsPlaylistId } = page.page;
+      const from: PlayFrom = { kind: "list", title: name, playlistId: topSongsPlaylistId };
       return <Artist page={page.page} actions={playingFrom(from)} route={route} />;
     }
   }
@@ -417,6 +419,16 @@ function PlayButtons({
   extra?: React.ReactNode;
 }) {
   const empty = tracks.length === 0;
+  /** YouTube Music's shuffle waits on the server, so the button shows it is working. */
+  const [shuffling, setShuffling] = useState(false);
+  const shuffle = async () => {
+    setShuffling(true);
+    try {
+      await actions.onPlay(tracks, null);
+    } finally {
+      setShuffling(false);
+    }
+  };
   return (
     <div className="mt-1 flex items-center gap-2">
       <Button
@@ -430,10 +442,10 @@ function PlayButtons({
       <Button
         variant="outline"
         className="rounded-full"
-        disabled={empty}
-        onClick={() => actions.onPlay(tracks, null)}
+        disabled={empty || shuffling}
+        onClick={() => void shuffle()}
       >
-        <IconArrowsShuffle size={16} stroke={1.75} />
+        {shuffling ? <Spinner /> : <IconArrowsShuffle size={16} stroke={1.75} />}
         Shuffle
       </Button>
       {extra}

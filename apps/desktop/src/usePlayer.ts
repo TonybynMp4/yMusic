@@ -19,6 +19,7 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { followShuffle } from "./followShuffle.ts";
 import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
 import { queryClient } from "./query.ts";
@@ -41,12 +42,20 @@ function logPlaybackFailure(error: unknown): void {
  * Where a queue came from, so it can keep growing and be named under
  * "Playing from": a playlist still loading its later pages, a fixed list
  * such as an album, or a song radio (what YouTube Music starts when you
- * play a search result).
+ * play a search result). A list's `playlistId`, when it has one, is what
+ * YouTube Music's shuffle shuffles.
  */
 export type PlayFrom =
   | { kind: "playlist"; id: string; title: string }
-  | { kind: "list"; title: string }
+  | { kind: "list"; title: string; playlistId?: string | null }
   | { kind: "radio" };
+
+/**
+ * How a shuffle play started: shuffled here, in YouTube Music's order, here
+ * after YouTube Music's failed, or not at all because another queue replaced
+ * it while it waited.
+ */
+export type ShuffleStart = "local" | "youtube" | "fallback" | "overtaken";
 
 /**
  * The seed for autoplay: the last YouTube track in playing order. Local files
@@ -369,10 +378,14 @@ export function usePlayer(
     setFilling(false);
   }, []);
 
+  /** Counts queues replaced, so a shuffle that arrives late can tell it was overtaken. */
+  const replaced = useRef(0);
+
   /** Clearing or replacing the queue also stops it growing from its old source. */
   const send = useCallback(
     (action: QueueAction) => {
       if (action.type === "setQueue" || action.type === "clear") {
+        replaced.current++;
         stopFollowing();
         setPlayingFrom(null);
       }
@@ -445,6 +458,67 @@ export function usePlayer(
       };
     },
     [send],
+  );
+
+  /**
+   * Shuffle play. With YouTube Music's shuffle chosen and a list that is a
+   * YouTube playlist, the queue is the server's order, fetched a page at a
+   * time by `followShuffle`, with local shuffle off since the order is
+   * shuffled already. Otherwise, or if YouTube's first page fails, the list
+   * is shuffled here. Settles once the queue has started, saying how, so the
+   * button can show it is waiting and the app can say when it fell back.
+   */
+  const shufflePlay = useCallback(
+    async (tracks: Track[], from?: PlayFrom): Promise<ShuffleStart> => {
+      const local = () => {
+        if (tracks.length === 0) return;
+        // Shuffle first, so the queue is laid down shuffled from a random start.
+        dispatch({ type: "setShuffle", shuffle: true });
+        playTrack(tracks, tracks[Math.floor(Math.random() * tracks.length)]!.id, from);
+      };
+      const playlistId =
+        from?.kind === "playlist" ? from.id : from?.kind === "list" ? from.playlistId : null;
+      if (settings.shuffleWith !== "youtube" || playlistId == null) {
+        local();
+        return "local";
+      }
+
+      const started = ++replaced.current;
+      const first = await youtube.shuffle(playlistId).catch((error: unknown) => {
+        console.error("could not get YouTube Music's shuffle", error);
+        return null;
+      });
+      if (replaced.current !== started) return "overtaken";
+      if (first === null || first.tracks.length === 0) {
+        local();
+        return "fallback";
+      }
+
+      dispatch({ type: "setShuffle", shuffle: false });
+      send({ type: "setQueue", tracks: first.tracks, startIndex: 0 });
+      if (from?.kind === "playlist" || from?.kind === "list") {
+        setPlayingFrom({ title: from.title, device: null });
+      }
+      const ids = new Set(first.tracks.map((t) => t.id));
+      source.current = { playlistId, ids };
+      let stopped = false;
+      unfollow.current = () => {
+        stopped = true;
+      };
+      setFilling(true);
+      void followShuffle(first, {
+        more: (token) => youtube.shuffleMore(token),
+        onPage: (page) => {
+          for (const t of page) ids.add(t.id);
+          dispatch({ type: "extend", tracks: page });
+        },
+        stopped: () => stopped,
+      }).then(() => {
+        if (!stopped) setFilling(false);
+      });
+      return "youtube";
+    },
+    [settings.shuffleWith, send, playTrack],
   );
 
   /**
@@ -654,6 +728,7 @@ export function usePlayer(
     loadedTrack,
     volume,
     playTrack,
+    shufflePlay,
     cue,
     restore,
     playingFrom,

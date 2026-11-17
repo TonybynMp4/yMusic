@@ -148,7 +148,7 @@ export function Sidebar(props: Props) {
                 <IconPlaylistAdd size={15} />
               </IconButton>
             )}
-            <IconButton label="Create a radio" onClick={createRadio}>
+            <IconButton label="Create a mix" onClick={createRadio}>
               <IconBroadcast size={15} />
             </IconButton>
             <IconButton label="Refresh library" onClick={props.onRefresh} disabled={props.loading}>

@@ -106,7 +106,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] "New playlist" in the save-to-playlist menu, with a title, description and privacy
 - [x] Albums and playlists: shuffle play, start mix, play next, add to queue, save to library, save to playlist, go to artist
 - [x] Artists: shuffle play, start mix, play next, add to queue, subscribe and unsubscribe
-- [x] Create a radio from artists and songs, tuned for discovery, variety, popularity and mood, with YouTube's cover under "Playing from"
+- [x] Create a mix from artists and songs, tuned for discovery, variety, popularity and mood, with YouTube's cover under "Playing from"
 - [x] Tuning chips above the queue of a mix or radio, as on the web player
 - [x] Edit a playing tuned radio in the radio builder, as the Android app does
 - [x] Player bar: a click opens the full player, a right click the song's menu

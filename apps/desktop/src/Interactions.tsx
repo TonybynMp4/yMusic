@@ -235,7 +235,7 @@ export function InteractionsProvider({
             onPlay={(tracks, cover, radio) =>
               value.play(tracks, tracks[0]!.id, {
                 kind: "list",
-                title: cover?.title ?? "Radio",
+                title: cover?.title ?? "Mix",
                 radio,
                 ...(cover ? { thumbnails: cover.thumbnails } : {}),
               })
@@ -540,7 +540,7 @@ function SongItems({
       {videoId && (
         <DropdownMenuItem onClick={() => x.play([track], track.id, { kind: "radio" })}>
           <IconBroadcast />
-          Start mix
+          Start radio
         </DropdownMenuItem>
       )}
       {videoId && (
@@ -552,7 +552,7 @@ function SongItems({
           }
         >
           <IconAdjustmentsHorizontal />
-          Create a radio
+          Create a mix
         </DropdownMenuItem>
       )}
       <DropdownMenuItem onClick={() => x.enqueue([track], "next")}>
@@ -665,14 +665,14 @@ function CollectionItems({ route }: { route: Route }) {
           if (tracks.length > 0) {
             x.play(tracks, tracks[0]!.id, {
               kind: "list",
-              title: `${name} mix`,
+              title: `${name} radio`,
               radio: mix.playlistId,
             });
           }
         })}
       >
         <IconBroadcast />
-        Start mix
+        Start radio
       </DropdownMenuItem>
       {route.kind === "artist" && (
         <DropdownMenuItem
@@ -690,7 +690,7 @@ function CollectionItems({ route }: { route: Route }) {
           })}
         >
           <IconAdjustmentsHorizontal />
-          Create a radio
+          Create a mix
         </DropdownMenuItem>
       )}
       <DropdownMenuItem onClick={queue("next")}>
@@ -1497,7 +1497,7 @@ async function tracksOf(page: Page): Promise<{ tracks: Track[]; from?: PlayFrom 
   }
 }
 
-/** The radio behind "Start mix", as YouTube Music's own buttons name it. */
+/** The radio behind "Start radio", as YouTube Music's own buttons name it. */
 function mixOf(page: Page): { playlistId: string; videoId: string | null } | null {
   switch (page.kind) {
     case "album": {

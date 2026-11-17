@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { Art } from "@/components/Art";
 import { FromDevice } from "@/components/FromDevice";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
+import { RadioChips } from "./RadioChips.tsx";
 import { Artwork } from "./TrackList.tsx";
 import { positionOf, sourceOf, useRowDrag } from "./useRowDrag.ts";
 import { useStableHandler } from "./useStableHandler.ts";
@@ -40,6 +42,8 @@ interface Props {
   /** Moves the track at playing position `from` to position `to`. */
   onMove: (from: number, to: number) => void;
   onClear: () => void;
+  /** Plays a tuning chip's radio after the playing song, in place of what was to come. */
+  onTune: (radio: string, playlistId: string, tracks: Track[]) => void;
 }
 
 /** Where the playing row is, relative to what the list shows. */
@@ -170,6 +174,7 @@ export function Queue({
   onRemove,
   onMove,
   onClear,
+  onTune,
 }: Props) {
   const current = currentItemIndex(queue);
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
@@ -201,13 +206,26 @@ export function Queue({
   return (
     <div className="flex h-full flex-col">
       {playingFrom && (
-        <div className="px-4 pt-3">
-          <p className="text-xs text-muted-foreground">Playing from</p>
-          <p className="flex items-center gap-1.5 text-sm font-medium">
-            <span className="truncate">{playingFrom.title}</span>
-            {playingFrom.device && <FromDevice device={playingFrom.device} />}
-          </p>
+        <div className="flex items-center gap-3 px-4 pt-3">
+          {playingFrom.thumbnails && playingFrom.thumbnails.length > 0 && (
+            <Art
+              thumbnails={playingFrom.thumbnails}
+              width={40}
+              lazy={false}
+              className="size-10 shrink-0 rounded"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Playing from</p>
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <span className="truncate">{playingFrom.title}</span>
+              {playingFrom.device && <FromDevice device={playingFrom.device} />}
+            </p>
+          </div>
         </div>
+      )}
+      {playingFrom?.radio && (
+        <RadioChips radio={playingFrom.radio} tuned={playingFrom.tuned ?? null} onTune={onTune} />
       )}
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

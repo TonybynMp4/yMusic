@@ -1,4 +1,4 @@
-import { Track, TrackId, VideoId } from "@ymusic/core";
+import { Thumbnail, Track, TrackId, VideoId } from "@ymusic/core";
 import { z } from "zod";
 
 import type { QueuePosition } from "./bindings.ts";
@@ -6,7 +6,16 @@ import { call, isTauri } from "./tauri.ts";
 
 export type { QueuePosition } from "./bindings.ts";
 
-export const QueueFrom = z.object({ title: z.string(), device: z.string().nullable() });
+export const QueueFrom = z.object({
+  title: z.string(),
+  device: z.string().nullable(),
+  /** A cover to show with the name. Only a tuned radio has one, drawn by YouTube. */
+  thumbnails: z.array(Thumbnail).optional(),
+  /** The mix or radio whose tuning chips show above the queue. */
+  radio: z.string().optional(),
+  /** The chip playing, when one other than the mix itself was picked. */
+  tuned: z.string().optional(),
+});
 export type QueueFrom = z.infer<typeof QueueFrom>;
 
 /**

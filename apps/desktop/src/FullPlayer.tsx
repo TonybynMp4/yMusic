@@ -38,6 +38,7 @@ interface Props {
   onRemove: (id: TrackId) => void;
   onMove: (from: number, to: number) => void;
   onClear: () => void;
+  onTune: (radio: string, playlistId: string, tracks: Track[]) => void;
   onCollapse: () => void;
   /** Opens the album or an artist from the song's title and byline. */
   onOpen: (route: Route) => void;

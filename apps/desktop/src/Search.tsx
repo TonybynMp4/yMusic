@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import type { SearchFilter, SearchResults, Track } from "@ymusic/core";
 
+import { Chip } from "@/components/Chip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 import { Card, Shelf, ShelfHeader, type BrowseActions } from "./Browse.tsx";
 import { TrackList } from "./TrackList.tsx";
 import type { YouTubeSearchState } from "./useYouTubeSearch.ts";
@@ -62,23 +62,6 @@ export function YouTubeResults({
       <Filtered results={results} filter={filter} actions={actions} />
       {youtube.hasMore && <More loading={youtube.loadingMore} onReach={youtube.loadMore} />}
     </>
-  );
-}
-
-function Chip(props: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <Button
-      variant="secondary"
-      size="sm"
-      aria-pressed={props.selected}
-      onClick={props.onClick}
-      className={cn(
-        "rounded-lg",
-        props.selected && "bg-foreground text-background hover:bg-foreground/90",
-      )}
-    >
-      {props.children}
-    </Button>
   );
 }
 

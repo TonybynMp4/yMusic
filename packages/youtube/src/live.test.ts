@@ -1,14 +1,15 @@
 import { expect, it } from "vitest";
-import type { VideoId } from "@ymusic/core";
+import { defaultTuning, radioId, type VideoId } from "@ymusic/core";
 
 import { getAlbum, getArtist, getPlaylist } from "./browse.ts";
 import { createPlayer, createYouTube } from "./client.ts";
 import { fetchSignatureTimestamp, getPlaybackTracking } from "./history.ts";
-import { getRadio, getSongYear } from "./radio.ts";
+import { getMix, getRadio, getSongYear } from "./radio.ts";
 import { ratingFrom, type RawNext } from "./rating.ts";
 import { searchMusic, searchSongs } from "./search.ts";
 import { live, unlessBotChecked } from "./live.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
+import { getRadioArtist, getRadioChips, getRadioCover } from "./tuned-radio.ts";
 
 // The half the offline tests cannot cover: that InnerTube still answers, and
 // that what it sends still fits the shapes `parse.ts` describes.
@@ -117,6 +118,36 @@ live("song radio against the real InnerTube", () => {
     expect(tracks.length).toBeGreaterThan(10);
     expect(tracks.some((t) => t.id === "yt:SM4tQcUt_mQ")).toBe(false);
     expect(tracks.filter((t) => t.artists.length > 0).length).toBeGreaterThan(0);
+  }, 30_000);
+});
+
+live("tuned radio against the real InnerTube", () => {
+  it("finds an artist's seed from its mix, and plays and draws a tuned radio of it", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const artist = await getArtist(youtube, "UCDPM_n1atn2ijUwHd0NNRQw"); // Coldplay
+    expect(artist.mix).not.toBeNull();
+    const seed = await getRadioArtist(youtube, artist.mix!.playlistId);
+    expect(seed).toBe("0kr_t");
+
+    const id = radioId({
+      ...defaultTuning,
+      artists: [seed!],
+      songs: ["SM4tQcUt_mQ" as VideoId],
+      discovery: "discover",
+    })!;
+    const tracks = await getMix(youtube, id, null);
+    expect(tracks.length).toBeGreaterThan(10);
+    const cover = await getRadioCover(youtube, id);
+    // "Roygbiv Mix • Like Coldplay • Discover"
+    expect(cover?.title).toMatch(/Mix/);
+    expect(cover?.thumbnails[0]?.url).toMatch(/^https:\/\/music\.youtube\.com\/image\/radioart\?/);
+  }, 30_000);
+
+  it("reads the tuning chips above a song radio's queue", async () => {
+    const youtube = await createYouTube({ fetch: globalThis.fetch });
+    const chips = await getRadioChips(youtube, "RDAMVMSM4tQcUt_mQ");
+    expect(chips[0]).toEqual({ title: "All", playlistId: "RDAMVMSM4tQcUt_mQ" });
+    expect(chips).toContainEqual({ title: "Popular", playlistId: "RDATpYvSM4tQcUt_mQ" });
   }, 30_000);
 });
 

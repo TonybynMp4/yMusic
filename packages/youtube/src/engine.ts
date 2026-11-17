@@ -4,6 +4,8 @@ import type {
   ArtistPage,
   BrowseCard,
   PlaylistPage,
+  RadioChip,
+  RadioCover,
   SearchFilter,
   SearchResults,
   StreamLease,
@@ -74,6 +76,7 @@ import {
 } from "./search-history.ts";
 import { watchSession } from "./session.ts";
 import { NotPlayableError, resolveStream } from "./stream.ts";
+import { getRadioArtist, getRadioChips, getRadioCover } from "./tuned-radio.ts";
 
 /**
  * How long one fallback session is reused. Its token is bound to a visitor id,
@@ -246,6 +249,24 @@ export class YouTubeEngine {
    */
   async mix(playlistId: string, videoId: string | null = null): Promise<Track[]> {
     return getMix(await this.#browseClient(), playlistId, videoId);
+  }
+
+  /**
+   * The artist an artist's mix (`RDEM…`) is seeded with, as a tuned radio
+   * names it (see `radioId`), or null when YouTube offers no tuning for it.
+   */
+  async radioArtist(mixId: string): Promise<string | null> {
+    return getRadioArtist(await this.#browseClient(), mixId);
+  }
+
+  /** The tuning chips above the queue of a mix or radio, each a radio to play instead. */
+  async radioChips(playlistId: string): Promise<RadioChip[]> {
+    return getRadioChips(await this.#browseClient(), playlistId);
+  }
+
+  /** The name and cover YouTube Music gives a tuned radio (`RDAT…`). */
+  async radioCover(playlistId: string): Promise<RadioCover | null> {
+    return getRadioCover(await this.#browseClient(), playlistId);
   }
 
   /** Saves an album or playlist to the library, or removes it. `id` is the bare playlist id. */

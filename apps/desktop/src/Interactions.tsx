@@ -1,4 +1,5 @@
 import {
+  IconAdjustmentsHorizontal,
   IconArrowsShuffle,
   IconBroadcast,
   IconDisc,
@@ -93,6 +94,7 @@ import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
+import { RadioBuilderDialog, type RadioSeed } from "./RadioBuilder.tsx";
 import { toggled } from "./Rating.tsx";
 import {
   newPlaylistRoute,
@@ -138,6 +140,8 @@ interface Context extends Interactions {
   editPlaylist: (page: PlaylistPage) => void;
   /** Asks before deleting one of your playlists. */
   deletePlaylist: (page: PlaylistPage) => void;
+  /** Opens the radio builder with these seeds picked. */
+  createRadio: (seeds: RadioSeed[]) => void;
 }
 
 const InteractionsContext = createContext<Context | null>(null);
@@ -190,11 +194,13 @@ export function InteractionsProvider({
   }, [open, menu]);
   const [editing, setEditing] = useState<PlaylistPage | null>(null);
   const [deleting, setDeleting] = useState<PlaylistPage | null>(null);
+  const [radioSeeds, setRadioSeeds] = useState<RadioSeed[] | null>(null);
   const context: Context = {
     ...value,
     createPlaylist: (ids) => setSongs(() => ids),
     editPlaylist: setEditing,
     deletePlaylist: setDeleting,
+    createRadio: setRadioSeeds,
   };
   return (
     <OpenMenuContext.Provider value={openMenu}>
@@ -222,6 +228,19 @@ export function InteractionsProvider({
           <NewPlaylistDialog songs={songs} onClose={() => setSongs(null)} />
           <EditPlaylistDialog page={editing} onClose={() => setEditing(null)} />
           <DeletePlaylistDialog page={deleting} onClose={() => setDeleting(null)} />
+          <RadioBuilderDialog
+            seeds={radioSeeds}
+            signedIn={value.signedIn}
+            onClose={() => setRadioSeeds(null)}
+            onPlay={(tracks, cover, radio) =>
+              value.play(tracks, tracks[0]!.id, {
+                kind: "list",
+                title: cover?.title ?? "Mix",
+                radio,
+                ...(cover ? { thumbnails: cover.thumbnails } : {}),
+              })
+            }
+          />
         </InteractionsContext.Provider>
       </RatingOfContext.Provider>
     </OpenMenuContext.Provider>
@@ -258,6 +277,17 @@ function useOpenMenu(): (request: MenuRequest) => void {
   const open = useContext(OpenMenuContext);
   if (open === null) throw new Error("menu opened outside InteractionsProvider");
   return open;
+}
+
+/** Opens the radio builder with nothing picked yet. */
+export function useCreateRadio(): () => void {
+  const x = useInteractions();
+  return () => x.createRadio([]);
+}
+
+/** Shows a short message at the bottom of the window. */
+export function useNotify(): (message: string) => void {
+  return useInteractions().notify;
 }
 
 /** Opens the "New playlist" dialog for an empty playlist, or null while signed out. */
@@ -505,7 +535,19 @@ function SongItems({
       {videoId && (
         <DropdownMenuItem onClick={() => x.play([track], track.id, { kind: "radio" })}>
           <IconBroadcast />
-          Start mix
+          Start radio
+        </DropdownMenuItem>
+      )}
+      {videoId && (
+        <DropdownMenuItem
+          onClick={() =>
+            x.createRadio([
+              { kind: "song", videoId, title: track.title, thumbnails: track.thumbnails },
+            ])
+          }
+        >
+          <IconAdjustmentsHorizontal />
+          Create a mix
         </DropdownMenuItem>
       )}
       <DropdownMenuItem onClick={() => x.enqueue([track], "next")}>
@@ -614,12 +656,38 @@ function CollectionItems({ route }: { route: Route }) {
           const mix = mixOf(loaded);
           if (!mix) throw new Error("YouTube Music has no mix for this");
           const tracks = await engine.mix(mix.playlistId, mix.videoId);
-          if (tracks.length > 0) x.play(tracks, tracks[0]!.id);
+          const name = loaded.kind === "artist" ? loaded.page.name : loaded.page.title;
+          if (tracks.length > 0) {
+            x.play(tracks, tracks[0]!.id, {
+              kind: "list",
+              title: `${name} radio`,
+              radio: mix.playlistId,
+            });
+          }
         })}
       >
         <IconBroadcast />
-        Start mix
+        Start radio
       </DropdownMenuItem>
+      {route.kind === "artist" && (
+        <DropdownMenuItem
+          onClick={run((loaded) => {
+            if (loaded.kind !== "artist") return;
+            const artist = loaded.page;
+            x.createRadio([
+              {
+                kind: "artist",
+                channelId: route.id,
+                name: artist.name,
+                thumbnails: artist.avatar.length > 0 ? artist.avatar : artist.thumbnails,
+              },
+            ]);
+          })}
+        >
+          <IconAdjustmentsHorizontal />
+          Create a mix
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onClick={queue("next")}>
         <IconPlayerTrackNext />
         Play next
@@ -1424,7 +1492,7 @@ async function tracksOf(page: Page): Promise<{ tracks: Track[]; from?: PlayFrom 
   }
 }
 
-/** The radio behind "Start mix", as YouTube Music's own buttons name it. */
+/** The radio behind "Start radio", as YouTube Music's own buttons name it. */
 function mixOf(page: Page): { playlistId: string; videoId: string | null } | null {
   switch (page.kind) {
     case "album": {

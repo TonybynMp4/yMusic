@@ -9,6 +9,7 @@ import {
   restoredQueue,
   type RepeatMode,
   type StreamLease,
+  type Thumbnail,
   type Track,
   type QueueState,
   type TrackId,
@@ -42,11 +43,12 @@ function logPlaybackFailure(error: unknown): void {
  * Where a queue came from, so it can keep growing and be named under
  * "Playing from": a playlist still loading its later pages, a fixed list
  * such as an album, or a song radio (what YouTube Music starts when you
- * play a search result).
+ * play a search result). A list that is a mix or radio names it in `radio`,
+ * for the tuning chips above the queue.
  */
 export type PlayFrom =
   | { kind: "playlist"; id: string; title: string }
-  | { kind: "list"; title: string }
+  | { kind: "list"; title: string; thumbnails?: Thumbnail[]; radio?: string }
   | { kind: "radio" };
 
 /**
@@ -110,6 +112,11 @@ export function usePlayer(
   // Removing the last song empties the queue without a `clear`, and a song
   // added after that plays from nothing.
   if (queue.items.length === 0 && playingFrom !== null) setPlayingFrom(null);
+  /** `playingFrom` for callbacks that finish after a request, such as {@link tune}. */
+  const playingFromNow = useRef(playingFrom);
+  useEffect(() => {
+    playingFromNow.current = playingFrom;
+  }, [playingFrom]);
 
   const track = currentTrack(queue);
   const trackId = track?.id ?? null;
@@ -412,6 +419,7 @@ export function usePlayer(
         const videoId = seed ? videoIdFromTrackId(seed.id) : null;
         if (!seed || videoId === null) return;
         send({ type: "setQueue", tracks: [seed], startIndex: 0 });
+        setPlayingFrom({ title: `${seed.title} radio`, device: null, radio: `RDAMVM${videoId}` });
         source.current = null;
         let stopped = false;
         unfollow.current = () => {
@@ -432,7 +440,12 @@ export function usePlayer(
 
       send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
       if (from?.kind === "playlist" || from?.kind === "list") {
-        setPlayingFrom({ title: from.title, device: null });
+        setPlayingFrom({
+          title: from.title,
+          device: null,
+          ...(from.kind === "list" && from.thumbnails ? { thumbnails: from.thumbnails } : {}),
+          ...(from.kind === "list" && from.radio ? { radio: from.radio } : {}),
+        });
       }
       if (from?.kind !== "playlist") {
         source.current = null;
@@ -468,6 +481,27 @@ export function usePlayer(
       };
     },
     [send],
+  );
+
+  /**
+   * Plays the radio of a tuning chip after the playing song, in place of
+   * what was to come, and marks the chip as picked. `radio` is the radio
+   * the chip belongs to: when the queue has moved on to something else
+   * while the chip's songs loaded, nothing changes.
+   */
+  const tune = useCallback(
+    (radio: string, playlistId: string, tracks: Track[]) => {
+      if (playingFromNow.current?.radio !== radio) return;
+      stopFollowing();
+      dispatch({ type: "replaceUpcoming", tracks });
+      setPlayingFrom((from) => {
+        if (!from?.radio) return from;
+        const picked: QueueFrom = { ...from, tuned: playlistId };
+        if (playlistId === from.radio) delete picked.tuned;
+        return picked;
+      });
+    },
+    [stopFollowing],
   );
 
   /**
@@ -691,6 +725,7 @@ export function usePlayer(
     loadedTrack,
     volume,
     playTrack,
+    tune,
     cue,
     restore,
     playingFrom,

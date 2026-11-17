@@ -10,7 +10,8 @@
 //! recently drawn first. Files are named after the URL the page asked for, so a
 //! JPEG cached before still answers it.
 //!
-//! Only Google's image hosts are fetched: the scheme is not a general proxy.
+//! Only Google's image hosts are fetched, plus the radio covers YouTube Music
+//! draws on its own host: the scheme is not a general proxy.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -31,6 +32,9 @@ const BACKOFF: Duration = Duration::from_millis(400);
 const TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const ALLOWED_HOSTS: [&str; 3] = [".googleusercontent.com", ".ggpht.com", ".ytimg.com"];
+/// The cover YouTube Music draws for a tuned radio, from the seeds named in its
+/// query. It is the one path on `music.youtube.com` the scheme fetches.
+const RADIO_ART: &str = "music.youtube.com/image/radioart?";
 /// The cache trims itself back to `TRIM_TO_BYTES` once it passes this.
 const CAP_BYTES: u64 = 100 * 1024 * 1024;
 const TRIM_TO_BYTES: u64 = 90 * 1024 * 1024;
@@ -214,7 +218,8 @@ fn target(request: &Request<Vec<u8>>) -> Option<String> {
     let rest = url.strip_prefix("https://")?;
     let host = rest.split(['/', '?']).next()?;
     let allowed = !host.contains(['@', '\\', ':'])
-        && ALLOWED_HOSTS.iter().any(|suffix| host.ends_with(suffix));
+        && (ALLOWED_HOSTS.iter().any(|suffix| host.ends_with(suffix))
+            || rest.starts_with(RADIO_ART));
     allowed.then_some(url)
 }
 
@@ -523,6 +528,8 @@ mod tests {
             "https%3A%2F%2Fexample.com%2Fa.jpg",
             "http%3A%2F%2Flh3.googleusercontent.com%2Fa",
             "https%3A%2F%2Fgoogleusercontent.com.evil.test%2Fa",
+            "https%3A%2F%2Fmusic.youtube.com%2Fyoutubei%2Fv1%2Fbrowse",
+            "https%3A%2F%2Fmusic.youtube.com%2Fimage%2Fradioart.evil",
         ] {
             assert_eq!(
                 target(&request(&format!("img://localhost/{url}"))),
@@ -530,6 +537,15 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    #[test]
+    fn takes_youtube_musics_radio_covers() {
+        let url = "https%3A%2F%2Fmusic.youtube.com%2Fimage%2Fradioart%3Fr%3DEMgBGMgB";
+        assert_eq!(
+            target(&request(&format!("img://localhost/{url}"))).as_deref(),
+            Some("https://music.youtube.com/image/radioart?r=EMgBGMgB"),
+        );
     }
 
     /// An empty folder of its own under the system's temporary one.

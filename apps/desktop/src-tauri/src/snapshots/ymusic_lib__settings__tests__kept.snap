@@ -8,6 +8,7 @@ expression: file
   "autoplay": false,
   "checkForUpdates": true,
   "closeToTray": false,
+  "fewerRepeats": true,
   "fromTheFuture": 1,
   "includePrereleases": false,
   "pauseWatchHistory": false,

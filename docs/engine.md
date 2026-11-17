@@ -32,10 +32,11 @@ YouTube Music keeps each account's queue on its servers, and that server queue i
 
 ## The queue across restarts
 
-The queue, the song in it and the position are saved on this device, and come back at launch paused, the way a resumed queue does. Two files sit beside `settings.json`, written by `src-tauri/src/queue.rs`:
+The queue, the song in it and the position are saved on this device, and come back at launch paused, the way a resumed queue does. Three files sit beside `settings.json`, written by `src-tauri/src/queue.rs`:
 
 - `queue.json` holds the queue (its items, the playing order, the current song, shuffle and repeat), the YouTube playlist it was started from and which songs came from it (a song added to the queue since is shared on its own), what it plays from for "Playing from" and the device it came from (see [playback](playback.md)), and what this device last wrote to the account's server queue: the account, the song, and the playlist it named, or none for a radio. Rust stores it as the frontend sends it, and `SavedQueue` in `packages/ipc` parses it on the way back, so a file that fails the schema reads as nothing saved. `useSavedQueue` writes it half a second after the queue last changed, so a playlist arriving page by page is written once. A queue that has run out saves as nothing.
 - `queue-position.json` holds the playing song's id and how far into it playback was. It is a separate file because it changes far more often than the queue, which can be a whole playlist. The frontend writes it on pause and every ten seconds while playing. On exit Rust writes it again from mpv's own `time-pos`, because by then the webview may be gone.
+- `play-history.json` holds when each track last played, for shuffle's fewer repeats (see [Shuffle](playback.md#shuffle)). Like `queue.json`, Rust stores it as it comes and `packages/ipc` parses it; the frontend keeps it bounded.
 
 **At launch.** `useResume` waits until the saved session has been tried, then reads the saved queue and, signed in, the server queue. If the server queue's selected song and playlist are still what this device wrote (`isSharedQueue`), nothing has played elsewhere since, and the saved queue comes back exactly, position included. If they differ, another device has moved on, and the server queue wins, as Resume always has. Signed in but offline, signed out, or with an empty server queue (a free account may get nothing back), the saved queue comes back unchecked. A saved record from another account counts as differing.
 

@@ -28,6 +28,8 @@ import { followPlaylist } from "./useBrowse.ts";
 import { usePlayback } from "./usePlayback.ts";
 import { useRatings } from "./useRatings.ts";
 import type { SettingsState } from "./useSettings.ts";
+import { usePlayHistory } from "./usePlayHistory.ts";
+import { useStableHandler } from "./useStableHandler.ts";
 import { useWatchHistory } from "./useWatchHistory.ts";
 
 /** The `attempt` the Rust log gives the reload on another player client. */
@@ -60,6 +62,9 @@ function radioSeed(queue: QueueState): TrackId | null {
   }
   return null;
 }
+
+/** The queue actions that shuffle, which fewer repeats weights. */
+type ShuffleAction = Extract<QueueAction, { type: "setQueue" | "extend" | "setShuffle" }>;
 
 /**
  * Joins the pure queue reducer to the real player: whenever the queue's current
@@ -170,6 +175,11 @@ export function usePlayer(
     return from?.ids.has(id) ? from.playlistId : null;
   }, []);
   useWatchHistory(trackId, state.status, position, settings.pauseWatchHistory, playlistOf);
+  const playWeight = usePlayHistory(trackId, state.status);
+  /** For actions that shuffle: adds the play history's weighting under fewer repeats. */
+  const shuffled = useStableHandler((action: ShuffleAction): QueueAction =>
+    settings.fewerRepeats ? { ...action, weight: playWeight() } : action,
+  );
 
   /**
    * Which track we last asked mpv to load. Without it, any re-render that
@@ -400,9 +410,9 @@ export function usePlayer(
         setPlayingFrom(null);
       }
       if (action.type === "setQueue" || action.type === "jumpTo") cameUp.current = false;
-      dispatch(action);
+      dispatch(action.type === "setQueue" ? shuffled(action) : action);
     },
-    [stopFollowing],
+    [stopFollowing, shuffled],
   );
 
   const playTrack = useCallback(
@@ -421,7 +431,7 @@ export function usePlayer(
         void youtube
           .radio(videoId)
           .then((radio) => {
-            if (!stopped) dispatch({ type: "extend", tracks: radio });
+            if (!stopped) dispatch(shuffled({ type: "extend", tracks: radio }));
           })
           .catch((error: unknown) => console.error("could not start the song radio", error))
           .finally(() => {
@@ -450,7 +460,7 @@ export function usePlayer(
         if (all.length > known) {
           const added = all.slice(known);
           for (const t of added) ids.add(t.id);
-          dispatch({ type: "extend", tracks: added });
+          dispatch(shuffled({ type: "extend", tracks: added }));
           known = all.length;
         }
         setFilling(loading);
@@ -467,7 +477,7 @@ export function usePlayer(
         stop();
       };
     },
-    [send],
+    [send, shuffled],
   );
 
   /**
@@ -671,8 +681,8 @@ export function usePlayer(
     [],
   );
   const setShuffle = useCallback(
-    (shuffle: boolean) => dispatch({ type: "setShuffle", shuffle }),
-    [],
+    (shuffle: boolean) => dispatch(shuffled({ type: "setShuffle", shuffle })),
+    [shuffled],
   );
 
   return {

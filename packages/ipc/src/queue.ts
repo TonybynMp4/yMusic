@@ -1,4 +1,4 @@
-import { Track, TrackId, VideoId } from "@ymusic/core";
+import { type PlayHistory, Track, TrackId, VideoId } from "@ymusic/core";
 import { z } from "zod";
 
 import type { QueuePosition } from "./bindings.ts";
@@ -64,4 +64,21 @@ export async function queueSave(queue: SavedQueue | null): Promise<void> {
 export async function queueSavePosition(position: QueuePosition): Promise<void> {
   if (!isTauri) return;
   await call("queueSavePosition", position);
+}
+
+/** `play-history.json`: when each track last played, keyed by track id. */
+const SavedPlayHistory = z.record(z.string(), z.number()).nullable();
+
+/** The saved play history. Empty outside Tauri, or when the file does not parse. */
+export async function playHistoryLoad(): Promise<PlayHistory> {
+  if (!isTauri) return {};
+  const saved = await call("playHistoryLoad");
+  const history = SavedPlayHistory.safeParse(saved);
+  if (!history.success) console.error("ignoring the saved play history", history.error);
+  return (history.success ? history.data : null) ?? {};
+}
+
+export async function playHistorySave(history: PlayHistory): Promise<void> {
+  if (!isTauri) return;
+  await call("playHistorySave", history);
 }

@@ -9,7 +9,7 @@ use crate::http::Http;
 use crate::images::Images;
 use crate::platform::InstallFlavor;
 use crate::playback::{AudioDevice, AudioStats, LoadRequest, PlaybackEvent, Player, Position};
-use crate::queue::{QueueJson, QueuePosition, QueueStore, SavedQueue};
+use crate::queue::{PlayHistoryJson, QueueJson, QueuePosition, QueueStore, SavedQueue};
 use crate::settings::{Settings, SettingsPatch, SettingsStore};
 use crate::volume::{SavedVolume, VolumeStore};
 use tauri::{ipc::Channel, Manager, Runtime, State};
@@ -451,6 +451,22 @@ pub async fn queue_save_position(
     position: QueuePosition,
 ) -> Result<(), String> {
     store.save_position(&position)
+}
+
+/// When each track last played, as the last run saved it.
+#[tauri::command]
+#[specta::specta]
+pub fn play_history_load(store: State<'_, QueueStore>) -> Option<PlayHistoryJson> {
+    store.load_history().map(PlayHistoryJson)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn play_history_save(
+    store: State<'_, QueueStore>,
+    history: PlayHistoryJson,
+) -> Result<(), String> {
+    store.save_history(&history.0)
 }
 
 /// A release newer than this build, if there is one. Prereleases count when

@@ -244,7 +244,7 @@ export class YouTubeEngine {
   }
 
   /**
-   * "Start mix" on a list: `playlistId` is the radio playlist (`RDAMPL…`,
+   * "Start radio" on a list: `playlistId` is the radio playlist (`RDAMPL…`,
    * `RDEM…`) and `videoId`, when the button names one, the song it opens on.
    */
   async mix(playlistId: string, videoId: string | null = null): Promise<Track[]> {

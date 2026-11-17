@@ -94,13 +94,13 @@ export function EditRadio({
   return (
     <>
       {variant === "icon" ? (
-        <IconButton label="Edit radio" onClick={() => setEditing(radio)}>
+        <IconButton label="Edit mix" onClick={() => setEditing(radio)}>
           <IconAdjustmentsHorizontal />
         </IconButton>
       ) : (
         <Button variant="outline" className="rounded-full" onClick={() => setEditing(radio)}>
           <IconAdjustmentsHorizontal size={16} stroke={1.75} />
-          Edit radio
+          Edit mix
         </Button>
       )}
       <EditRadioDialog

@@ -19,6 +19,7 @@ import type { QueueFrom, QueuePosition, SavedQueue } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
 import { engine as youtube } from "./engine.ts";
+import { followShuffle } from "./followShuffle.ts";
 import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
 import { queryClient } from "./query.ts";
@@ -49,8 +50,12 @@ export type PlayFrom =
   | { kind: "list"; title: string; playlistId?: string | null }
   | { kind: "radio" };
 
-/** Pages of YouTube Music's shuffle to follow at most, about two thousand songs. */
-const MAX_SHUFFLE_PAGES = 40;
+/**
+ * How a shuffle play started: shuffled here, in YouTube Music's order, here
+ * after YouTube Music's failed, or not at all because another queue replaced
+ * it while it waited.
+ */
+export type ShuffleStart = "local" | "youtube" | "fallback" | "overtaken";
 
 /**
  * The seed for autoplay: the last YouTube track in playing order. Local files
@@ -458,12 +463,13 @@ export function usePlayer(
   /**
    * Shuffle play. With YouTube Music's shuffle chosen and a list that is a
    * YouTube playlist, the queue is the server's order, fetched a page at a
-   * time, with local shuffle off since the order is shuffled already. The
-   * server draws with replacement, so a song it picks again is dropped.
-   * Otherwise, or if YouTube fails, the list is shuffled here.
+   * time by `followShuffle`, with local shuffle off since the order is
+   * shuffled already. Otherwise, or if YouTube's first page fails, the list
+   * is shuffled here. Settles once the queue has started, saying how, so the
+   * button can show it is waiting and the app can say when it fell back.
    */
   const shufflePlay = useCallback(
-    (tracks: Track[], from?: PlayFrom) => {
+    async (tracks: Track[], from?: PlayFrom): Promise<ShuffleStart> => {
       const local = () => {
         if (tracks.length === 0) return;
         // Shuffle first, so the queue is laid down shuffled from a random start.
@@ -472,46 +478,45 @@ export function usePlayer(
       };
       const playlistId =
         from?.kind === "playlist" ? from.id : from?.kind === "list" ? from.playlistId : null;
-      if (settings.shuffleWith !== "youtube" || playlistId == null) return local();
+      if (settings.shuffleWith !== "youtube" || playlistId == null) {
+        local();
+        return "local";
+      }
 
       const started = ++replaced.current;
-      void (async () => {
-        const first = await youtube.shuffle(playlistId).catch((error: unknown) => {
-          console.error("could not get YouTube Music's shuffle", error);
-          return null;
-        });
-        if (replaced.current !== started) return;
-        if (first === null || first.tracks.length === 0) return local();
+      const first = await youtube.shuffle(playlistId).catch((error: unknown) => {
+        console.error("could not get YouTube Music's shuffle", error);
+        return null;
+      });
+      if (replaced.current !== started) return "overtaken";
+      if (first === null || first.tracks.length === 0) {
+        local();
+        return "fallback";
+      }
 
-        dispatch({ type: "setShuffle", shuffle: false });
-        send({ type: "setQueue", tracks: first.tracks, startIndex: 0 });
-        if (from?.kind === "playlist" || from?.kind === "list") {
-          setPlayingFrom({ title: from.title, device: null });
-        }
-        const ids = new Set(first.tracks.map((t) => t.id));
-        source.current = { playlistId, ids };
-        // An object, so the loop sees `unfollow` set it from outside.
-        const run = { stopped: false };
-        unfollow.current = () => {
-          run.stopped = true;
-        };
-        setFilling(true);
-        let more = first.more;
-        for (let page = 1; more !== null && page < MAX_SHUFFLE_PAGES && !run.stopped; page++) {
-          const next = await youtube.shuffleMore(more).catch((error: unknown) => {
-            console.error("could not get more of YouTube Music's shuffle", error);
-            return null;
-          });
-          if (run.stopped || next === null) break;
-          const added = next.tracks.filter((t) => !ids.has(t.id));
-          // A page of nothing but repeats: the server has run out of new songs.
-          if (added.length === 0) break;
+      dispatch({ type: "setShuffle", shuffle: false });
+      send({ type: "setQueue", tracks: first.tracks, startIndex: 0 });
+      if (from?.kind === "playlist" || from?.kind === "list") {
+        setPlayingFrom({ title: from.title, device: null });
+      }
+      const ids = new Set(first.tracks.map((t) => t.id));
+      source.current = { playlistId, ids };
+      let stopped = false;
+      unfollow.current = () => {
+        stopped = true;
+      };
+      setFilling(true);
+      void followShuffle(first, {
+        more: (token) => youtube.shuffleMore(token),
+        onPage: (added) => {
           for (const t of added) ids.add(t.id);
           dispatch({ type: "extend", tracks: added });
-          more = next.more;
-        }
-        if (!run.stopped) setFilling(false);
-      })();
+        },
+        stopped: () => stopped,
+      }).then(() => {
+        if (!stopped) setFilling(false);
+      });
+      return "youtube";
     },
     [settings.shuffleWith, send, playTrack],
   );

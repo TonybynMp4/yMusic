@@ -86,7 +86,7 @@ pub fn player_queue_next(
 #[tauri::command]
 #[specta::specta]
 pub fn player_log_failure(track_id: String, message: String) {
-    log::warn!("could not play {track_id}: {message}");
+    tracing::warn!(%track_id, %message, "could not play");
 }
 
 #[tauri::command]

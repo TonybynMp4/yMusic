@@ -21,6 +21,7 @@ import {
   IconThumbUp,
   IconThumbUpFilled,
   IconTrash,
+  IconShare3,
   IconUser,
   IconUserMinus,
   IconUserPlus,
@@ -91,6 +92,7 @@ import {
 } from "./cover.ts";
 import { CoverCropper } from "./CoverCropper.tsx";
 import { engine } from "./engine.ts";
+import { shareUrl, type Shared } from "./share.ts";
 import { errorMessage } from "./errors.ts";
 import { queryClient } from "./query.ts";
 import { toggled } from "./Rating.tsx";
@@ -538,6 +540,7 @@ function SongItems({
         </DropdownMenuItem>
       )}
       <GoToArtist artists={track.artists} />
+      <ShareItem shared={videoId ? { kind: "song", videoId } : null} />
       {sourceOf(track.id) === "local" && (
         <>
           <DropdownMenuSeparator />
@@ -548,6 +551,27 @@ function SongItems({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * "Share": copies the music.youtube.com link, as YouTube Music's own does
+ * on a computer. Nothing for a local file or for Liked Music.
+ */
+function ShareItem({ shared }: { shared: Shared | null }) {
+  const x = useInteractions();
+  const url = shared && shareUrl(shared);
+  if (!url) return null;
+  return (
+    <DropdownMenuItem
+      onClick={reporting(x, async () => {
+        await navigator.clipboard.writeText(url);
+        x.notify("Link copied");
+      })}
+    >
+      <IconShare3 />
+      Share
+    </DropdownMenuItem>
   );
 }
 
@@ -653,6 +677,7 @@ function CollectionItems({ route }: { route: Route }) {
           <GoToArtist artists={page.page.artists} />
         </>
       )}
+      <ShareItem shared={route} />
     </>
   );
 }

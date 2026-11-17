@@ -12,12 +12,11 @@ use tauri_plugin_window_state::StateFlags;
 /// Wayland, where the window always reads (0, 0) and cannot move itself:
 /// saving it there would overwrite a real position saved under X11.
 pub fn saved_state() -> StateFlags {
-    let state = StateFlags::SIZE | StateFlags::MAXIMIZED;
-    if is_wayland() {
-        state
-    } else {
-        state | StateFlags::POSITION
+    let mut state = StateFlags::SIZE | StateFlags::MAXIMIZED;
+    if !is_wayland() {
+        state |= StateFlags::POSITION;
     }
+    state
 }
 
 /// Whether GTK opens its windows on Wayland. Read from the environment, as GDK
@@ -119,21 +118,18 @@ pub fn keep_on_screen(window: &WebviewWindow) {
     ) else {
         return;
     };
-    let target = window
+    let Some(target) = window
         .primary_monitor()
         .ok()
         .flatten()
-        .or_else(|| monitors.first().cloned());
-    let Some(target) = target else {
+        .or_else(|| monitors.first().cloned())
+    else {
         return;
     };
     let title_bar = (TITLE_BAR_HEIGHT * window.scale_factor().unwrap_or(1.0)) as u32;
-    let screens: Vec<PhysicalRect<i32, u32>> = monitors
-        .iter()
-        .map(|monitor| *monitor.work_area())
-        .collect();
+    let screens = monitors.iter().map(|monitor| monitor.work_area());
     if let Some((position, size)) =
-        placement(position, size, title_bar, &screens, target.work_area())
+        placement(position, size, title_bar, screens, target.work_area())
     {
         log::info!("the saved window position is off screen, centring it");
         let _ = window.set_size(size);
@@ -143,18 +139,18 @@ pub fn keep_on_screen(window: &WebviewWindow) {
 
 /// Where to put a window whose title bar is on none of `screens`, or `None` to
 /// leave it. It goes in the middle of `target`, shrunk to fit if it is bigger.
-fn placement(
+fn placement<'a>(
     position: PhysicalPosition<i32>,
     size: PhysicalSize<u32>,
     title_bar: u32,
-    screens: &[PhysicalRect<i32, u32>],
+    screens: impl IntoIterator<Item = &'a PhysicalRect<i32, u32>>,
     target: &PhysicalRect<i32, u32>,
 ) -> Option<(PhysicalPosition<i32>, PhysicalSize<u32>)> {
     let centre = PhysicalPosition {
         x: position.x + (size.width / 2) as i32,
         y: position.y + (title_bar.min(size.height) / 2) as i32,
     };
-    if screens.iter().any(|screen| contains(screen, centre)) {
+    if screens.into_iter().any(|screen| contains(screen, centre)) {
         return None;
     }
     let size = PhysicalSize {

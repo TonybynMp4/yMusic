@@ -62,6 +62,40 @@ export function radioId(tuning: RadioTuning): string | null {
 }
 
 /**
+ * The seeds and tuning a tuned radio's id spells out, the reverse of
+ * {@link radioId}; null for any other id, and for one carrying tuning the
+ * builder doesn't offer (decades, genres, or new releases with a popularity),
+ * which it could not edit without losing it. This is how a mix is edited:
+ * YouTube Music's apps build the id from the picks themselves, and read it
+ * back to edit it, so any `RDAT…` id can be.
+ */
+export function parseRadioId(playlistId: string): RadioTuning | null {
+  const match =
+    /^RDAT(m[YXbca])?(dX)?(p[YX])?(i[YX])?(r[XZ])?(?:a([0-9a-z_]+)((?:I[0-9a-z_]+)*)E)?((?:v[\w-]{11})*)z?$/.exec(
+      playlistId,
+    );
+  if (!match) return null;
+  const [, mood, latest, popularity, disc, vari, first, rest, videos] = match;
+  if (latest && popularity) return null;
+  const artists = first ? [first, ...rest!.split("I").filter(Boolean)] : [];
+  const songs = (videos!.match(/v[\w-]{11}/g) ?? []).map((v) => v.slice(1) as VideoId);
+  const tuning: RadioTuning = {
+    artists,
+    songs,
+    discovery: keyOf(discovery, disc ?? "")!,
+    variety: keyOf(variety, vari ?? "")!,
+    filter: keyOf(filters, latest ?? popularity ?? "") ?? null,
+    mood: keyOf(moods, mood ?? "") ?? null,
+  };
+  // Only the id radioId gives back is read, so a missing or misplaced `z` is refused.
+  return radioId(tuning) === playlistId ? tuning : null;
+}
+
+function keyOf<K extends string>(table: Record<K, string>, value: string): K | undefined {
+  return (Object.keys(table) as K[]).find((key) => table[key] === value);
+}
+
+/**
  * The artist of a one-artist radio with a single popularity, discovery or
  * variety modifier, as {@link RadioTuning.artists} takes it; null for any
  * other id. These are the ids of the tuning chips YouTube attaches to an

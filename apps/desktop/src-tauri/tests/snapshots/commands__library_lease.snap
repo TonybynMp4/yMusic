@@ -1,0 +1,17 @@
+---
+source: tests/commands.rs
+expression: lease
+---
+{
+  "bitrate": 96,
+  "codec": "flac",
+  "degraded": null,
+  "expiresAt": null,
+  "headers": {},
+  "isPremiumFormat": false,
+  "itag": null,
+  "loudnessDb": null,
+  "playerClient": null,
+  "trackId": "[id]",
+  "url": "file://<fixtures>/Nebula/01.flac"
+}

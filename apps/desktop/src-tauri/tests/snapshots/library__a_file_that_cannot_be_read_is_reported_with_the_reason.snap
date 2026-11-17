@@ -1,0 +1,16 @@
+---
+source: tests/library.rs
+expression: report
+---
+{
+  "added": 1,
+  "updated": 0,
+  "unchanged": 0,
+  "failed": [
+    {
+      "path": "<temp>/music/broken.flac",
+      "reason": "failed to parse Flac file"
+    }
+  ],
+  "removed": 0
+}

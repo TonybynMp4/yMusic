@@ -1,0 +1,20 @@
+---
+source: tests/commands.rs
+expression: "tracks[0]"
+---
+{
+  "addedAt": "[timestamp]",
+  "album": "Drift",
+  "albumArtist": null,
+  "artist": "Nebula",
+  "bitrate": 96,
+  "codec": "flac",
+  "coverArt": null,
+  "discNumber": null,
+  "durationMs": 2000,
+  "id": "[id]",
+  "path": "<fixtures>/Nebula/01.flac",
+  "title": "First Light",
+  "trackNumber": 1,
+  "year": 2021
+}

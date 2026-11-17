@@ -1,2 +1,5 @@
 /target
 /gen
+# Pending insta snapshots, left by a failed run until `cargo insta review`
+*.snap.new
+.*.pending-snap

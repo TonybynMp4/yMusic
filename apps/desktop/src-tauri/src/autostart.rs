@@ -74,13 +74,20 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
             Some(Entry {
                 runs: true,
                 exe: Some(path),
-            }) if !path.exists() => set(&app, true),
+            }) if is_gone(&path) => set(&app, true),
             _ => Ok(()),
         });
         if let Err(error) = result {
             tracing::warn!(%error, "could not refresh the login entry");
         }
     });
+}
+
+/// Whether an entry's binary no longer exists. Only an absolute path can
+/// tell: a bare name such as `ymusic` is found through `PATH` at login, and
+/// checking it against the working directory would read it as missing.
+fn is_gone(path: &Path) -> bool {
+    path.is_absolute() && !path.exists()
 }
 
 /// The path that starts this app. An AppImage runs from a mount that changes
@@ -370,8 +377,8 @@ mod imp {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use super::appimage_file;
     use super::imp::{desktop_file, exec_path, quote_exec, runs};
+    use super::{appimage_file, is_gone};
 
     #[test]
     fn quotes_the_exec_path() {
@@ -400,6 +407,14 @@ mod tests {
         }
         let unquoted = "[Desktop Entry]\nExec=/usr/bin/ymusic --autostart\n";
         assert_eq!(exec_path(unquoted), Some(PathBuf::from("/usr/bin/ymusic")));
+    }
+
+    #[test]
+    fn only_a_missing_absolute_path_is_gone() {
+        assert!(is_gone(Path::new("/no/such/dir/ymusic")));
+        assert!(!is_gone(Path::new("/bin/sh")));
+        // Found through `PATH` at login, whatever the working directory.
+        assert!(!is_gone(Path::new("ymusic")));
     }
 
     #[test]

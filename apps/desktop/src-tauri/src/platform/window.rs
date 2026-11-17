@@ -94,13 +94,18 @@ fn wayland_socket(display: Option<&str>, runtime_dir: Option<&Path>) -> Option<P
 }
 
 /// The main window's entry in the plugin's file, as far as placing it goes.
-/// `width` and `height` are the inner size.
+/// `width` and `height` are the inner size. For a maximized window they are
+/// the size it un-maximizes to, and `prev_x` and `prev_y` the position.
 #[derive(Deserialize)]
 struct SavedWindow {
     width: u32,
     height: u32,
     x: i32,
     y: i32,
+    #[serde(default)]
+    prev_x: i32,
+    #[serde(default)]
+    prev_y: i32,
     #[serde(default)]
     maximized: bool,
 }
@@ -112,9 +117,40 @@ fn read_saved<R: Runtime>(app: &AppHandle<R>) -> Option<SavedWindow> {
     windows.remove("main")
 }
 
-/// Managed once the main window has been shown at the end of setup. Until
-/// then nothing else may show it: the page would find its state missing.
-pub struct Shown;
+/// Whether setup has shown the main window, and whether anything asked to
+/// show it before then. Until setup shows it nothing else may: the page would
+/// find its state missing.
+struct Startup {
+    shown: bool,
+    requested: bool,
+}
+
+static STARTUP: Mutex<Startup> = Mutex::new(Startup {
+    shown: false,
+    requested: false,
+});
+
+/// Shows the main window at the end of setup, and focuses it when a second
+/// launch, the tray or the media controls asked for it while setup ran.
+pub fn reveal(window: &WebviewWindow) {
+    let requested = {
+        let mut startup = STARTUP.lock().expect("startup mutex");
+        startup.shown = true;
+        startup.requested
+    };
+    let _ = window.show();
+    if requested {
+        let _ = window.set_focus();
+    }
+}
+
+/// Whether setup has shown the main window, so others may show it too. Before
+/// then the request is kept for `reveal`.
+pub fn may_show() -> bool {
+    let mut startup = STARTUP.lock().expect("startup mutex");
+    startup.requested |= !startup.shown;
+    startup.shown
+}
 
 /// How much of the top of the window has to be on a screen to count as
 /// reachable: the custom title bar's height, the part you drag it by. Keep it
@@ -184,18 +220,19 @@ pub fn forward_touchpad_pinch(window: &WebviewWindow) {
 
 /// Moves the window back onto a screen when its saved position leaves its
 /// title bar on none, which happens when the monitor it was on is gone. The
-/// plugin only checks that one corner of the window lands on a monitor.
+/// plugin only checks that one corner of the window lands on a monitor, and
+/// for a maximized window it checks the maximized corner but restores the
+/// position it un-maximizes to, which it does not check at all.
 ///
 /// It works from the saved state, not the window: on Linux the plugin's moves
 /// are still queued at this point, and a window that has never been mapped
 /// reads its creation-time geometry. Its own moves queue behind the plugin's.
 pub fn keep_on_screen(window: &WebviewWindow) {
-    // Wayland reports no position to check, and ignores one set. Maximizing
-    // places the window on a screen.
+    // Wayland reports no position to check, and ignores one set.
     if is_wayland() {
         return;
     }
-    let Some(saved) = read_saved(window.app_handle()).filter(|saved| !saved.maximized) else {
+    let Some(saved) = read_saved(window.app_handle()) else {
         return;
     };
     if saved.width == 0 || saved.height == 0 {
@@ -213,37 +250,60 @@ pub fn keep_on_screen(window: &WebviewWindow) {
         return;
     };
     let size = PhysicalSize::new(saved.width, saved.height);
-    let title_bar = (TITLE_BAR_HEIGHT * window.scale_factor().unwrap_or(1.0)) as u32;
-    let screens = monitors.iter().map(|monitor| monitor.work_area());
-    if let Some((position, fitted)) = placement(
-        PhysicalPosition::new(saved.x, saved.y),
-        size,
-        title_bar,
-        screens,
-        target.work_area(),
-    ) {
-        log::info!("the saved window position is off screen, centring it");
-        if fitted != size {
-            let _ = window.set_size(fitted);
-        }
-        let _ = window.set_position(position);
+    let position = if saved.maximized {
+        PhysicalPosition::new(saved.prev_x, saved.prev_y)
+    } else {
+        PhysicalPosition::new(saved.x, saved.y)
+    };
+    // The whole monitor, not its work area: a title bar under a panel the
+    // window manager lets windows overlap is still on screen. Each with its
+    // own scale, which sets how tall the title bar is there.
+    let screens = monitors.iter().map(|monitor| Screen {
+        bounds: PhysicalRect {
+            position: *monitor.position(),
+            size: *monitor.size(),
+        },
+        title_bar: (TITLE_BAR_HEIGHT * monitor.scale_factor()) as u32,
+    });
+    let Some((position, fitted)) = placement(position, size, screens, target.work_area()) else {
+        return;
+    };
+    log::info!("the saved window position is off screen, centring it");
+    // A maximized window takes the new place as the one it un-maximizes to.
+    if saved.maximized {
+        let _ = window.unmaximize();
     }
+    if fitted != size {
+        let _ = window.set_size(fitted);
+    }
+    let _ = window.set_position(position);
+    if saved.maximized {
+        let _ = window.maximize();
+    }
+}
+
+/// A monitor, and the height of the title bar on it.
+struct Screen {
+    bounds: PhysicalRect<i32, u32>,
+    title_bar: u32,
 }
 
 /// Where to put a window whose title bar is on none of `screens`, or `None` to
 /// leave it. It goes in the middle of `target`, shrunk to fit if it is bigger.
-fn placement<'a>(
+fn placement(
     position: PhysicalPosition<i32>,
     size: PhysicalSize<u32>,
-    title_bar: u32,
-    screens: impl IntoIterator<Item = &'a PhysicalRect<i32, u32>>,
+    screens: impl IntoIterator<Item = Screen>,
     target: &PhysicalRect<i32, u32>,
 ) -> Option<(PhysicalPosition<i32>, PhysicalSize<u32>)> {
-    let centre = PhysicalPosition {
-        x: position.x + (size.width / 2) as i32,
-        y: position.y + (title_bar.min(size.height) / 2) as i32,
-    };
-    if screens.into_iter().any(|screen| contains(screen, centre)) {
+    let on_screen = screens.into_iter().any(|screen| {
+        let centre = PhysicalPosition {
+            x: position.x + (size.width / 2) as i32,
+            y: position.y + (screen.title_bar.min(size.height) / 2) as i32,
+        };
+        contains(&screen.bounds, centre)
+    });
+    if on_screen {
         return None;
     }
     let size = PhysicalSize {
@@ -274,6 +334,13 @@ mod tests {
         PhysicalRect {
             position: PhysicalPosition { x, y },
             size: PhysicalSize { width, height },
+        }
+    }
+
+    fn screen(x: i32, y: i32, width: u32, height: u32) -> Screen {
+        Screen {
+            bounds: rect(x, y, width, height),
+            title_bar: 32,
         }
     }
 
@@ -309,16 +376,17 @@ mod tests {
 
     #[test]
     fn leaves_a_window_whose_title_bar_is_on_a_screen() {
-        let screens = [rect(0, 0, 1920, 1080), rect(1920, 0, 2560, 1440)];
+        let screens = [screen(0, 0, 1920, 1080), screen(1920, 0, 2560, 1440)];
         let at = PhysicalPosition { x: 2400, y: 200 };
-        assert_eq!(placement(at, SIZE, 32, &screens, &screens[0]), None);
+        let target = rect(0, 0, 1920, 1080);
+        assert_eq!(placement(at, SIZE, screens, &target), None);
     }
 
     #[test]
     fn centres_a_window_left_on_a_monitor_that_is_gone() {
         let laptop = rect(0, 0, 1920, 1080);
         let at = PhysicalPosition { x: 2400, y: 200 };
-        let (position, size) = placement(at, SIZE, 32, &[laptop], &laptop).unwrap();
+        let (position, size) = placement(at, SIZE, [screen(0, 0, 1920, 1080)], &laptop).unwrap();
         assert_eq!(size, SIZE);
         assert_eq!(position, PhysicalPosition { x: 410, y: 180 });
     }
@@ -329,7 +397,7 @@ mod tests {
         // the plugin, but the title bar is above the top edge.
         let laptop = rect(0, 0, 1920, 1080);
         let at = PhysicalPosition { x: 1000, y: -700 };
-        assert!(placement(at, SIZE, 32, &[laptop], &laptop).is_some());
+        assert!(placement(at, SIZE, [screen(0, 0, 1920, 1080)], &laptop).is_some());
     }
 
     #[test]
@@ -340,7 +408,7 @@ mod tests {
             height: 1300,
         };
         let at = PhysicalPosition { x: -2400, y: 0 };
-        let (position, size) = placement(at, big, 32, &[small], &small).unwrap();
+        let (position, size) = placement(at, big, [screen(0, 0, 1280, 680)], &small).unwrap();
         assert_eq!(
             size,
             PhysicalSize {
@@ -349,5 +417,28 @@ mod tests {
             }
         );
         assert_eq!(position, PhysicalPosition { x: 0, y: 0 });
+    }
+
+    #[test]
+    fn leaves_a_title_bar_under_a_top_panel() {
+        // The work area starts below a 40px panel; the monitor does not.
+        let screens = [screen(0, 0, 1920, 1080)];
+        let work_area = rect(0, 40, 1920, 1040);
+        let at = PhysicalPosition { x: 400, y: 0 };
+        assert_eq!(placement(at, SIZE, screens, &work_area), None);
+    }
+
+    #[test]
+    fn measures_the_title_bar_on_each_screen() {
+        // The middle of a 64px title bar at y = -20 is on screen; the middle
+        // of a 32px one is not.
+        let at = PhysicalPosition { x: 400, y: -20 };
+        let target = rect(0, 0, 1920, 1080);
+        let hidpi = Screen {
+            bounds: target,
+            title_bar: 64,
+        };
+        assert_eq!(placement(at, SIZE, [hidpi], &target), None);
+        assert!(placement(at, SIZE, [screen(0, 0, 1920, 1080)], &target).is_some());
     }
 }

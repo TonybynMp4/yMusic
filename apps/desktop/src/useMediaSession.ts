@@ -7,6 +7,14 @@ import type { usePlayer } from "./usePlayer.ts";
 
 type Player = ReturnType<typeof usePlayer>;
 
+/** The media keys that move playback somewhere else. */
+const MOVES: ReadonlySet<MediaKeyEvent["type"]> = new Set([
+  "next",
+  "previous",
+  "seekBy",
+  "setPosition",
+]);
+
 function logMediaFailure(error: unknown): void {
   console.error("media session update failed", error);
 }
@@ -20,9 +28,11 @@ export function useMediaSession(player: Player) {
   // The subscription is made once, so it reads the player through an effect
   // event: the callbacks close over playback state and change every render.
   const onMediaKey = useEffectEvent(async (event: MediaKeyEvent) => {
-    // Previous and a seek by an offset start from the position, which is up to
-    // ten seconds old while the window is hidden in the tray.
-    if (windowHidden.get() && (event.type === "previous" || event.type === "seekBy")) {
+    // While the window is hidden in the tray the position is up to ten
+    // seconds old. Previous and a seek by an offset start from it, and a skip
+    // or a seek closes a stretch of listening at it, so each asks for a fresh
+    // one first. A pause needs nothing: Rust sends the position with it.
+    if (windowHidden.get() && MOVES.has(event.type)) {
       await player.syncPosition().catch(logMediaFailure);
     }
     switch (event.type) {

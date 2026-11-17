@@ -271,4 +271,54 @@ describe("MpvPlaybackEngine while the window is hidden", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(tauri.position).toHaveBeenCalledTimes(3);
   });
+
+  it("answers overlapping syncs with one question, and both see the fresh position", async () => {
+    tauri.position.mockReturnValueOnce(reply(1_000)).mockReturnValue(reply(7_500));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    const seen: number[][] = [];
+    const first = engine.syncPosition().then(() => seen.push(positions()));
+    const second = engine.syncPosition().then(() => seen.push(positions()));
+    await Promise.all([first, second]);
+
+    expect(tauri.position).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual([
+      [1_000, 7_500],
+      [1_000, 7_500],
+    ]);
+  });
+
+  it("asks again when a status drops the reply to a sync", async () => {
+    tauri.position.mockReturnValueOnce(reply(1_000));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    let answer!: (position: { positionMs: number; durationMs: number }) => void;
+    tauri.position
+      .mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      .mockReturnValue(reply(7_500));
+    const synced = engine.syncPosition();
+    push({ type: "status", status: "playing" });
+    answer({ positionMs: 7_000, durationMs: 200_000 });
+    await synced;
+
+    expect(positions()).toEqual([1_000, 7_500]);
+  });
+
+  it("keeps polling after a question that failed", async () => {
+    tauri.position.mockReturnValueOnce(reply(1_000));
+    setHidden(true);
+    push({ type: "status", status: "playing" });
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    tauri.position.mockRejectedValueOnce(new Error("no reply")).mockReturnValue(reply(17_000));
+    await engine.syncPosition();
+    expect(positions()).toEqual([1_000]);
+
+    await vi.advanceTimersByTimeAsync(HIDDEN_POLL_MS);
+    expect(positions()).toEqual([1_000, 17_000]);
+  });
 });

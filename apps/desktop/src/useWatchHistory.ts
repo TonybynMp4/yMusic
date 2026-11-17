@@ -41,21 +41,9 @@ export function useWatchHistory(
   position: PositionStore,
   paused: boolean,
   playlistOf: (id: TrackId) => string | null,
-  durationMs: number | null,
 ): void {
   const play = useRef<Play | null>(null);
   const playing = useRef(false);
-  // The playing song's length, kept past the render that clears it when the
-  // next song starts, for the play that is then finished.
-  const length = useRef<{ trackId: TrackId; ms: number } | null>(null);
-  useEffect(() => {
-    if (trackId !== null && durationMs !== null) length.current = { trackId, ms: durationMs };
-  }, [trackId, durationMs]);
-  const lengthOf = useCallback(
-    (current: Play) => (length.current?.trackId === current.trackId ? length.current.ms : null),
-    [],
-  );
-
   const report = useCallback(
     (current: Play, final: boolean) => {
       const handle = current.handle;
@@ -76,29 +64,22 @@ export function useWatchHistory(
     [position],
   );
 
-  /**
-   * Sends the final report, after which the next moment playing is a new play.
-   * `wasPlaying` says whether the song played right up to now.
-   */
-  const finish = useCallback(
-    (wasPlaying: boolean) => {
-      const current = play.current;
-      if (current === null) return;
-      current.listened.pause(wasPlaying ? performance.now() : null, lengthOf(current));
-      report(current, true);
-      play.current = null;
-    },
-    [report, lengthOf],
-  );
+  /** Sends the final report, after which the next moment playing is a new play. */
+  const finish = useCallback(() => {
+    const current = play.current;
+    if (current === null) return;
+    current.listened.pause();
+    report(current, true);
+    play.current = null;
+  }, [report]);
 
   // A different track ends the old play. The next one starts once it plays,
   // not when it is queued up or still loading.
   useEffect(() => {
-    const wasPlaying = playing.current;
-    if (play.current && play.current.trackId !== trackId) finish(wasPlaying);
+    if (play.current && play.current.trackId !== trackId) finish();
     playing.current = status === "playing";
     if (status === "ended") {
-      finish(wasPlaying);
+      finish();
       return;
     }
     const videoId = trackId === null ? null : videoIdFromTrackId(trackId);
@@ -116,33 +97,35 @@ export function useWatchHistory(
       };
       return;
     }
-    // A pause is reported straight away, with the stretch it closed.
+    // A pause is reported straight away, with the stretch it closed. The
+    // position it paused at has arrived by now: Rust sends it ahead of the
+    // status, as it does when a song ends.
     const current = play.current;
     if (current && status === "paused") {
-      current.listened.pause(wasPlaying ? performance.now() : null, lengthOf(current));
+      current.listened.pause();
       report(current, false);
     }
-  }, [trackId, status, paused, report, finish, lengthOf, playlistOf]);
+  }, [trackId, status, paused, report, finish, playlistOf]);
 
   useEffect(
     () =>
       position.subscribe(() => {
         const current = play.current;
         if (current === null || !playing.current) return;
-        current.listened.observe(position.get(), performance.now(), lengthOf(current));
+        current.listened.observe(position.get(), performance.now());
         if (Date.now() >= current.nextReportAt) report(current, false);
       }),
-    [position, report, lengthOf],
+    [position, report],
   );
 
   // Closing the app ends whatever is playing. The report may not make it out
   // before the window goes, which costs a few seconds of watch time.
   useEffect(() => {
-    const onUnload = () => finish(playing.current);
+    const onUnload = () => finish();
     window.addEventListener("beforeunload", onUnload);
     return () => {
       window.removeEventListener("beforeunload", onUnload);
-      finish(playing.current);
+      finish();
     };
   }, [finish]);
 }

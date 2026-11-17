@@ -769,6 +769,8 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
             let mut duration_ms: Option<u64> = None;
             // Set on a restart, so the next `time-pos` reaches the page too.
             let mut page_wants_position = false;
+            // Where the song was last seen, for the page to hear when it ends.
+            let mut last_position: Option<Position> = None;
 
             loop {
                 let Some(event) = mpv.wait_event(0.5) else {
@@ -802,6 +804,7 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                 match event {
                     Event::StartFile => {
                         duration_ms = None;
+                        last_position = None;
                         match advance(&mpv, &state) {
                             Advance::None => emit(
                                 &sink,
@@ -837,7 +840,8 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         // the position itself (`Player::progress`) while a
                         // song plays. It only hears it from here when a song
                         // starts or after a seek, which also covers a scrub
-                        // while paused, when the page is not asking.
+                        // while paused, when the page is not asking, and
+                        // below on a pause and at the song's end.
                         //
                         // `time-pos` can still fall short of the seek target
                         // here and only settle in the next change, which mpv
@@ -869,6 +873,12 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         libmpv2::mpv_end_file_reason::Eof => {
                             // With a track appended, mpv goes straight on to
                             // it, and `StartFile` reports the change.
+                            // The page asks for the position as rarely as every
+                            // ten seconds (hidden in the tray), so it hears
+                            // where the song got to before it hears it is over.
+                            if let Some(event) = end_position(last_position.take()) {
+                                emit(&sink, event);
+                            }
                             let mut gapless = state.gapless.lock().expect("gapless mutex");
                             if gapless.next.is_some() {
                                 gapless.advancing = true;
@@ -907,8 +917,13 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                     } => match reply_userdata {
                         OBSERVE_TIME_POS => {
                             if let libmpv2::events::PropertyData::Double(seconds) = change {
+                                let position_ms = seconds_to_ms(seconds);
+                                last_position = Some(Position {
+                                    position_ms,
+                                    duration_ms,
+                                });
                                 let event = PlaybackEvent::Position {
-                                    position_ms: seconds_to_ms(seconds),
+                                    position_ms,
                                     duration_ms,
                                 };
                                 if page_wants_position {
@@ -930,6 +945,24 @@ fn spawn_event_thread(mpv: Arc<Mpv>, sink: Sink, state: State) {
                         },
                         OBSERVE_PAUSE => {
                             if let libmpv2::events::PropertyData::Flag(paused) = change {
+                                // A pause comes with where it paused: the
+                                // page's last position can be ten seconds old,
+                                // and it saves and reports the one it has.
+                                if paused {
+                                    if let Some(Position {
+                                        position_ms,
+                                        duration_ms,
+                                    }) = read_position(&mpv)
+                                    {
+                                        emit(
+                                            &sink,
+                                            PlaybackEvent::Position {
+                                                position_ms,
+                                                duration_ms,
+                                            },
+                                        );
+                                    }
+                                }
                                 emit(
                                     &sink,
                                     PlaybackEvent::Status {
@@ -1015,6 +1048,16 @@ fn read_position(mpv: &Mpv) -> Option<Position> {
     })
 }
 
+/// The position a song that played to its end is reported at: its length, or
+/// where it was last seen when mpv never gave one.
+fn end_position(last: Option<Position>) -> Option<PlaybackEvent> {
+    let last = last?;
+    Some(PlaybackEvent::Position {
+        position_ms: last.duration_ms.unwrap_or(last.position_ms),
+        duration_ms: last.duration_ms,
+    })
+}
+
 fn emit_to_observers(sink: &Sink, event: PlaybackEvent) {
     for observer in sink.observers.lock().expect("observer mutex").iter() {
         observer.send(event.clone());
@@ -1031,6 +1074,37 @@ fn emit(sink: &Sink, event: PlaybackEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_song_that_ends_is_reported_at_its_length() {
+        let event = end_position(Some(Position {
+            position_ms: 193_400,
+            duration_ms: Some(200_000),
+        }));
+        assert!(matches!(
+            event,
+            Some(PlaybackEvent::Position {
+                position_ms: 200_000,
+                duration_ms: Some(200_000),
+            })
+        ));
+    }
+
+    #[test]
+    fn a_song_with_no_length_ends_where_it_was_last_seen() {
+        let event = end_position(Some(Position {
+            position_ms: 193_400,
+            duration_ms: None,
+        }));
+        assert!(matches!(
+            event,
+            Some(PlaybackEvent::Position {
+                position_ms: 193_400,
+                duration_ms: None,
+            })
+        ));
+        assert!(end_position(None).is_none());
+    }
 
     fn device(name: &str) -> AudioDevice {
         AudioDevice {

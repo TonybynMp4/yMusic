@@ -290,6 +290,29 @@ export function useSignedIn(): boolean {
   return useInteractions().signedIn;
 }
 
+/**
+ * Moves a library entry from one playlist to another: what editing a saved
+ * mix does, since the edited mix is a new playlist id. Saves the new one
+ * first, so a failure halfway leaves both rather than neither.
+ */
+export function useReplaceSaved(): (from: string, to: string) => Promise<void> {
+  const x = useInteractions();
+  return async (from, to) => {
+    try {
+      await engine.setSaved(to, true);
+      await engine.setSaved(from, false);
+      patchPage({ kind: "playlist", id: from }, (p) =>
+        p.kind === "artist" ? p : ({ ...p, page: { ...p.page, saved: false } } as Page),
+      );
+      x.libraryChanged();
+      x.notify("Mix updated in your library");
+    } catch (error) {
+      x.libraryChanged();
+      x.notify(errorMessage(error));
+    }
+  };
+}
+
 /** Shows a short message at the bottom of the window. */
 export function useNotify(): (message: string) => void {
   return useInteractions().notify;

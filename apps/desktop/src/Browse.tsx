@@ -31,6 +31,7 @@ import {
   InteractionButton,
   PRIVACY_LABELS,
   usePlaylistEditing,
+  useReplaceSaved,
   type Subject,
 } from "./Interactions.tsx";
 import { EditRadio } from "./RadioChips.tsx";
@@ -165,6 +166,7 @@ function Playlist({
   // playlist whose artwork is missing shows the playlist icon.
   const liked = route.id === LIKED_MUSIC;
   const editing = usePlaylistEditing(page);
+  const replaceSaved = useReplaceSaved();
   // Every row is in: not still loading, and not stopped early by a failure.
   const complete = !loadingMore && !resume;
   // YouTube's count and length until every row is in, then the rows' own,
@@ -200,14 +202,11 @@ function Playlist({
             <EditRadio
               radio={route.id}
               variant="button"
-              onPlay={(tracks, cover, radio) =>
-                actions.onPlay(tracks, tracks[0]!.id, {
-                  kind: "list",
-                  title: cover?.title ?? "Radio",
-                  radio,
-                  ...(cover ? { thumbnails: cover.thumbnails } : {}),
-                })
-              }
+              // As on Android: open the edited mix's page, and move a saved mix's library entry to it.
+              onPlay={(_tracks, _cover, radio) => {
+                if (page.saved === true) void replaceSaved(route.id, radio);
+                actions.onOpen({ kind: "playlist", id: radio });
+              }}
             />
           </>
         }

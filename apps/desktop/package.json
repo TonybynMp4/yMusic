@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:replay": "YMUSIC_REPLAY=${YMUSIC_REPLAY:-default} vite",
+    "record": "YMUSIC_RECORD=${YMUSIC_RECORD:-default} tauri dev",
+    "record:browser": "YMUSIC_RECORD=${YMUSIC_RECORD:-signed-out} vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

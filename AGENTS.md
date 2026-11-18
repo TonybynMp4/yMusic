@@ -24,6 +24,10 @@ Typecheck, clippy and the tests take too long for every commit, so they run in C
 
 GitHub skips the commits in `.git-blame-ignore-revs` when showing blame. For local `git blame` to skip them too, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once. Add the squash commit of any future bulk reformat there.
 
+## Test-driving the app
+
+To see a change, or take before and after screenshots, run the app in a browser from a recording with `pnpm --filter @ymusic/desktop dev:replay`. It needs no account and makes no requests. See `docs/replay.md`, including what to do when a screen needs data the recording lacks.
+
 ## UI
 
 - Follow YouTube Music, not Spotify, for layout and behaviour.

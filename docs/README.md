@@ -19,4 +19,5 @@ How the parts that are built work, and why they are built that way. Plans for wh
 - [Memory](memory.md): where memory goes, and what has been cut.
 - [Logging](logging.md): where the log goes, how to change the level, how to read spans, and what is never logged.
 - [Testing](testing.md): unit tests and the opt-in network tests.
+- [Replay](replay.md): recording the app's IPC and YouTube traffic, and running the app in a browser from the recording.
 - [React performance](react-performance.md): how to profile the UI, common causes of slow renders, and what is left to look at.

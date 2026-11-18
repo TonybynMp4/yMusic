@@ -19,6 +19,8 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [x] Explicit libmpv version floor with a clear startup error
 - [x] TypeScript types for the Tauri commands generated from Rust (tauri-specta)
 - [x] YouTube Music's snackbar on Base UI's Toast, one at a time, for the whole app
+- [x] Replay: the app runs in a browser from a recording of its IPC, for test drives without an account (`docs/replay.md`)
+- [ ] Replay the player's channel events, so a track can start in a replay
 
 ### Playback
 

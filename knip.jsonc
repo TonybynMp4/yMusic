@@ -6,8 +6,8 @@
     },
     "apps/desktop": {
       // The Vite plugin finds main.tsx through index.html; the workers are
-      // spawned by URL.
-      "entry": ["src/*.worker.ts"],
+      // spawned by URL. The replay plugin injects its two entries into index.html.
+      "entry": ["src/*.worker.ts", "src/replay/record.ts", "src/replay/replay.ts"],
       // CSS included so the Tailwind imports in styles.css count.
       "project": ["src/**/*.{ts,tsx,css}"],
     },

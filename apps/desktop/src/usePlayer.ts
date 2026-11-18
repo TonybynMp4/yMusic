@@ -39,6 +39,12 @@ function logPlaybackFailure(error: unknown): void {
   console.error("playback command failed", error);
 }
 
+/** A playing radio as changed in the radio builder: its new name and cover. */
+export interface RadioEdit {
+  title: string;
+  thumbnails: Thumbnail[];
+}
+
 /**
  * Where a queue came from, so it can keep growing and be named under
  * "Playing from": a playlist still loading its later pages, a fixed list
@@ -445,6 +451,9 @@ export function usePlayer(
           device: null,
           ...(from.kind === "list" && from.thumbnails ? { thumbnails: from.thumbnails } : {}),
           ...(from.kind === "list" && from.radio ? { radio: from.radio } : {}),
+          // A mix opened as a playlist (a tuned radio, or one of YouTube's
+          // mixes) gets its chips and its edit button like one started here.
+          ...(from.kind === "playlist" && from.id.startsWith("RD") ? { radio: from.id } : {}),
         });
       }
       if (from?.kind !== "playlist") {
@@ -485,16 +494,26 @@ export function usePlayer(
 
   /**
    * Plays the radio of a tuning chip after the playing song, in place of
-   * what was to come, and marks the chip as picked. `radio` is the radio
-   * the chip belongs to: when the queue has moved on to something else
-   * while the chip's songs loaded, nothing changes.
+   * what was to come, and marks the chip as picked. A radio changed in the
+   * builder (`edited`) becomes the mix the queue plays, with its own name,
+   * cover and chips. `radio` is the radio the chip or edit belongs to: when
+   * the queue has moved on to something else while the songs loaded,
+   * nothing changes.
    */
   const tune = useCallback(
-    (radio: string, playlistId: string, tracks: Track[]) => {
+    (radio: string, playlistId: string, tracks: Track[], edited?: RadioEdit) => {
       if (playingFromNow.current?.radio !== radio) return;
       stopFollowing();
       dispatch({ type: "replaceUpcoming", tracks });
       setPlayingFrom((from) => {
+        if (edited) {
+          return {
+            title: edited.title,
+            device: null,
+            radio: playlistId,
+            ...(edited.thumbnails.length > 0 ? { thumbnails: edited.thumbnails } : {}),
+          };
+        }
         if (!from?.radio) return from;
         const picked: QueueFrom = { ...from, tuned: playlistId };
         if (playlistId === from.radio) delete picked.tuned;

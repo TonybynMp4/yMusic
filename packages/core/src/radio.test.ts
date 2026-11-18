@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VideoId } from "./domain.ts";
-import { defaultTuning, radioArtist, radioId, type RadioTuning } from "./radio.ts";
+import { defaultTuning, parseRadioId, radioArtist, radioId, type RadioTuning } from "./radio.ts";
 
 const tuning = (over: Partial<RadioTuning>): RadioTuning => ({
   artists: [],
@@ -71,5 +71,66 @@ describe("radioArtist", () => {
     ["RDATpYa0kr_tI0187x8E", null],
   ])("%s", (id, expected) => {
     expect(radioArtist(id)).toBe(expected);
+  });
+});
+
+describe("parseRadioId", () => {
+  it.each<[string, Partial<RadioTuning>]>([
+    ["RDATa0kr_tE", { artists: ["0kr_t"] }],
+    ["RDATa0_yc88vEz", { artists: ["0_yc88v"] }],
+    ["RDATpYa0kr_tEz", { artists: ["0kr_t"], filter: "popular" }],
+    ["RDATdXa0kr_tEz", { artists: ["0kr_t"], filter: "latest" }],
+    ["RDATiYrXa0kr_tE", { artists: ["0kr_t"], discovery: "familiar", variety: "low" }],
+    [
+      "RDATmXpXiXrZa0kr_tI0187x8E",
+      {
+        artists: ["0kr_t", "0187x8"],
+        mood: "chill",
+        filter: "deepCuts",
+        discovery: "discover",
+        variety: "high",
+      },
+    ],
+    ["RDATpYvBJwovrr6XzI", { songs: ["BJwovrr6XzI" as VideoId], filter: "popular" }],
+    [
+      // A mix made in the Android app, one past a multiple of four with no z.
+      "RDATiXrZa11svx3kx26I11pkb0819tI0q94tmtI0slzk74I012z2_tzI11hdsch370I11tc8lkllhI0h1ggxnI11np34hxcyE",
+      {
+        artists: [
+          "11svx3kx26",
+          "11pkb0819t",
+          "0q94tmt",
+          "0slzk74",
+          "012z2_tz",
+          "11hdsch370",
+          "11tc8lkllh",
+          "0h1ggxn",
+          "11np34hxcy",
+        ],
+        discovery: "discover",
+        variety: "high",
+      },
+    ],
+    [
+      "RDATa0kr_tEvBJwovrr6XzIvIO_GLvVB5Vc",
+      { artists: ["0kr_t"], songs: ["BJwovrr6XzI", "IO_GLvVB5Vc"] as VideoId[] },
+    ],
+  ])("reads %s", (id, expected) => {
+    expect(parseRadioId(id)).toEqual(tuning(expected));
+  });
+
+  it.each([
+    ["a song radio", "RDAMVMBJwovrr6XzI"],
+    ["an artist mix", "RDEMabc"],
+    ["no seeds", "RDATpY"],
+    ["a missing z", "RDATa0_yc88vE"],
+    ["a misplaced z", "RDATa0kr_tEz"],
+    ["a z on a long id", "RDATiXrZa11svx3kx26I11pkb0819tEz"],
+    ["a decade", "RDATd0Xa0kr_tE"],
+    ["a genre", "RDATg9Xa0kr_tE"],
+    ["new releases with a popularity", "RDATdXpYa0kr_tE"],
+    ["modifiers out of order", "RDATiXpYa0kr_tE"],
+  ])("refuses %s", (_, id) => {
+    expect(parseRadioId(id)).toBeNull();
   });
 });

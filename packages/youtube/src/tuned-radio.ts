@@ -3,7 +3,7 @@ import { radioArtist, type RadioChip, type RadioCover } from "@ymusic/core";
 
 import { toThumbnails, type RawThumbnail } from "./thumbnails.ts";
 
-/** The raw `/next` answer for a mix, as YouTube Music's own "Start mix" asks for it. */
+/** The raw `/next` answer for a mix, as YouTube Music's own "Start radio" asks for it. */
 async function nextOf(youtube: Innertube, playlistId: string): Promise<unknown> {
   const response = await youtube.actions.execute("/next", {
     playlistId,

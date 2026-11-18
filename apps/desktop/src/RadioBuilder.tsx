@@ -10,6 +10,7 @@ import { skipToken, useQueries, useQuery } from "@tanstack/react-query";
 import {
   defaultTuning,
   maxRadioSeeds,
+  parseRadioId,
   radioId,
   type BrowseCard,
   type RadioCover,
@@ -37,10 +38,26 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { engine } from "./engine.ts";
 
-/** What a radio grows from: an artist, by channel, or a song. */
+/**
+ * What a radio grows from: an artist or a song. An artist picked here is
+ * known by its channel, and its Knowledge Graph id (`radioArtist`) is looked
+ * up; one read back from a radio being edited is known by that id alone.
+ */
 export type RadioSeed =
-  | { kind: "artist"; channelId: string; name: string; thumbnails: Thumbnail[] }
+  | {
+      kind: "artist";
+      channelId: string | null;
+      radioArtist?: string;
+      name: string;
+      thumbnails: Thumbnail[];
+    }
   | { kind: "song"; videoId: VideoId; title: string; thumbnails: Thumbnail[] };
+
+/** What the builder opens with: seeds picked, and for a radio being edited, its tuning. */
+export interface RadioDraft {
+  seeds: RadioSeed[];
+  tuning?: Tuning;
+}
 
 type Tuning = Omit<RadioTuning, "artists" | "songs">;
 
@@ -67,6 +84,8 @@ const MOODS: [NonNullable<Tuning["mood"]>, string][] = [
   ["focus", "Focus"],
 ];
 
+type OnPlay = (tracks: Track[], cover: RadioCover | null, radio: string) => void;
+
 /**
  * YouTube Music's radio builder: pick artists and songs, tune how familiar
  * and how varied the radio is, and play it. Open while `seeds` is set, with
@@ -82,7 +101,7 @@ export function RadioBuilderDialog({
   /** Whether there is a library to suggest seeds from. */
   signedIn: boolean;
   onClose: () => void;
-  onPlay: (tracks: Track[], cover: RadioCover | null, radio: string) => void;
+  onPlay: OnPlay;
 }) {
   return (
     <Dialog open={seeds !== null} onOpenChange={(open) => open || onClose()}>
@@ -90,7 +109,7 @@ export function RadioBuilderDialog({
         {/* Mounted afresh on each opening, so it starts from the seeds given. */}
         {seeds && (
           <Builder
-            initial={seeds}
+            initial={{ seeds }}
             signedIn={signedIn}
             onPlay={(tracks, cover, radio) => {
               onPlay(tracks, cover, radio);
@@ -103,16 +122,136 @@ export function RadioBuilderDialog({
   );
 }
 
+/**
+ * The radio builder opened on a tuned radio (`RDAT…`), with its seeds and
+ * tuning read back from its id. Open while `radio` is set.
+ */
+export function EditRadioDialog({
+  radio,
+  signedIn,
+  onClose,
+  onPlay,
+}: {
+  radio: string | null;
+  signedIn: boolean;
+  onClose: () => void;
+  onPlay: OnPlay;
+}) {
+  return (
+    <Dialog open={radio !== null} onOpenChange={(open) => open || onClose()}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col">
+        {radio !== null && (
+          <EditLoader
+            radio={radio}
+            signedIn={signedIn}
+            onPlay={(tracks, cover, id) => {
+              onPlay(tracks, cover, id);
+              onClose();
+            }}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Names the seeds of the radio being edited, then opens the builder on them.
+ * The id only carries their ids: an artist's name and picture come from the
+ * page of a radio of that artist alone ("Coldplay Mix"), and a song's from
+ * the head of its own radio.
+ */
+function unnamedArtist(radioArtist: string): Extract<RadioSeed, { kind: "artist" }> {
+  return { kind: "artist", channelId: null, radioArtist, name: "Unknown artist", thumbnails: [] };
+}
+
+function unnamedSong(videoId: VideoId): RadioSeed {
+  return { kind: "song", videoId, title: "Unknown song", thumbnails: [] };
+}
+
+function EditLoader({
+  radio,
+  signedIn,
+  onPlay,
+}: {
+  radio: string;
+  signedIn: boolean;
+  onPlay: OnPlay;
+}) {
+  const parsed = parseRadioId(radio);
+  // A failed lookup is not cached, so the next opening asks again.
+  const artists = useQueries({
+    queries: (parsed?.artists ?? []).map((id) => ({
+      queryKey: ["radio-artist-seed", id],
+      queryFn: async (): Promise<RadioSeed> => {
+        const solo = radioId({ ...defaultTuning, artists: [id], songs: [] })!;
+        const cover = await engine.radioCover(solo);
+        return {
+          ...unnamedArtist(id),
+          name: cover?.title.replace(/ Mix$/, "") || "Unknown artist",
+          thumbnails: cover?.thumbnails ?? [],
+        };
+      },
+      staleTime: Infinity,
+    })),
+  });
+  const songs = useQueries({
+    queries: (parsed?.songs ?? []).map((videoId) => ({
+      queryKey: ["radio-song-seed", videoId],
+      queryFn: async (): Promise<RadioSeed> => {
+        // A song radio leaves its song out; the same radio as a mix, started on it, leads with it.
+        const tracks = await engine.mix(`RDAMVM${videoId}`, videoId);
+        const track = tracks.find((t) => videoIdFromTrackId(t.id) === videoId);
+        return track
+          ? { kind: "song", videoId, title: track.title, thumbnails: track.thumbnails }
+          : unnamedSong(videoId);
+      },
+      staleTime: Infinity,
+    })),
+  });
+  if ([...artists, ...songs].some((q) => q.isPending)) {
+    return (
+      <div className="flex min-h-40 items-center justify-center">
+        <Spinner label="Reading the radio" />
+      </div>
+    );
+  }
+  const seeds = [
+    ...artists.map((q, i) => q.data ?? unnamedArtist(parsed!.artists[i]!)),
+    ...songs.map((q, i) => q.data ?? unnamedSong(parsed!.songs[i]!)),
+  ];
+  const tuning: Tuning = parsed
+    ? {
+        discovery: parsed.discovery,
+        variety: parsed.variety,
+        filter: parsed.filter,
+        mood: parsed.mood,
+      }
+    : defaultTuning;
+  return <Builder initial={{ seeds, tuning }} editing signedIn={signedIn} onPlay={onPlay} />;
+}
+
 function seedKey(seed: RadioSeed): string {
-  return seed.kind === "artist" ? `artist:${seed.channelId}` : `song:${seed.videoId}`;
+  if (seed.kind === "song") return `song:${seed.videoId}`;
+  return seed.channelId !== null ? `artist:${seed.channelId}` : `artist-kg:${seed.radioArtist}`;
 }
 
 /**
  * The Knowledge Graph id a tuned radio names an artist by, which only the
  * tuning chips of the artist's own mix carry. Null when the artist has no
- * mix, or YouTube offers no tuning for it.
+ * mix, or YouTube offers no tuning for it. A seed read back from a radio
+ * already has it.
  */
-function radioArtistOptions(channelId: string) {
+function radioArtistOptions(seed: Extract<RadioSeed, { kind: "artist" }>) {
+  const { channelId, radioArtist } = seed;
+  if (radioArtist !== undefined || channelId === null) {
+    return {
+      queryKey: ["radio-artist-known", radioArtist ?? null],
+      queryFn: () => radioArtist ?? null,
+      initialData: radioArtist ?? null,
+      staleTime: Infinity,
+    };
+  }
   return {
     queryKey: ["radio-artist", channelId],
     queryFn: async () => {
@@ -174,23 +313,40 @@ function songSeed(track: Track): RadioSeed | null {
 
 function Builder({
   initial,
+  editing = false,
   signedIn,
   onPlay,
 }: {
-  initial: RadioSeed[];
+  initial: RadioDraft;
+  /** Whether this is a playing radio being changed rather than a new one. */
+  editing?: boolean;
   signedIn: boolean;
-  onPlay: (tracks: Track[], cover: RadioCover | null, radio: string) => void;
+  onPlay: OnPlay;
 }) {
-  const [seeds, setSeeds] = useState(initial);
-  const [tuning, setTuning] = useState<Tuning>(defaultTuning);
+  const [seeds, setSeeds] = useState(initial.seeds);
+  const [tuning, setTuning] = useState<Tuning>(initial.tuning ?? defaultTuning);
   const tune = (change: Partial<Tuning>) => setTuning((t) => ({ ...t, ...change }));
 
   const artistSeeds = seeds.filter((s) => s.kind === "artist");
   const artistTokens = useQueries({
-    queries: artistSeeds.map((s) => radioArtistOptions(s.channelId)),
+    queries: artistSeeds.map(radioArtistOptions),
   });
-  const tokenOf = new Map(artistSeeds.map((s, i) => [s.channelId, artistTokens[i]!]));
+  const tokenOf = new Map(artistSeeds.map((s, i) => [seedKey(s), artistTokens[i]!]));
   const resolving = artistTokens.some((q) => q.isPending);
+  // An artist read back from the radio is known by its Knowledge Graph id and
+  // the same artist picked in the search by its channel, so the two only
+  // turn out to match once the channel resolves. Keep the first.
+  const seen = new Set<string>();
+  const repeated = new Set(
+    artistSeeds.flatMap((s, i) => {
+      const token = artistTokens[i]!.data;
+      if (!token) return [];
+      if (seen.has(token)) return [seedKey(s)];
+      seen.add(token);
+      return [];
+    }),
+  );
+  if (repeated.size > 0) setSeeds((all) => all.filter((s) => !repeated.has(seedKey(s))));
 
   const id = resolving
     ? null
@@ -234,7 +390,7 @@ function Builder({
       }}
     >
       <DialogHeader>
-        <DialogTitle>Create a mix</DialogTitle>
+        <DialogTitle>{editing ? "Edit mix" : "Create a mix"}</DialogTitle>
       </DialogHeader>
       {/* Header and footer stay put; the rest scrolls when the window is short. */}
       <div className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-0.5">
@@ -247,7 +403,7 @@ function Builder({
         {seeds.length > 0 && (
           <ul className="flex flex-wrap gap-1.5" aria-label="Seeds">
             {seeds.map((seed) => {
-              const token = seed.kind === "artist" ? tokenOf.get(seed.channelId) : undefined;
+              const token = seed.kind === "artist" ? tokenOf.get(seedKey(seed)) : undefined;
               return (
                 <SeedChip
                   key={seedKey(seed)}
@@ -317,7 +473,7 @@ function Builder({
         <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
         <Button type="submit" disabled={!playable || radio.isFetching || cover.isFetching}>
           <IconBroadcast />
-          Start mix
+          {editing ? "Update mix" : "Start mix"}
         </Button>
       </DialogFooter>
     </form>

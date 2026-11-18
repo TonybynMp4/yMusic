@@ -31,8 +31,10 @@ import {
   InteractionButton,
   PRIVACY_LABELS,
   usePlaylistEditing,
+  useReplaceSaved,
   type Subject,
 } from "./Interactions.tsx";
+import { EditRadio } from "./RadioChips.tsx";
 import { TrackList } from "./TrackList.tsx";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import { LIKED_MUSIC } from "./libraryPlaylists.ts";
@@ -64,10 +66,14 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     );
   }
   const { page } = state;
-  /** Every play on the page queues from it, which also names the queue. */
+  /**
+   * Every play on the page queues from it, which also names the queue, unless
+   * it plays something else (an edited radio).
+   */
   const playingFrom = (from: PlayFrom): BrowseActions => ({
     ...actions,
-    onPlay: (tracks: Track[], id: TrackId | null) => actions.onPlay(tracks, id, from),
+    onPlay: (tracks: Track[], id: TrackId | null, other?: PlayFrom) =>
+      actions.onPlay(tracks, id, other ?? from),
   });
   switch (page.kind) {
     case "album": {
@@ -160,6 +166,7 @@ function Playlist({
   // playlist whose artwork is missing shows the playlist icon.
   const liked = route.id === LIKED_MUSIC;
   const editing = usePlaylistEditing(page);
+  const replaceSaved = useReplaceSaved();
   // Every row is in: not still loading, and not stopped early by a failure.
   const complete = !loadingMore && !resume;
   // YouTube's count and length until every row is in, then the rows' own,
@@ -185,12 +192,23 @@ function Playlist({
         actions={actions}
         subject={{ kind: "collection", route }}
         extra={
-          editing && (
-            <Button variant="outline" className="rounded-full" onClick={editing.edit}>
-              <IconPencil size={16} stroke={1.75} />
-              Edit
-            </Button>
-          )
+          <>
+            {editing && (
+              <Button variant="outline" className="rounded-full" onClick={editing.edit}>
+                <IconPencil size={16} stroke={1.75} />
+                Edit
+              </Button>
+            )}
+            <EditRadio
+              radio={route.id}
+              variant="button"
+              // As on Android: open the edited mix's page, and move a saved mix's library entry to it.
+              onPlay={(_tracks, _cover, radio) => {
+                if (page.saved === true) void replaceSaved(route.id, radio);
+                actions.onOpen({ kind: "playlist", id: radio });
+              }}
+            />
+          </>
         }
       />
       <TrackList

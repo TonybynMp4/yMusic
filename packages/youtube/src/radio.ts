@@ -33,7 +33,7 @@ export async function getRadio(youtube: Innertube, videoId: VideoId): Promise<Tr
 }
 
 /**
- * A mix of a whole list: "Start mix" on an album, playlist or artist. It is
+ * A mix of a whole list: "Start radio" on an album, playlist or artist. It is
  * the up-next panel of a radio playlist (`RDAMPL…` for an album or playlist,
  * the artist's own `RDEM…`), and unlike a song radio it keeps its first song.
  */
@@ -45,7 +45,7 @@ export async function getMix(
   const response = await youtube.actions.execute("/next", {
     playlistId,
     ...(videoId ? { videoId } : {}),
-    // What YouTube Music's own "Start mix" buttons send.
+    // What YouTube Music's own "Start radio" buttons send.
     params: "wAEB",
     client: "YTMUSIC",
     parse: true,

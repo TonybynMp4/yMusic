@@ -20,8 +20,9 @@ import { Switch } from "@/components/ui/switch";
 import { VirtualList } from "@/components/VirtualList";
 import { cn } from "@/lib/utils";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
-import { RadioChips } from "./RadioChips.tsx";
+import { EditRadio, RadioChips } from "./RadioChips.tsx";
 import { Artwork } from "./TrackList.tsx";
+import type { RadioEdit } from "./usePlayer.ts";
 import { positionOf, sourceOf, useRowDrag } from "./useRowDrag.ts";
 import { useStableHandler } from "./useStableHandler.ts";
 
@@ -43,7 +44,7 @@ interface Props {
   onMove: (from: number, to: number) => void;
   onClear: () => void;
   /** Plays a tuning chip's radio after the playing song, in place of what was to come. */
-  onTune: (radio: string, playlistId: string, tracks: Track[]) => void;
+  onTune: (radio: string, playlistId: string, tracks: Track[], edited?: RadioEdit) => void;
 }
 
 /** Where the playing row is, relative to what the list shows. */
@@ -215,13 +216,26 @@ export function Queue({
               className="size-10 shrink-0 rounded"
             />
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">Playing from</p>
             <p className="flex items-center gap-1.5 text-sm font-medium">
               <span className="truncate">{playingFrom.title}</span>
               {playingFrom.device && <FromDevice device={playingFrom.device} />}
             </p>
           </div>
+          {playingFrom.radio && (
+            <EditRadio
+              radio={playingFrom.tuned ?? playingFrom.radio}
+              variant="icon"
+              onPlay={(tracks, cover, id) => {
+                if (!playingFrom.radio) return;
+                onTune(playingFrom.radio, id, tracks, {
+                  title: cover?.title ?? "Radio",
+                  thumbnails: cover?.thumbnails ?? [],
+                });
+              }}
+            />
+          )}
         </div>
       )}
       {playingFrom?.radio && (

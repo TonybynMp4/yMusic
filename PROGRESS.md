@@ -154,6 +154,7 @@ The MVP is done when you can sign in, search, play and manage a queue, on both p
 - [ ] Window position restored after the tray and restarts (Wayland needs xdg-session-management, see PLAN.md)
 - [ ] Home and Explore pages
 - [x] Saved albums and artists in the library
+- [x] "In your library" on artist pages, local files included
 - [ ] Local playlists
 - [ ] Downloads: the premium stream saved to disk
 - [ ] Linking local files to YouTube tracks (tags, matching, manual)

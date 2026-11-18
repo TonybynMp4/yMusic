@@ -17,6 +17,7 @@ import type {
   Track,
   TrackId,
 } from "@ymusic/core";
+import type { LocalTrack } from "@ymusic/ipc";
 
 import { useCallback, useState, type CSSProperties } from "react";
 
@@ -34,6 +35,7 @@ import {
   type Subject,
 } from "./Interactions.tsx";
 import { TrackList } from "./TrackList.tsx";
+import { useArtistLibrary } from "./useArtistLibrary.ts";
 import { useBrowse, type Route } from "./useBrowse.ts";
 import { LIKED_MUSIC } from "./libraryPlaylists.ts";
 import type { PlayFrom } from "./usePlayer.ts";
@@ -52,7 +54,19 @@ export interface BrowseActions {
   onOpen: (route: Route) => void;
 }
 
-export function BrowseView({ route, actions }: { route: Route; actions: BrowseActions }) {
+export function BrowseView({
+  route,
+  actions,
+  account,
+  local,
+}: {
+  route: Route;
+  actions: BrowseActions;
+  /** The signed-in account's name, null signed out. */
+  account: string | null;
+  /** Every local track, for an artist page's "In your library". */
+  local: readonly LocalTrack[];
+}) {
   const state = useBrowse(route);
   if (state.status === "loading") return <Loading round={route.kind === "artist"} />;
   if (state.status === "error") {
@@ -89,7 +103,15 @@ export function BrowseView({ route, actions }: { route: Route; actions: BrowseAc
     }
     case "artist": {
       const from: PlayFrom = { kind: "list", title: page.page.name };
-      return <Artist page={page.page} actions={playingFrom(from)} route={route} />;
+      return (
+        <Artist
+          page={page.page}
+          actions={playingFrom(from)}
+          route={route}
+          account={account}
+          local={local}
+        />
+      );
     }
   }
 }
@@ -234,10 +256,14 @@ function Artist({
   page,
   actions,
   route,
+  account,
+  local,
 }: {
   page: ArtistPage;
   actions: BrowseActions;
   route: Route;
+  account: string | null;
+  local: readonly LocalTrack[];
 }) {
   const playlistId = page.topSongsPlaylistId;
   return (
@@ -306,10 +332,85 @@ function Artist({
         </section>
       )}
 
+      <InYourLibrary
+        key={page.id}
+        account={account}
+        id={page.id}
+        name={page.name}
+        local={local}
+        actions={actions}
+      />
+
       {page.shelves.map((shelf) => (
         <Shelf key={shelf.title} title={shelf.title} cards={shelf.cards} onOpen={actions.onOpen} />
       ))}
     </>
+  );
+}
+
+/** Rows "In your library" shows until Show all. */
+const LIBRARY_ROWS = 5;
+
+/**
+ * The artist's songs in your library: the account's, then local files tagged
+ * with the artist's name. Hidden when there are none.
+ */
+function InYourLibrary({
+  account,
+  id,
+  name,
+  local,
+  actions,
+}: {
+  account: string | null;
+  id: string;
+  name: string;
+  local: readonly LocalTrack[];
+  actions: BrowseActions;
+}) {
+  const { tracks, loading } = useArtistLibrary(account, id, name, local);
+  const [all, setAll] = useState(false);
+  if (tracks.length === 0 && !loading) return null;
+  const shown = all ? tracks : tracks.slice(0, LIBRARY_ROWS);
+  return (
+    <section className="mb-6">
+      <ShelfHeader
+        title="In your library"
+        action={
+          !loading &&
+          tracks.length > LIBRARY_ROWS && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              aria-expanded={all}
+              onClick={() => setAll((a) => !a)}
+            >
+              {all ? "Show less" : "Show all"}
+            </Button>
+          )
+        }
+      />
+      {/* Held until the account's songs are in, so they don't push the
+          local rows down under the pointer. */}
+      {loading ? (
+        <div className="flex flex-col gap-2 px-3">
+          {Array.from({ length: 2 }, (_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : (
+        <TrackList
+          tracks={shown}
+          currentId={actions.currentId}
+          playing={actions.playing}
+          onToggle={actions.onToggle}
+          // The whole section queues, the rows past Show all included.
+          onPlay={(trackId) => actions.onPlay(tracks, trackId)}
+          onOpen={actions.onOpen}
+        />
+      )}
+    </section>
   );
 }
 

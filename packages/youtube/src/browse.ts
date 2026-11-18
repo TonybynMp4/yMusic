@@ -529,6 +529,16 @@ function songsAfter(
   };
 }
 
+/**
+ * The songs in the library by the artist with channel id `id`, from the
+ * library-only artist page YouTube Music opens from its Artists chip
+ * (`MPLAUC…`), in YouTube's order. Bounded like the other library lists.
+ */
+export async function getLibraryArtistSongs(youtube: Innertube, id: string): Promise<Track[]> {
+  const { items } = await libraryItems(youtube, `${LIBRARY_ARTIST_PREFIX}${id}`);
+  return rowsFrom(items).tracks;
+}
+
 const LIBRARY_PLAYLISTS = "FEmusic_liked_playlists";
 const LIBRARY_PAGES: Record<LibraryKind, string> = {
   playlists: LIBRARY_PLAYLISTS,

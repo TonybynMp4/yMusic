@@ -45,6 +45,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-linux
+      # TEMPORARY: measure the restored Rust cache.
+      - name: Measure restored cache
+        shell: bash
+        run: |
+          du -sh target target/debug/* ~/.cargo/registry/* ~/.cargo/git ~/.cargo/bin 2>/dev/null || true
+          echo "deps files: $(ls target/debug/deps | wc -l)"
+          echo "distinct rlib crates: $(ls target/debug/deps/*.rlib | sed 's/-[0-9a-f]*\.rlib$//' | sort -u | wc -l), rlib files: $(ls target/debug/deps/*.rlib | wc -l)"
+          echo "distinct rmeta crates: $(ls target/debug/deps/*.rmeta | sed 's/-[0-9a-f]*\.rmeta$//' | sort -u | wc -l), rmeta files: $(ls target/debug/deps/*.rmeta | wc -l)"
+          ls target/debug/deps/*.rlib | sed 's/-[0-9a-f]*\.rlib$//' | sort | uniq -c | sort -rn | head -15
+          find target -type f -mtime +7 -printf '%s\n' | awk '{s+=$1} END{printf "files older than 7 days: %.0f MB\n", s/1e6}'
+          ls -la --time-style=+%F target/debug/deps | awk '{print $6}' | sort | uniq -c
 
       # generate_context! embeds apps/desktop/dist, so it has to exist before
       # the crate compiles.

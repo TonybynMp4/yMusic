@@ -266,8 +266,12 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const interactions: Interactions = {
     signedIn,
     play,
-    enqueue: (tracks, at) =>
-      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
+    enqueue: (tracks, at) => {
+      // An album or playlist's greyed-out songs stay out, as when it plays.
+      const playable = tracks.filter(isPlayable);
+      if (playable.length === 0) return;
+      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks: playable });
+    },
     open: go,
     notify,
     libraryChanged: () => {

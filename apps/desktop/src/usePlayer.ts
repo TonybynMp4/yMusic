@@ -22,7 +22,8 @@ import type { Rating } from "@ymusic/youtube/host";
 import { engine as youtube } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
-import { classifyFailure, type PlaybackFailure } from "./playbackFailure.ts";
+import { showSnackbar } from "@/lib/snackbar";
+import { classifyFailure, failureMessage, type PlaybackFailure } from "./playbackFailure.ts";
 import { queryClient } from "./query.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
@@ -127,6 +128,12 @@ export function usePlayer(
   const skipped = useRef(0);
   /** Songs YouTube refused as Premium-only this session, passed over from then on. */
   const [premiumOnly, setPremiumOnly] = useState<ReadonlySet<TrackId>>(() => new Set());
+  // Signing in, or into another account, may bring Premium: try them all again.
+  const [premiumFor, setPremiumFor] = useState(account);
+  if (premiumFor !== account) {
+    setPremiumFor(account);
+    setPremiumOnly(new Set());
+  }
   /**
    * A song that will not play: greyed out where it was queued from, or
    * refused as Premium-only since.
@@ -151,6 +158,15 @@ export function usePlayer(
     if ((!disliked && !dead) || skipped.current >= queue.order.length) return false;
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
+  });
+  /**
+   * Says why a song you picked was passed over. One that came up on its own
+   * goes quietly, as a disliked one does: its refusal was shown the first time.
+   */
+  const sayPassedOver = useEffectEvent(() => {
+    if (cameUp.current || track === null || !unplayable(track)) return;
+    const kind = track.availability === "unavailable" ? "unavailable" : "premium";
+    showSnackbar({ message: failureMessage(kind, track.title, true) });
   });
   /** The last song that failed for good. Each failure is a new object, even for the same song. */
   const [failure, setFailure] = useState<PlaybackFailure | null>(null);
@@ -239,6 +255,7 @@ export function usePlayer(
     if (loadedId.current === trackId) return;
     if (skips(trackId)) {
       skipped.current++;
+      sayPassedOver();
       dispatch({ type: "next", reason: "user" });
       return;
     }
@@ -421,7 +438,7 @@ export function usePlayer(
       if (from?.kind === "radio") {
         const seed = tracks.find((t) => t.id === id);
         const videoId = seed ? videoIdFromTrackId(seed.id) : null;
-        if (!seed || videoId === null) return;
+        if (!seed || videoId === null || !isPlayable(seed)) return;
         send({ type: "setQueue", tracks: [seed], startIndex: 0 });
         source.current = null;
         let stopped = false;

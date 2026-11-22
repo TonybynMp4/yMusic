@@ -28,6 +28,7 @@ import {
 import { queryOptions, skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { libraryOpenFolder, libraryReveal } from "@ymusic/ipc";
 import {
+  isPlayable,
   sourceOf,
   videoIdFromTrackId,
   type Artist,
@@ -499,23 +500,29 @@ function SongItems({
   const x = useInteractions();
   const videoId = videoIdFromTrackId(track.id);
   const albumId = track.albumId;
+  const playable = isPlayable(track);
   // A local file has no radio, playlists or pages to go to, but has a file.
   return (
     <>
-      {videoId && (
+      {/* A greyed-out song cannot be queued, or seed a mix it would open. */}
+      {videoId && playable && (
         <DropdownMenuItem onClick={() => x.play([track], track.id, { kind: "radio" })}>
           <IconBroadcast />
           Start mix
         </DropdownMenuItem>
       )}
-      <DropdownMenuItem onClick={() => x.enqueue([track], "next")}>
-        <IconPlayerTrackNext />
-        Play next
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => x.enqueue([track], "last")}>
-        <IconPlaylist />
-        Add to queue
-      </DropdownMenuItem>
+      {playable && (
+        <>
+          <DropdownMenuItem onClick={() => x.enqueue([track], "next")}>
+            <IconPlayerTrackNext />
+            Play next
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => x.enqueue([track], "last")}>
+            <IconPlaylist />
+            Add to queue
+          </DropdownMenuItem>
+        </>
+      )}
       {onRemove && (
         <DropdownMenuItem onClick={onRemove}>
           <IconPlaylistX />

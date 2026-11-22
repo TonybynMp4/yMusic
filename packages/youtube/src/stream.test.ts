@@ -6,6 +6,8 @@ import {
   codecFromMimeType,
   expiryFromUrl,
   leaseFrom,
+  needsPremium,
+  NotPlayableError,
   streamUrl,
   type RawFormat,
 } from "./stream.ts";
@@ -213,5 +215,17 @@ describe("streamUrl", () => {
   it("trusts the URL when the player script deciphered it", async () => {
     const url = `${PLAIN}&n=transformed`;
     await expect(streamUrl({ decipher: () => url }, {})).resolves.toBe(url);
+  });
+});
+
+describe("needsPremium", () => {
+  it("is YouTube's Premium-only refusal and nothing else", () => {
+    const reason = "This video is only available to Music Premium members";
+    expect(needsPremium(new NotPlayableError("UNPLAYABLE", reason))).toBe(true);
+    expect(needsPremium(new NotPlayableError("UNPLAYABLE", "The page needs to be reloaded."))).toBe(
+      false,
+    );
+    expect(needsPremium(new NotPlayableError("ERROR", reason))).toBe(false);
+    expect(needsPremium(new Error(`UNPLAYABLE: ${reason}`))).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ Two details that each cost a day if missed:
 
 ## Player clients
 
-A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next. The webview console records each resolution (`resolved <id> as itag 774 through WEB_REMIX`), and the Rust log records the client and itag of each lease mpv loads (see [Logging](logging.md)).
+A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next, with one more exception: a Premium-only refusal (`UNPLAYABLE`, "only available to Music Premium members") from the signed-in `WEB_REMIX` means the account has no Premium, and the anonymous clients cannot do better. Signed out, every client is tried, and a Premium-only refusal from any of them is the error that stands. The webview console records each resolution (`resolved <id> as itag 774 through WEB_REMIX`), and the Rust log records the client and itag of each lease mpv loads (see [Logging](logging.md)).
 
 - Signed in: `WEB_REMIX`, then `VISIONOS`, then `TV_SIMPLY`.
 - Signed out: `VISIONOS`, then `TV_SIMPLY`.
@@ -86,10 +86,13 @@ A failure reaches the snackbar once it stands. A 403 from mpv on a YouTube song 
 | ----------- | ----------------------------------------------------------------- | -------------------------------------------- | ------ |
 | missing     | a local file gone from disk or from the library                   | Couldn't find the file for _title_           | Skip   |
 | unavailable | YouTube's `ERROR` status, the one answer the engine stops on      | _title_ isn't available on YouTube Music     | Skip   |
+| premium     | YouTube's `UNPLAYABLE` refusal of a Premium-only song             | _title_ needs YouTube Music Premium          | Skip   |
 | offline     | a request that never reached YouTube, or `navigator.onLine` false | Couldn't play _title_. Check your connection | Retry  |
 | failed      | anything else, such as a stream mpv refused on every client       | Couldn't play _title_                        | Retry  |
 
 Retry can help with the last two, so the song stays and the queue waits. A lost connection should not run through the whole queue. Retry resolves the song afresh, with its own fallback retry, from the start of the song.
+
+A Premium-only song is skipped at once, with a snackbar saying so ("Skipped _title_, which needs YouTube Music Premium") and no action, since YouTube Music never plays it for this account. The player remembers the refusal until the account changes, since signing in may bring Premium, and passes the song over before loading it from then on, as it does a song greyed out where it was queued from (see [Interactions](interactions.md)). Neither is joined gaplessly. On the last song, or under repeat-one, it shows the plain message instead.
 
 Missing and unavailable songs will not play however often they are tried. The queue moves on by itself after 4 seconds, on the app's own timer rather than the snackbar's, because Base UI pauses a toast's timer while the window is unfocused and a player usually is. Skip moves on at once. Picking another song in the meantime cancels the skip. With nothing to move on to (the last song, or repeat one), the snackbar has no action.
 

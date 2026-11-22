@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyFailure, failureAction } from "./playbackFailure.ts";
+import { classifyFailure, failureAction, failureMessage, skipsAtOnce } from "./playbackFailure.ts";
 
 describe("classifyFailure", () => {
   it("reads a local file gone from disk or from the library as missing", () => {
@@ -17,6 +17,13 @@ describe("classifyFailure", () => {
     expect(classifyFailure("ERROR")).toBe("unavailable");
     expect(classifyFailure("LOGIN_REQUIRED: Sign in to confirm you're not a bot")).toBe("failed");
     expect(classifyFailure("could not resolve a stream: ERRORS; then UNPLAYABLE")).toBe("failed");
+  });
+
+  it("reads YouTube's Premium-only refusal as premium", () => {
+    expect(
+      classifyFailure("UNPLAYABLE: This video is only available to Music Premium members"),
+    ).toBe("premium");
+    expect(classifyFailure("UNPLAYABLE: The page needs to be reloaded.")).toBe("failed");
   });
 
   it("reads a request that never reached YouTube as offline", () => {
@@ -49,6 +56,21 @@ describe("failureAction", () => {
 
   it("offers Skip for a failure for good, when there is a song to move on to", () => {
     expect(failureAction({ kind: "missing", canSkip: true })).toBe("skip");
+    expect(failureAction({ kind: "premium", canSkip: true })).toBe("skip");
     expect(failureAction({ kind: "unavailable", canSkip: false })).toBeNull();
+  });
+});
+
+describe("skipsAtOnce", () => {
+  it("moves straight past a Premium-only song, when there is one to move on to", () => {
+    expect(skipsAtOnce({ kind: "premium", canSkip: true })).toBe(true);
+    expect(skipsAtOnce({ kind: "premium", canSkip: false })).toBe(false);
+    expect(skipsAtOnce({ kind: "unavailable", canSkip: true })).toBe(false);
+  });
+
+  it("says the song was skipped, and why", () => {
+    expect(failureMessage("premium", "Like a Rolling Stone", true)).toBe(
+      "Skipped Like a Rolling Stone, which needs YouTube Music Premium",
+    );
   });
 });

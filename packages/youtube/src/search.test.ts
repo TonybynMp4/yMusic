@@ -56,6 +56,7 @@ describe("toTrack", () => {
       thumbnails: [],
       isExplicit: false,
       year: null,
+      availability: "available",
     });
   });
 

@@ -13,6 +13,7 @@ import {
   type QueueState,
   type TrackId,
   type VideoId,
+  isPlayable,
   videoIdFromTrackId,
 } from "@ymusic/core";
 import { playerLogFailure, type QueueFrom, type QueuePosition, type SavedQueue } from "@ymusic/ipc";
@@ -21,7 +22,8 @@ import type { Rating } from "@ymusic/youtube/host";
 import { engine as youtube } from "./engine.ts";
 import { errorMessage } from "./errors.ts";
 import { leaseKey, leaseOptions } from "./leases.ts";
-import { classifyFailure, type PlaybackFailure } from "./playbackFailure.ts";
+import { showSnackbar } from "@/lib/snackbar";
+import { classifyFailure, failureMessage, type PlaybackFailure } from "./playbackFailure.ts";
 import { queryClient } from "./query.ts";
 import { resolveTrack } from "./resolve.ts";
 import { followPlaylist } from "./useBrowse.ts";
@@ -124,6 +126,20 @@ export function usePlayer(
   const currentId = useEffectEvent(() => trackId);
   /** Tracks skipped in a row, so a queue of only disliked songs stops after one pass. */
   const skipped = useRef(0);
+  /** Songs YouTube refused as Premium-only this session, passed over from then on. */
+  const [premiumOnly, setPremiumOnly] = useState<ReadonlySet<TrackId>>(() => new Set());
+  // Signing in, or into another account, may bring Premium: try them all again.
+  const [premiumFor, setPremiumFor] = useState(account);
+  if (premiumFor !== account) {
+    setPremiumFor(account);
+    setPremiumOnly(new Set());
+  }
+  /**
+   * A song that will not play: greyed out where it was queued from, or
+   * refused as Premium-only since.
+   */
+  const unplayable = (candidate: Track | null): boolean =>
+    candidate !== null && (!isPlayable(candidate) || premiumOnly.has(candidate.id));
   /**
    * Whether to pass over a track rather than play it. An effect event, so the
    * load effect does not rerun, and cancel its load, when a rating or the
@@ -132,17 +148,25 @@ export function usePlayer(
    */
   const skips = useEffectEvent((id: TrackId): boolean => {
     const videoId = videoIdFromTrackId(id);
-    if (
-      !settings.skipDisliked ||
-      !cameUp.current ||
-      videoId === null ||
-      ratings.ratingOf(videoId) !== "dislike" ||
-      skipped.current >= queue.order.length
-    ) {
-      return false;
-    }
+    const disliked =
+      settings.skipDisliked &&
+      cameUp.current &&
+      videoId !== null &&
+      ratings.ratingOf(videoId) === "dislike";
+    // A song that will not play is passed over even when picked.
+    const dead = track?.id === id && unplayable(track);
+    if ((!disliked && !dead) || skipped.current >= queue.order.length) return false;
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
+  });
+  /**
+   * Says why a song you picked was passed over. One that came up on its own
+   * goes quietly, as a disliked one does: its refusal was shown the first time.
+   */
+  const sayPassedOver = useEffectEvent(() => {
+    if (cameUp.current || track === null || !unplayable(track)) return;
+    const kind = track.availability === "unavailable" ? "unavailable" : "premium";
+    showSnackbar({ message: failureMessage(kind, track.title, true) });
   });
   /** The last song that failed for good. Each failure is a new object, even for the same song. */
   const [failure, setFailure] = useState<PlaybackFailure | null>(null);
@@ -158,9 +182,11 @@ export function usePlayer(
     void playerLogFailure(id, message).catch(logPlaybackFailure);
     markFailed();
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
+    const kind = classifyFailure(message, navigator.onLine);
+    if (kind === "premium") setPremiumOnly((known) => new Set(known).add(id));
     setFailure({
       trackId: id,
-      kind: classifyFailure(message, navigator.onLine),
+      kind,
       canSkip: landing !== null && landing.id !== id,
     });
   });
@@ -229,6 +255,7 @@ export function usePlayer(
     if (loadedId.current === trackId) return;
     if (skips(trackId)) {
       skipped.current++;
+      sayPassedOver();
       dispatch({ type: "next", reason: "user" });
       return;
     }
@@ -276,9 +303,10 @@ export function usePlayer(
   const audioQuality = settings.audioQuality;
   const upcomingVideo = upcomingId === null ? null : videoIdFromTrackId(upcomingId);
   const upcomingSkipped =
-    settings.skipDisliked &&
-    upcomingVideo !== null &&
-    ratings.ratingOf(upcomingVideo) === "dislike";
+    unplayable(peekNext(queue)) ||
+    (settings.skipDisliked &&
+      upcomingVideo !== null &&
+      ratings.ratingOf(upcomingVideo) === "dislike");
   const joinable = upcomingId !== null && upcomingId !== trackId && !upcomingSkipped;
   useEffect(() => {
     // Until mpv has the track, Rust would ignore a next meant to follow it.
@@ -410,7 +438,7 @@ export function usePlayer(
       if (from?.kind === "radio") {
         const seed = tracks.find((t) => t.id === id);
         const videoId = seed ? videoIdFromTrackId(seed.id) : null;
-        if (!seed || videoId === null) return;
+        if (!seed || videoId === null || !isPlayable(seed)) return;
         send({ type: "setQueue", tracks: [seed], startIndex: 0 });
         source.current = null;
         let stopped = false;
@@ -430,7 +458,16 @@ export function usePlayer(
         return;
       }
 
-      send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+      // Songs YouTube Music greys out stay on the page but out of the queue.
+      // Play on an album that opens with one starts at the first song after it.
+      const playable = tracks.filter(isPlayable);
+      const clicked = Math.max(
+        0,
+        tracks.findIndex((t) => t.id === id),
+      );
+      const start = tracks.slice(clicked).find(isPlayable) ?? playable[0];
+      if (start === undefined) return;
+      send({ type: "setQueue", tracks: playable, startIndex: playable.indexOf(start) });
       if (from?.kind === "playlist" || from?.kind === "list") {
         setPlayingFrom({ title: from.title, device: null });
       }
@@ -450,7 +487,7 @@ export function usePlayer(
         if (all.length > known) {
           const added = all.slice(known);
           for (const t of added) ids.add(t.id);
-          dispatch({ type: "extend", tracks: added });
+          dispatch({ type: "extend", tracks: added.filter(isPlayable) });
           known = all.length;
         }
         setFilling(loading);

@@ -4,7 +4,7 @@ import {
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
 } from "@tabler/icons-react";
-import type { Track, TrackId } from "@ymusic/core";
+import { isPlayable, type Track, type TrackId } from "@ymusic/core";
 import { Fragment, memo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Art } from "@/components/Art";
@@ -14,6 +14,7 @@ import { formatDuration } from "./format.ts";
 import { InteractionArea, InteractionButton, useDisliked } from "./Interactions.tsx";
 import { useScrollParent } from "./scroll.ts";
 import type { Route } from "./useBrowse.ts";
+import { UnavailableBadge } from "./UnavailableBadge.tsx";
 import { sourceOf, useRowDrag } from "./useRowDrag.ts";
 import { useStableHandler } from "./useStableHandler.ts";
 
@@ -144,7 +145,11 @@ const Row = memo(function Row({
   dragging,
   dragActive,
 }: RowProps) {
-  const dimmed = useDisliked(track) && !isCurrent;
+  // A song YouTube Music greys out shows as it does there: faded, and with
+  // nothing to play. Its menu still works.
+  const playable = isPlayable(track);
+  const disliked = useDisliked(track);
+  const dimmed = (disliked || !playable) && !isCurrent;
   const play = () => (isCurrent ? onToggle() : onPlay(track.id));
   const subject = {
     kind: "song" as const,
@@ -158,7 +163,7 @@ const Row = memo(function Row({
     // same menu as the dots button.
     <InteractionArea
       subject={subject}
-      onClick={() => onPlay(track.id)}
+      onClick={() => playable && onPlay(track.id)}
       style={{ height: ROW_HEIGHT }}
       className={cn(
         "group flex cursor-default items-center gap-3 rounded-lg px-3 transition-colors",
@@ -185,22 +190,27 @@ const Row = memo(function Row({
         track={track}
         isCurrent={isCurrent}
         playing={playing}
-        onClick={play}
+        onClick={playable ? play : null}
         dimmed={dimmed}
       />
       <span className={cn("min-w-0 flex-1", dimmed && "opacity-40")}>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onPlay(track.id);
-          }}
-          className="block max-w-full truncate text-left text-sm outline-none focus-visible:underline"
-        >
-          {track.title}
-        </button>
+        {playable ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onPlay(track.id);
+            }}
+            className="block max-w-full truncate text-left text-sm outline-none focus-visible:underline"
+          >
+            {track.title}
+          </button>
+        ) : (
+          <span className="block truncate text-sm">{track.title}</span>
+        )}
         <Byline track={track} onOpen={onOpen} hideAlbum={hideAlbum} />
       </span>
+      <UnavailableBadge availability={track.availability} />
       <InteractionButton
         subject={subject}
         className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 data-popup-open:opacity-100"
@@ -220,7 +230,8 @@ function RowArt(props: {
   track: Track;
   isCurrent: boolean;
   playing: boolean;
-  onClick: () => void;
+  /** Null for a song that cannot be played, which gets no play button. */
+  onClick: (() => void) | null;
   /** Fades the cover only, so the play button over it stays clear. */
   dimmed: boolean;
 }) {
@@ -236,18 +247,20 @@ function RowArt(props: {
           {playing ? <Equalizer /> : <IconDots size={18} stroke={2} />}
         </span>
       )}
-      <button
-        type="button"
-        aria-label={pauses ? "Pause" : "Play"}
-        tabIndex={-1}
-        onClick={(event) => {
-          event.stopPropagation();
-          props.onClick();
-        }}
-        className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-white opacity-0 outline-none group-hover:opacity-100"
-      >
-        {pauses ? <IconPlayerPauseFilled size={16} /> : <IconPlayerPlayFilled size={16} />}
-      </button>
+      {props.onClick !== null && (
+        <button
+          type="button"
+          aria-label={pauses ? "Pause" : "Play"}
+          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation();
+            props.onClick?.();
+          }}
+          className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-white opacity-0 outline-none group-hover:opacity-100"
+        >
+          {pauses ? <IconPlayerPauseFilled size={16} /> : <IconPlayerPlayFilled size={16} />}
+        </button>
+      )}
     </span>
   );
 }

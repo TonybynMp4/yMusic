@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { IconArrowLeft, IconHistory, IconSearch, IconX } from "@tabler/icons-react";
-import { type Track, type TrackId, type VideoId, videoIdFromTrackId } from "@ymusic/core";
+import {
+  isPlayable,
+  type Track,
+  type TrackId,
+  type VideoId,
+  videoIdFromTrackId,
+} from "@ymusic/core";
 import type { SavedVolume, Settings } from "@ymusic/ipc";
 import type { Rating } from "@ymusic/youtube/host";
 
@@ -191,9 +197,11 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const play = (tracks: Track[], id: TrackId | null, from?: PlayFrom) => {
     if (tracks.length === 0) return;
     if (id === null) {
+      const playable = tracks.filter(isPlayable);
+      if (playable.length === 0) return;
       // Shuffle first, so the queue is laid down shuffled from a random start.
       player.setShuffle(true);
-      id = tracks[Math.floor(Math.random() * tracks.length)]!.id;
+      id = playable[Math.floor(Math.random() * playable.length)]!.id;
     }
     player.playTrack(tracks, id, from);
   };
@@ -258,8 +266,12 @@ export function App(props: { settings: Settings; volume: SavedVolume }) {
   const interactions: Interactions = {
     signedIn,
     play,
-    enqueue: (tracks, at) =>
-      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks }),
+    enqueue: (tracks, at) => {
+      // An album or playlist's greyed-out songs stay out, as when it plays.
+      const playable = tracks.filter(isPlayable);
+      if (playable.length === 0) return;
+      player.dispatch({ type: at === "next" ? "enqueueNext" : "enqueueLast", tracks: playable });
+    },
     open: go,
     notify,
     libraryChanged: () => {

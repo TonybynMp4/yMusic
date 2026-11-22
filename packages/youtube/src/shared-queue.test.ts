@@ -13,6 +13,7 @@ const track = (id: string): Track => ({
   thumbnails: [],
   isExplicit: false,
   year: null,
+  availability: "available",
 });
 
 const server = (selected: number, playlistId: string | null) => ({

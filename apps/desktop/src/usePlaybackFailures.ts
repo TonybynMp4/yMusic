@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { TrackId } from "@ymusic/core";
 
 import { closeSnackbar, SNACKBAR_MS, showSnackbar } from "@/lib/snackbar";
-import { failureAction, failureMessage } from "./playbackFailure.ts";
+import { failureAction, failureMessage, skipsAtOnce } from "./playbackFailure.ts";
 import type { usePlayer } from "./usePlayer.ts";
 
 /**
@@ -28,6 +28,12 @@ export function usePlaybackFailures(player: ReturnType<typeof usePlayer>) {
   // A new failure is a new object, so this runs once per failure.
   useEffect(() => {
     if (failure === null || failure.trackId !== current.current) return;
+    if (skipsAtOnce(failure)) {
+      // Not kept in `shown`: the song changing is the point, not a reason to close it.
+      showSnackbar({ message: failureMessage(failure.kind, title.current, true) });
+      actions.current.next();
+      return;
+    }
     const action = failureAction(failure);
     const failed = failure.trackId;
     // Skip and the timer running out both move on, but only once, and only

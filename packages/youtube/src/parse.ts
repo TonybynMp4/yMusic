@@ -1,4 +1,4 @@
-import { Track, trackIdForVideo, type Artist, type VideoId } from "@ymusic/core";
+import { Track, trackIdForVideo, type Artist, type Availability, type VideoId } from "@ymusic/core";
 
 import { toThumbnails, type RawThumbnail } from "./thumbnails.ts";
 
@@ -26,11 +26,19 @@ export interface RawSong {
   year?: unknown;
   /** The row's columns as YouTube sent them, for what youtubei.js misses. */
   flex_columns?: readonly { title?: { runs?: readonly RawRun[] } | null }[] | null;
+  fixed_columns?: readonly { title?: { toString(): string } | null }[] | null;
+  /** `musicItemRendererDisplayPolicy`, kept by `list-item.ts`. */
+  display_policy?: unknown;
 }
 
 interface RawRun {
   text?: unknown;
-  endpoint?: { payload?: { browseId?: unknown } } | null;
+  endpoint?: {
+    payload?: {
+      browseId?: unknown;
+      panelLoadingStrategy?: { requestTemplate?: { panelId?: unknown } | null } | null;
+    };
+  } | null;
 }
 
 const EXPLICIT_BADGE = "MUSIC_EXPLICIT_BADGE";
@@ -47,12 +55,12 @@ export function toTrack(raw: RawSong): Track | null {
   const title = typeof raw.title === "string" && raw.title.length > 0 ? raw.title : null;
   if (videoId === null || title === null) return null;
 
-  const seconds = raw.duration?.seconds;
+  const seconds = raw.duration?.seconds ?? secondsFrom(raw.fixed_columns?.[0]?.title?.toString());
   // Live content reports no duration, and we cannot queue what has no end.
   const durationMs = typeof seconds === "number" && seconds > 0 ? Math.round(seconds * 1000) : null;
 
   const album = toAlbum(raw);
-  const artists = toArtists(raw.artists);
+  const artists = toArtists(raw.item_type === "unknown" ? artistRuns(raw) : raw.artists);
   const candidate = {
     id: trackIdForVideo(videoId as VideoId),
     title,
@@ -65,6 +73,7 @@ export function toTrack(raw: RawSong): Track | null {
     thumbnails: toThumbnails(raw.thumbnails ?? undefined),
     isExplicit: (raw.badges ?? []).some((badge) => badge?.icon_type === EXPLICIT_BADGE),
     year: yearFrom(raw.year),
+    availability: availabilityOf(raw),
   };
 
   const result = Track.safeParse(candidate);
@@ -94,6 +103,42 @@ function toAlbum(raw: RawSong): { name: string | null; id: string | null } {
 }
 
 const ALBUM_BROWSE_PREFIX = "MPREb_";
+
+const GREY_OUT = "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT";
+
+/**
+ * A greyed-out row is one the listener cannot play. When the reason is
+ * Premium, its title opens the Premium upsell panel instead of playing.
+ */
+export function availabilityOf(raw: RawSong): Availability {
+  if (raw.display_policy !== GREY_OUT) return "available";
+  const title = raw.flex_columns?.[0]?.title?.runs?.[0];
+  const panel = title?.endpoint?.payload?.panelLoadingStrategy?.requestTemplate?.panelId;
+  return typeof panel === "string" && /premium/i.test(panel) ? "premium" : "unavailable";
+}
+
+/** "6:10" or "1:02:03" in seconds. */
+function secondsFrom(text: string | undefined): number | null {
+  if (text === undefined || !/^\d+(:\d{2}){1,2}$/.test(text)) return null;
+  return text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
+}
+
+/**
+ * A row youtubei.js could not type (a greyed-out one, say) gets no artists;
+ * they are the runs linking to a channel.
+ */
+function artistRuns(raw: RawSong): RawSong["artists"] {
+  const artists: { name: unknown; channel_id: unknown }[] = [];
+  for (const column of raw.flex_columns?.slice(1) ?? []) {
+    for (const run of column?.title?.runs ?? []) {
+      const browseId = run?.endpoint?.payload?.browseId;
+      if (typeof browseId === "string" && browseId.startsWith("UC")) {
+        artists.push({ name: run.text, channel_id: browseId });
+      }
+    }
+  }
+  return artists;
+}
 
 /**
  * A release year out of text YouTube sends, such as a byline's last run

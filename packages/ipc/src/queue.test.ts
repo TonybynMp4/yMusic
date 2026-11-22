@@ -12,6 +12,7 @@ const song = {
   thumbnails: [],
   isExplicit: false,
   year: null,
+  availability: "available",
 };
 
 const saved = {

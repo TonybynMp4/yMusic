@@ -73,7 +73,7 @@ import {
   type SearchHistoryEntry,
 } from "./search-history.ts";
 import { watchSession } from "./session.ts";
-import { NotPlayableError, resolveStream } from "./stream.ts";
+import { needsPremium, NotPlayableError, resolveStream } from "./stream.ts";
 
 /**
  * How long one fallback session is reused. Its token is bound to a visitor id,
@@ -479,6 +479,11 @@ export class YouTubeEngine {
    * has the fewest moving parts. Then the PO-token client. Anything that goes
    * wrong on one, short of YouTube saying the video is gone, is retried on the
    * next.
+   *
+   * A Premium-only song refused by the signed-in `WEB_REMIX` means the account
+   * has no Premium, and the anonymous clients after it cannot do better. Signed
+   * out, every client is tried, and a Premium-only refusal from any of them is
+   * the error that stands, so the player can say why.
    */
   async resolve(videoId: VideoId, options: ResolveOptions = {}): Promise<StreamLease> {
     const quality = options.quality ?? "high";
@@ -496,12 +501,14 @@ export class YouTubeEngine {
         console.info(`resolved ${videoId} as itag ${lease.itag} through ${lease.playerClient}`);
         return lease;
       } catch (error) {
-        if (isGone(error)) throw error;
+        if (isGone(error) || (name === ClientType.MUSIC && needsPremium(error))) throw error;
         console.warn(`${name} could not resolve ${videoId}: ${describe(error)}`);
         errors.push(error);
       }
     }
     if (errors.length === 1) throw errors[0];
+    const premium = errors.find(needsPremium);
+    if (premium !== undefined) throw premium;
     throw new AggregateError(
       errors,
       `could not resolve a stream: ${errors.map(describe).join("; then ")}`,

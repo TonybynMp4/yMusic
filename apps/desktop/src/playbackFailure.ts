@@ -7,10 +7,12 @@ import type { TrackId } from "@ymusic/core";
  * - `missing`: a local file that is no longer on disk, or no longer in the library.
  * - `unavailable`: YouTube says the video is gone (status `ERROR`), the one
  *   answer the engine stops on without trying another player client.
+ * - `premium`: YouTube plays the song only for Premium members
+ *   (`UNPLAYABLE`, "only available to Music Premium members").
  * - `offline`: a request never reached YouTube.
  * - `failed`: anything else, such as a stream mpv refused or no client serving it.
  */
-export type FailureKind = "missing" | "unavailable" | "offline" | "failed";
+export type FailureKind = "missing" | "unavailable" | "premium" | "offline" | "failed";
 
 export interface PlaybackFailure {
   trackId: TrackId;
@@ -27,6 +29,7 @@ export function classifyFailure(message: string, online = true): FailureKind {
   if (/is no longer on disk|no track in the library with id/.test(message)) return "missing";
   // `NotPlayableError` puts YouTube's status first: `ERROR: <reason>`.
   if (/^(NotPlayableError: )?ERROR(:|$)/.test(message)) return "unavailable";
+  if (/^(NotPlayableError: )?UNPLAYABLE: .*Music Premium/.test(message)) return "premium";
   if (
     !online ||
     /error sending request|failed to fetch|fetch failed|dns error|failed to lookup address|network is unreachable/i.test(
@@ -40,7 +43,7 @@ export function classifyFailure(message: string, online = true): FailureKind {
 
 /** Whether a failure is for good, so the queue moves on instead of offering Retry. */
 function isForGood(kind: FailureKind): boolean {
-  return kind === "missing" || kind === "unavailable";
+  return kind === "missing" || kind === "unavailable" || kind === "premium";
 }
 
 /**
@@ -63,6 +66,8 @@ export function failureMessage(kind: FailureKind, title: string): string {
       return `Couldn't find the file for ${title}`;
     case "unavailable":
       return `${title} isn't available on YouTube Music`;
+    case "premium":
+      return `${title} needs YouTube Music Premium`;
     case "offline":
       return `Couldn't play ${title}. Check your connection`;
     case "failed":

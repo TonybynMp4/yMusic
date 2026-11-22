@@ -19,6 +19,13 @@ describe("classifyFailure", () => {
     expect(classifyFailure("could not resolve a stream: ERRORS; then UNPLAYABLE")).toBe("failed");
   });
 
+  it("reads YouTube's Premium-only refusal as premium", () => {
+    expect(
+      classifyFailure("UNPLAYABLE: This video is only available to Music Premium members"),
+    ).toBe("premium");
+    expect(classifyFailure("UNPLAYABLE: The page needs to be reloaded.")).toBe("failed");
+  });
+
   it("reads a request that never reached YouTube as offline", () => {
     expect(
       classifyFailure(
@@ -49,6 +56,7 @@ describe("failureAction", () => {
 
   it("offers Skip for a failure for good, when there is a song to move on to", () => {
     expect(failureAction({ kind: "missing", canSkip: true })).toBe("skip");
+    expect(failureAction({ kind: "premium", canSkip: true })).toBe("skip");
     expect(failureAction({ kind: "unavailable", canSkip: false })).toBeNull();
   });
 });

@@ -45,6 +45,18 @@ export class NotPlayableError extends Error {
 }
 
 /**
+ * YouTube's refusal of a song only Premium members may play: status
+ * `UNPLAYABLE`, reason "This video is only available to Music Premium members".
+ */
+export function needsPremium(error: unknown): boolean {
+  return (
+    error instanceof NotPlayableError &&
+    error.status === "UNPLAYABLE" &&
+    /Music Premium/.test(error.message)
+  );
+}
+
+/**
  * The shape youtubei.js throws for an unplayable video: its own error class,
  * carrying the playability status it refused on.
  */

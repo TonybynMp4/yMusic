@@ -13,7 +13,7 @@ Two details that each cost a day if missed:
 
 ## Player clients
 
-A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next. The webview console records each resolution (`resolved <id> as itag 774 through WEB_REMIX`), and the Rust log records the client and itag of each lease mpv loads (see [Logging](logging.md)).
+A song's stream is resolved through one InnerTube player client after another, until one serves it. Anything short of YouTube saying the video is gone moves on to the next, with one more exception: a Premium-only refusal (`UNPLAYABLE`, "only available to Music Premium members") from the signed-in `WEB_REMIX` means the account has no Premium, and the anonymous clients cannot do better. Signed out, every client is tried, and a Premium-only refusal from any of them is the error that stands. The webview console records each resolution (`resolved <id> as itag 774 through WEB_REMIX`), and the Rust log records the client and itag of each lease mpv loads (see [Logging](logging.md)).
 
 - Signed in: `WEB_REMIX`, then `VISIONOS`, then `TV_SIMPLY`.
 - Signed out: `VISIONOS`, then `TV_SIMPLY`.
@@ -86,6 +86,7 @@ A failure reaches the snackbar once it stands. A 403 from mpv on a YouTube song 
 | ----------- | ----------------------------------------------------------------- | -------------------------------------------- | ------ |
 | missing     | a local file gone from disk or from the library                   | Couldn't find the file for _title_           | Skip   |
 | unavailable | YouTube's `ERROR` status, the one answer the engine stops on      | _title_ isn't available on YouTube Music     | Skip   |
+| premium     | YouTube's `UNPLAYABLE` refusal of a Premium-only song             | _title_ needs YouTube Music Premium          | Skip   |
 | offline     | a request that never reached YouTube, or `navigator.onLine` false | Couldn't play _title_. Check your connection | Retry  |
 | failed      | anything else, such as a stream mpv refused on every client       | Couldn't play _title_                        | Retry  |
 

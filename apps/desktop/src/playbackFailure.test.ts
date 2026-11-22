@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyFailure, failureAction } from "./playbackFailure.ts";
+import { classifyFailure, failureAction, failureMessage, skipsAtOnce } from "./playbackFailure.ts";
 
 describe("classifyFailure", () => {
   it("reads a local file gone from disk or from the library as missing", () => {
@@ -58,5 +58,19 @@ describe("failureAction", () => {
     expect(failureAction({ kind: "missing", canSkip: true })).toBe("skip");
     expect(failureAction({ kind: "premium", canSkip: true })).toBe("skip");
     expect(failureAction({ kind: "unavailable", canSkip: false })).toBeNull();
+  });
+});
+
+describe("skipsAtOnce", () => {
+  it("moves straight past a Premium-only song, when there is one to move on to", () => {
+    expect(skipsAtOnce({ kind: "premium", canSkip: true })).toBe(true);
+    expect(skipsAtOnce({ kind: "premium", canSkip: false })).toBe(false);
+    expect(skipsAtOnce({ kind: "unavailable", canSkip: true })).toBe(false);
+  });
+
+  it("says the song was skipped, and why", () => {
+    expect(failureMessage("premium", "Like a Rolling Stone", true)).toBe(
+      "Skipped Like a Rolling Stone, which needs YouTube Music Premium",
+    );
   });
 });

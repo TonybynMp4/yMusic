@@ -125,6 +125,14 @@ export function usePlayer(
   const currentId = useEffectEvent(() => trackId);
   /** Tracks skipped in a row, so a queue of only disliked songs stops after one pass. */
   const skipped = useRef(0);
+  /** Songs YouTube refused as Premium-only this session, passed over from then on. */
+  const [premiumOnly, setPremiumOnly] = useState<ReadonlySet<TrackId>>(() => new Set());
+  /**
+   * A song that will not play: greyed out where it was queued from, or
+   * refused as Premium-only since.
+   */
+  const unplayable = (candidate: Track | null): boolean =>
+    candidate !== null && (!isPlayable(candidate) || premiumOnly.has(candidate.id));
   /**
    * Whether to pass over a track rather than play it. An effect event, so the
    * load effect does not rerun, and cancel its load, when a rating or the
@@ -133,15 +141,14 @@ export function usePlayer(
    */
   const skips = useEffectEvent((id: TrackId): boolean => {
     const videoId = videoIdFromTrackId(id);
-    if (
-      !settings.skipDisliked ||
-      !cameUp.current ||
-      videoId === null ||
-      ratings.ratingOf(videoId) !== "dislike" ||
-      skipped.current >= queue.order.length
-    ) {
-      return false;
-    }
+    const disliked =
+      settings.skipDisliked &&
+      cameUp.current &&
+      videoId !== null &&
+      ratings.ratingOf(videoId) === "dislike";
+    // A song that will not play is passed over even when picked.
+    const dead = track?.id === id && unplayable(track);
+    if ((!disliked && !dead) || skipped.current >= queue.order.length) return false;
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
     return landing !== null && landing.id !== id;
   });
@@ -159,9 +166,11 @@ export function usePlayer(
     void playerLogFailure(id, message).catch(logPlaybackFailure);
     markFailed();
     const landing = currentTrack(queueReducer(queue, { type: "next", reason: "user" }));
+    const kind = classifyFailure(message, navigator.onLine);
+    if (kind === "premium") setPremiumOnly((known) => new Set(known).add(id));
     setFailure({
       trackId: id,
-      kind: classifyFailure(message, navigator.onLine),
+      kind,
       canSkip: landing !== null && landing.id !== id,
     });
   });
@@ -277,9 +286,10 @@ export function usePlayer(
   const audioQuality = settings.audioQuality;
   const upcomingVideo = upcomingId === null ? null : videoIdFromTrackId(upcomingId);
   const upcomingSkipped =
-    settings.skipDisliked &&
-    upcomingVideo !== null &&
-    ratings.ratingOf(upcomingVideo) === "dislike";
+    unplayable(peekNext(queue)) ||
+    (settings.skipDisliked &&
+      upcomingVideo !== null &&
+      ratings.ratingOf(upcomingVideo) === "dislike");
   const joinable = upcomingId !== null && upcomingId !== trackId && !upcomingSkipped;
   useEffect(() => {
     // Until mpv has the track, Rust would ignore a next meant to follow it.

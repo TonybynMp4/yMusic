@@ -59,15 +59,28 @@ export function failureAction(
   return failure.canSkip ? "skip" : null;
 }
 
-/** The snackbar's copy for a failure. Plain, with the raw error left to the log. */
-export function failureMessage(kind: FailureKind, title: string): string {
+/**
+ * A Premium-only song is skipped at once, as YouTube Music never plays it for
+ * this account: there is nothing to decide, so nothing to wait for.
+ */
+export function skipsAtOnce(failure: Pick<PlaybackFailure, "kind" | "canSkip">): boolean {
+  return failure.kind === "premium" && failure.canSkip;
+}
+
+/**
+ * The snackbar's copy for a failure. Plain, with the raw error left to the
+ * log. `skipped` when the queue already moved on from it.
+ */
+export function failureMessage(kind: FailureKind, title: string, skipped = false): string {
   switch (kind) {
     case "missing":
       return `Couldn't find the file for ${title}`;
     case "unavailable":
       return `${title} isn't available on YouTube Music`;
     case "premium":
-      return `${title} needs YouTube Music Premium`;
+      return skipped
+        ? `Skipped ${title}, which needs YouTube Music Premium`
+        : `${title} needs YouTube Music Premium`;
     case "offline":
       return `Couldn't play ${title}. Check your connection`;
     case "failed":

@@ -1,5 +1,6 @@
 import { ClientType, Innertube, Platform, type SessionOptions } from "youtubei.js";
 
+import { keepUnavailableRows } from "./list-item.ts";
 import { playerFrom } from "./player-extract.ts";
 import type { PlayerScript } from "./player-script.ts";
 
@@ -31,6 +32,7 @@ export interface YouTubeOptions {
  * part of startup, so nothing that only reads metadata should pay for it.
  */
 export async function createYouTube(options: YouTubeOptions): Promise<Innertube> {
+  keepUnavailableRows();
   return Innertube.create({
     retrieve_player: false,
     fetch: options.fetch,

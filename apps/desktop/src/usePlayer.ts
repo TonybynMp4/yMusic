@@ -13,6 +13,7 @@ import {
   type QueueState,
   type TrackId,
   type VideoId,
+  isPlayable,
   videoIdFromTrackId,
 } from "@ymusic/core";
 import { playerLogFailure, type QueueFrom, type QueuePosition, type SavedQueue } from "@ymusic/ipc";
@@ -430,7 +431,16 @@ export function usePlayer(
         return;
       }
 
-      send({ type: "setQueue", tracks, startIndex: tracks.findIndex((t) => t.id === id) });
+      // Songs YouTube Music greys out stay on the page but out of the queue.
+      // Play on an album that opens with one starts at the first song after it.
+      const playable = tracks.filter(isPlayable);
+      const clicked = Math.max(
+        0,
+        tracks.findIndex((t) => t.id === id),
+      );
+      const start = tracks.slice(clicked).find(isPlayable) ?? playable[0];
+      if (start === undefined) return;
+      send({ type: "setQueue", tracks: playable, startIndex: playable.indexOf(start) });
       if (from?.kind === "playlist" || from?.kind === "list") {
         setPlayingFrom({ title: from.title, device: null });
       }
@@ -450,7 +460,7 @@ export function usePlayer(
         if (all.length > known) {
           const added = all.slice(known);
           for (const t of added) ids.add(t.id);
-          dispatch({ type: "extend", tracks: added });
+          dispatch({ type: "extend", tracks: added.filter(isPlayable) });
           known = all.length;
         }
         setFilling(loading);

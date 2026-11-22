@@ -54,6 +54,13 @@ export const Artist = z.object({
 });
 export type Artist = z.infer<typeof Artist>;
 
+/**
+ * `premium`: YouTube plays it only for Premium members. `unavailable`: greyed
+ * out for another reason, such as the region.
+ */
+export const Availability = z.enum(["available", "premium", "unavailable"]);
+export type Availability = z.infer<typeof Availability>;
+
 export const Track = z.object({
   id: TrackId,
   title: z.string(),
@@ -67,8 +74,15 @@ export const Track = z.object({
   isExplicit: z.boolean().default(false),
   /** The album's release year, when the source says. */
   year: z.number().int().nullable().default(null),
+  /** Whether the listener can play it, as YouTube Music says on list rows. */
+  availability: Availability.default("available"),
 });
 export type Track = z.infer<typeof Track>;
+
+/** Whether a track can go into the queue: not greyed out on YouTube Music. */
+export function isPlayable(track: Pick<Track, "availability">): boolean {
+  return track.availability === "available";
+}
 
 /** Something a browse page links to, drawn as a card: YouTube Music's two-row item. */
 export const BrowseCard = z.object({

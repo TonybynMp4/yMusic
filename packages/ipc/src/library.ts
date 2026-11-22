@@ -86,6 +86,7 @@ async function toTrack(row: LocalTrackRow): Promise<LocalTrack> {
     durationMs: row.durationMs,
     thumbnails,
     isExplicit: false,
+    availability: "available",
     path: row.path,
     albumArtist: row.albumArtist,
     trackNumber: row.trackNumber,

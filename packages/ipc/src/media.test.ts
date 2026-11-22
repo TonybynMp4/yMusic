@@ -21,6 +21,7 @@ const base: Track = {
   ],
   isExplicit: false,
   year: null,
+  availability: "available",
 };
 
 describe("toMediaTrack", () => {

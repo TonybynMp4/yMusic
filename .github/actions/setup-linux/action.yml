@@ -19,9 +19,7 @@ runs:
         restore-keys: apt-debian13-
     # rustup's installer needs curl and its certificates, so those go in
     # first. The rest installs in the background while the toolchains and
-    # caches below set up; the last step waits for it. dpkg skips its fsyncs,
-    # which otherwise slow the cache downloads, since the container is thrown
-    # away after the job.
+    # caches below set up; the last step waits for it.
     - name: Install curl
       shell: bash
       run: |
@@ -34,7 +32,6 @@ runs:
           set +e
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y --no-install-recommends \
-            -o Dpkg::Options::=--force-unsafe-io \
             build-essential file git pkg-config \
             libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
             libssl-dev librsvg2-dev libayatana-appindicator3-dev

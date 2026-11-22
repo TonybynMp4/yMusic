@@ -69,18 +69,12 @@ jobs:
           tool: cargo-machete
       - run: cargo machete
       - run: cargo clippy --all-targets --locked -- -D warnings
-      # A snapshot that differs from, or is missing in, `tests/snapshots`
-      # fails its test. INSTA_UPDATE=no keeps insta from writing any snapshot
-      # file here, so CI only ever compares.
-      - run: cargo test --locked
-        env:
-          INSTA_UPDATE: "no"
-
       # rust-cache cleans dependencies by crate name, so every Cargo.lock
       # change left the old builds behind and the cache grew to 13 GB. Before
-      # it saves, keep only the builds that clippy and test use now: rerunning
-      # both with JSON output lists every live build hash, in seconds since
-      # nothing is left to compile.
+      # it saves, keep only the builds that clippy and test use now, which
+      # their JSON output lists by hash. Clippy has just run, so its rerun is
+      # instant, and the test build is the one cargo test would do anyway. It
+      # runs before the tests, which touch a file the build watches.
       - name: Prune stale Rust build output
         # TEMPORARY: runs on the PR to measure it. Becomes main only.
         shell: bash
@@ -95,6 +89,12 @@ jobs:
               "$RUNNER_TEMP/live-hashes" - |
             xargs -r rm -rf
           du -sh target
+      # A snapshot that differs from, or is missing in, `tests/snapshots`
+      # fails its test. INSTA_UPDATE=no keeps insta from writing any snapshot
+      # file here, so CI only ever compares.
+      - run: cargo test --locked
+        env:
+          INSTA_UPDATE: "no"
 
   # The squash merge uses the PR title as the commit subject, which the
   # release notes group by type, so it has to be a Conventional Commit.

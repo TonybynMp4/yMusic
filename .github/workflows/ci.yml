@@ -80,6 +80,7 @@ jobs:
         shell: bash
         run: |
           du -sh target
+          CARGO_LOG=cargo::core::compiler::fingerprint=info cargo clippy --all-targets --locked -- -D warnings 2>&1 | grep -iE "dirty|stale|fingerprint" | head -20 || true
           { cargo clippy --all-targets --locked --message-format=json -- -D warnings
             cargo test --locked --no-run --message-format=json; } |
             grep -oE -- '-[0-9a-f]{16}' | cut -c2- | sort -u > "$RUNNER_TEMP/live-hashes"

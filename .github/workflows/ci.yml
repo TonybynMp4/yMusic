@@ -75,6 +75,27 @@ jobs:
         env:
           INSTA_UPDATE: "no"
 
+      # rust-cache cleans dependencies by crate name, so every Cargo.lock
+      # change left the old builds behind and the cache grew to 13 GB. Before
+      # it saves, keep only the builds that clippy and test use now: rerunning
+      # both with JSON output lists every live build hash, in seconds since
+      # nothing is left to compile.
+      - name: Prune stale Rust build output
+        # TEMPORARY: runs on the PR to measure it. Becomes main only.
+        if: always()
+        shell: bash
+        run: |
+          du -sh target
+          { cargo clippy --all-targets --locked --message-format=json -- -D warnings
+            cargo test --locked --no-run --message-format=json; } |
+            grep -oE -- '-[0-9a-f]{16}' | cut -c2- | sort -u > "$RUNNER_TEMP/live-hashes"
+          find target/debug/deps target/debug/build target/debug/.fingerprint -mindepth 1 -maxdepth 1 |
+            awk 'NR == FNR { live[$0]; next }
+              match($0, /-[0-9a-f]{16}(\.[a-z]+)?$/) && !(substr($0, RSTART + 1, 16) in live)' \
+              "$RUNNER_TEMP/live-hashes" - |
+            xargs -r rm -rf
+          du -sh target
+
   # The squash merge uses the PR title as the commit subject, which the
   # release notes group by type, so it has to be a Conventional Commit.
   pr-title:

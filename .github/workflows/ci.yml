@@ -47,6 +47,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
       # TEMPORARY: measure the restored Rust cache.
       - name: Measure restored cache
+        continue-on-error: true
         shell: bash
         run: |
           du -sh target target/debug/* ~/.cargo/registry/* ~/.cargo/git ~/.cargo/bin 2>/dev/null || true
@@ -82,7 +83,6 @@ jobs:
       # nothing is left to compile.
       - name: Prune stale Rust build output
         # TEMPORARY: runs on the PR to measure it. Becomes main only.
-        if: always()
         shell: bash
         run: |
           du -sh target

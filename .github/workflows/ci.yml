@@ -25,6 +25,9 @@ jobs:
       - uses: pnpm/setup@v3.2.0
         with:
           cache: true
+          # Only main saves the store; other runs restore it, so each run's
+          # copy doesn't crowd main's caches out of the 10 GB limit.
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
           require-lockfile: true
       - run: pnpm lint --format github
       - run: pnpm format:check

@@ -17,14 +17,15 @@ runs:
         path: /var/cache/apt/archives/*.deb
         key: apt-debian13-${{ hashFiles('.github/actions/setup-linux/action.yml') }}
         restore-keys: apt-debian13-
-    # rustup's installer needs curl and its certificates, so those go in
-    # first. The rest installs in the background while the toolchains and
-    # caches below set up; the last step waits for it.
-    - name: Install curl
+    # rustup's installer needs curl and its certificates, and the Node that
+    # pnpm installs needs libatomic, so those go in first. The rest installs
+    # in the background while the toolchains and caches below set up; the
+    # last step waits for it.
+    - name: Install curl and libatomic
       shell: bash
       run: |
         apt-get update
-        apt-get install -y --no-install-recommends ca-certificates curl
+        apt-get install -y --no-install-recommends ca-certificates curl libatomic1
     - name: Start installing build dependencies
       shell: bash
       run: |

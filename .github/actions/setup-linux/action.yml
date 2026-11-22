@@ -51,11 +51,10 @@ runs:
         workspaces: apps/desktop/src-tauri
         # v1 starts over from the cache that kept every old dependency build;
         # see the prune step in ci.yml.
-        # TEMPORARY: -pr153 and save-if true measure the new cache on the PR.
-        prefix-key: v1-rust-pr153
+        prefix-key: v1-rust
         # Keep the compiled dependencies even when a later step fails, so the
         # rerun doesn't start cold.
         cache-on-failure: true
         # Pull requests restore main's cache but don't save their own, which
         # would crowd main's out of the 10 GB limit.
-        save-if: true
+        save-if: ${{ github.ref == 'refs/heads/main' }}

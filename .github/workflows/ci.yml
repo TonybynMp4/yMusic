@@ -45,18 +45,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-linux
-      # TEMPORARY: measure the restored Rust cache.
-      - name: Measure restored cache
-        continue-on-error: true
-        shell: bash
-        run: |
-          du -sh target target/debug/* ~/.cargo/registry/* ~/.cargo/git ~/.cargo/bin 2>/dev/null || true
-          echo "deps files: $(ls target/debug/deps | wc -l)"
-          echo "distinct rlib crates: $(ls target/debug/deps/*.rlib | sed 's/-[0-9a-f]*\.rlib$//' | sort -u | wc -l), rlib files: $(ls target/debug/deps/*.rlib | wc -l)"
-          echo "distinct rmeta crates: $(ls target/debug/deps/*.rmeta | sed 's/-[0-9a-f]*\.rmeta$//' | sort -u | wc -l), rmeta files: $(ls target/debug/deps/*.rmeta | wc -l)"
-          ls target/debug/deps/*.rlib | sed 's/-[0-9a-f]*\.rlib$//' | sort | uniq -c | sort -rn | head -15
-          find target -type f -mtime +7 -printf '%s\n' | awk '{s+=$1} END{printf "files older than 7 days: %.0f MB\n", s/1e6}'
-          ls -la --time-style=+%F target/debug/deps | awk '{print $6}' | sort | uniq -c
 
       # generate_context! embeds apps/desktop/dist, so it has to exist before
       # the crate compiles.
@@ -69,18 +57,23 @@ jobs:
           tool: cargo-machete
       - run: cargo machete
       - run: cargo clippy --all-targets --locked -- -D warnings
+      # A snapshot that differs from, or is missing in, `tests/snapshots`
+      # fails its test. INSTA_UPDATE=no keeps insta from writing any snapshot
+      # file here, so CI only ever compares.
+      - run: cargo test --locked
+        env:
+          INSTA_UPDATE: "no"
+
       # rust-cache cleans dependencies by crate name, so every Cargo.lock
       # change left the old builds behind and the cache grew to 13 GB. Before
       # it saves, keep only the builds that clippy and test use now, which
-      # their JSON output lists by hash. Clippy has just run, so its rerun is
-      # instant, and the test build is the one cargo test would do anyway. It
-      # runs before the tests, which touch a file the build watches.
+      # their JSON output lists by hash. Nothing but this crate recompiles
+      # (a file tauri writes into OUT_DIR mid-build always leaves it dirty), so
+      # this adds about 20 seconds, on main only.
       - name: Prune stale Rust build output
-        # TEMPORARY: runs on the PR to measure it. Becomes main only.
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
-          du -sh target
-          CARGO_LOG=cargo::core::compiler::fingerprint=info cargo clippy --all-targets --locked -- -D warnings 2>&1 | grep -iE "dirty|stale|fingerprint" | head -20 || true
           { cargo clippy --all-targets --locked --message-format=json -- -D warnings
             cargo test --locked --no-run --message-format=json; } |
             grep -oE -- '-[0-9a-f]{16}' | cut -c2- | sort -u > "$RUNNER_TEMP/live-hashes"
@@ -89,13 +82,6 @@ jobs:
               match($0, /-[0-9a-f]{16}(\.[a-z]+)?$/) && !(substr($0, RSTART + 1, 16) in live)' \
               "$RUNNER_TEMP/live-hashes" - |
             xargs -r rm -rf
-          du -sh target
-      # A snapshot that differs from, or is missing in, `tests/snapshots`
-      # fails its test. INSTA_UPDATE=no keeps insta from writing any snapshot
-      # file here, so CI only ever compares.
-      - run: cargo test --locked
-        env:
-          INSTA_UPDATE: "no"
 
   # The squash merge uses the PR title as the commit subject, which the
   # release notes group by type, so it has to be a Conventional Commit.

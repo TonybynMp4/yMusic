@@ -150,6 +150,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_sharekit::init())
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol(botguard::SCHEME, |_, request| botguard::respond(&request))
         .register_asynchronous_uri_scheme_protocol(images::SCHEME, |context, request, responder| {

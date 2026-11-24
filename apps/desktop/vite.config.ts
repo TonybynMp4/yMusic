@@ -3,10 +3,12 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
+import { replayPlugin } from "./src/replay/vite.ts";
+
 const host = process.env["TAURI_DEV_HOST"];
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), replayPlugin()],
   // `@/` is what shadcn components import each other by; without it every
   // added component needs hand-editing before it resolves.
   resolve: {

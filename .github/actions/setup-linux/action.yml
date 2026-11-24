@@ -20,11 +20,13 @@ runs:
     - name: Install build dependencies
       shell: bash
       run: |
+        # The caches after this step compress with zstd when it is
+        # installed, and fall back to gzip, which extracts much slower.
         apt-get update
         apt-get install -y --no-install-recommends \
           build-essential ca-certificates curl file git pkg-config \
           libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-          libssl-dev librsvg2-dev libayatana-appindicator3-dev
+          libssl-dev librsvg2-dev libayatana-appindicator3-dev zstd
 
     # Installs pnpm (the version in packageManager), Node (the version in
     # devEngines.runtime), and the dependencies from the lockfile, with the
@@ -47,6 +49,9 @@ runs:
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         workspaces: apps/desktop/src-tauri
+        # v1 starts over from the cache that kept every old dependency build;
+        # see the prune step in ci.yml.
+        prefix-key: v1-rust
         # Keep the compiled dependencies even when a later step fails, so the
         # rerun doesn't start cold.
         cache-on-failure: true

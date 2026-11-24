@@ -63,6 +63,7 @@ export function exposeEngine(endpoint: Endpoint = self as unknown as Endpoint): 
     libraryPlaylists: () => engine.libraryPlaylists(),
     libraryCards: (kind, sort) => engine.libraryCards(kind, sort),
     librarySongs: (sort) => engine.librarySongs(sort),
+    libraryArtistSongs: (id) => engine.libraryArtistSongs(id),
     mix: (playlistId, videoId) => engine.mix(playlistId, videoId),
     setSaved: (id, saved) => engine.setSaved(id, saved),
     setSubscribed: (channelId, subscribed) => engine.setSubscribed(channelId, subscribed),

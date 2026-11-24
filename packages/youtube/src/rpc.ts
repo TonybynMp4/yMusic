@@ -58,6 +58,7 @@ export interface EngineWorkerApi {
   libraryPlaylists: YouTubeEngine["libraryPlaylists"];
   libraryCards: YouTubeEngine["libraryCards"];
   librarySongs: YouTubeEngine["librarySongs"];
+  libraryArtistSongs: YouTubeEngine["libraryArtistSongs"];
   mix: YouTubeEngine["mix"];
   setSaved: YouTubeEngine["setSaved"];
   setSubscribed: YouTubeEngine["setSubscribed"];

@@ -103,7 +103,12 @@ export function forgetSaved(kind?: SavedKind): void {
   }
   void queryClient.invalidateQueries({
     queryKey: ["saved"],
-    predicate: ({ queryKey }) => kind === undefined || queryKey[2] === kind,
+    // An artist page's library songs (`useArtistLibrary`) change with the
+    // songs, and with the albums, whose songs saving one adds.
+    predicate: ({ queryKey }) =>
+      kind === undefined ||
+      queryKey[2] === kind ||
+      (queryKey[2] === "artist" && (kind === "songs" || kind === "albums")),
   });
 }
 

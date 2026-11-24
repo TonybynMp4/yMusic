@@ -10,6 +10,14 @@ Pages live in the app's TanStack Query client (`query.ts`), one query per page u
 - **Ten pages.** The cache keeps the 10 most recently opened pages (`capQueries` in `query.ts`, see [Memory](memory.md#the-browse-page-cache)). Query's own garbage collection is by time, so it is off for pages (`gcTime: Infinity`) and the cap counts instead.
 - **A seam for a persister.** Data stamped before this run started counts as stale, so a page a persister restores shows at once and is fetched again in the background. That is how the SQLite page cache in [the plan](../PLAN.md) would plug in: restore into the client, and the rest already works.
 
+## In your library
+
+An artist page shows "In your library" after Top songs: the account's songs by the artist, then the local files tagged with the artist's name (`useArtistLibrary.ts`). It is hidden when both are empty, and shows five rows until Show all. Play queues the whole section.
+
+- _The account's songs_ come from the library-only artist page YouTube Music opens from its Artists chip (`MPLAUC…`), in YouTube's order. Signed out, only local files show. The query sits under the library page's keys, so saving or removing anything, liking or unliking a song, and Refresh drop it with the library's lists.
+- _Local files_ match on the artist or album artist tag, ignoring case and accents (`artistLibrary.ts`). A tag that credits several artists ("A, B", "A & B", "A feat. B") counts for each of them and for the whole, so "Simon & Garfunkel" still matches its own page. They are ordered by album, disc and track. Nothing links a local file to a YouTube song yet, so one song can show from both.
+- The section waits for the account's songs before showing any rows, so they do not push the local ones down under the pointer.
+
 ## Long playlists
 
 YouTube serves a playlist a hundred rows at a time, each page a round trip, so a liked-songs list of two thousand songs takes twenty requests. The engine returns the first page with a handle for the next (a youtubei.js continuation is a closure, so it stays in the worker), and the page shows as soon as the first hundred rows arrive.

@@ -17,14 +17,29 @@ runs:
         path: /var/cache/apt/archives/*.deb
         key: apt-debian13-${{ hashFiles('.github/actions/setup-linux/action.yml') }}
         restore-keys: apt-debian13-
-    - name: Install build dependencies
+    # rustup's installer needs curl and its certificates, and the Node that
+    # pnpm installs needs libatomic, so those go in first. The rest installs
+    # in the background while the toolchains and caches below set up; the
+    # last step waits for it.
+    - name: Install curl and libatomic
       shell: bash
       run: |
         apt-get update
-        apt-get install -y --no-install-recommends \
-          build-essential ca-certificates curl file git pkg-config \
-          libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
-          libssl-dev librsvg2-dev libayatana-appindicator3-dev
+        apt-get install -y --no-install-recommends ca-certificates curl libatomic1
+    - name: Start installing build dependencies
+      shell: bash
+      run: |
+        (
+          set +e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y --no-install-recommends \
+            build-essential file git pkg-config \
+            libwebkit2gtk-4.1-dev libmpv-dev libsecret-1-dev libdbus-1-dev \
+            libssl-dev librsvg2-dev libayatana-appindicator3-dev
+          status=$?
+          echo "apt-get install took ${SECONDS}s"
+          echo "$status" > "$RUNNER_TEMP/apt-status"
+        ) > "$RUNNER_TEMP/apt.log" 2>&1 < /dev/null &
 
     # Installs pnpm (the version in packageManager), Node (the version in
     # devEngines.runtime), and the dependencies from the lockfile, with the
@@ -53,3 +68,10 @@ runs:
         # Pull requests restore main's cache but don't save their own, which
         # would crowd main's out of the 10 GB limit.
         save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Finish installing build dependencies
+      shell: bash
+      run: |
+        until test -s "$RUNNER_TEMP/apt-status"; do sleep 1; done
+        cat "$RUNNER_TEMP/apt.log"
+        exit "$(cat "$RUNNER_TEMP/apt-status")"

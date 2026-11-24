@@ -17,7 +17,46 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Skips the jobs a pull request can't affect: a Rust-only change skips web,
+  # and a docs or frontend-only change skips the four-minute rust job.
+  # .github/scripts/ci-changes.sh holds the mapping. Pushes to main and runs
+  # from the Release workflow check everything, and so does any change whose
+  # diff can't be worked out.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.detect.outputs.web }}
+      rust: ${{ steps.detect.outputs.rust }}
+    steps:
+      # A pull request checks out GitHub's merge commit; depth 2 brings its
+      # first parent, the base branch, to diff against.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          sparse-checkout: .github/scripts
+      - id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -uo pipefail
+          script=.github/scripts/ci-changes.sh
+          # A workflow_call run reports its caller's event, so only a real
+          # pull_request run gets past this.
+          if [[ $EVENT_NAME != pull_request ]]; then
+            "$script" --full | tee -a "$GITHUB_OUTPUT"
+          elif paths=$(git diff --name-only --no-renames HEAD^1 HEAD); then
+            # --no-renames lists both sides of a rename, so moving a file out
+            # of an inert folder still counts.
+            printf '%s\n' "$paths" | "$script" | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "Could not diff against the base branch, so running every job."
+            "$script" --full | tee -a "$GITHUB_OUTPUT"
+          fi
+
   web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,6 +73,8 @@ jobs:
       - run: pnpm --filter @ymusic/desktop build
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Same image and packages as the release build, which also gives the
     # playback tests a real libmpv.
@@ -92,12 +133,36 @@ jobs:
             chore
 
   # The one check the main ruleset requires, so jobs can change without
-  # touching the ruleset. Skipped jobs pass; failed or cancelled ones don't.
+  # touching the ruleset. Fails when a job failed or was cancelled, or was
+  # skipped although `changes` said it was needed, so a broken `if:` can't
+  # pass quietly. pr-title is needed on pull requests only.
   ci-ok:
     if: always()
-    needs: [web, rust, pr-title]
+    needs: [changes, web, rust, pr-title]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          WEB: ${{ needs.web.result }}
+          WEB_NEEDED: ${{ needs.changes.outputs.web }}
+          RUST: ${{ needs.rust.result }}
+          RUST_NEEDED: ${{ needs.changes.outputs.rust }}
+          PR_TITLE: ${{ needs.pr-title.result }}
+          PR_TITLE_NEEDED: ${{ github.event_name == 'pull_request' }}
+        run: |
+          status=0
+          check() {
+            local job=$1 result=$2 needed=$3
+            echo "$job: $result (needed: $needed)"
+            case $result in
+              success) ;;
+              skipped) [[ $needed == true ]] && { echo "::error::$job was skipped but needed"; status=1; } ;;
+              *) echo "::error::$job ended as $result"; status=1 ;;
+            esac
+          }
+          check changes "$CHANGES" true
+          check web "$WEB" "$WEB_NEEDED"
+          check rust "$RUST" "$RUST_NEEDED"
+          check pr-title "$PR_TITLE" "$PR_TITLE_NEEDED"
+          exit $status

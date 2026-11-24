@@ -29,9 +29,12 @@ runs:
     # Installs pnpm (the version in packageManager), Node (the version in
     # devEngines.runtime), and the dependencies from the lockfile, with the
     # pnpm store cached.
-    - uses: pnpm/setup@v3.0.0
+    - uses: pnpm/setup@v3.2.0
       with:
         cache: true
+        # Only main saves the store; other runs restore it, so each run's
+        # copy doesn't crowd main's caches out of the 10 GB limit.
+        save-cache: ${{ github.ref == 'refs/heads/main' }}
         require-lockfile: true
 
     - name: Read the Rust toolchain
